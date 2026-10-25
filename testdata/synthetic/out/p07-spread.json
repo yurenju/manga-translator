@@ -1,0 +1,403 @@
+{
+  "id": "p07-spread",
+  "description": "雙頁跨頁（Kindle 寬視窗會把兩頁合成一張圖）：橫跨兩頁的大格、跨越中縫的狀聲詞、右頁先讀",
+  "image": "p07-spread.png",
+  "width": 1760,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        880,
+        0,
+        880,
+        1280
+      ]
+    },
+    {
+      "index": 1,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "S",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        40,
+        40,
+        1680,
+        600
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          1720,
+          40
+        ],
+        [
+          1720,
+          640
+        ],
+        [
+          40,
+          640
+        ]
+      ]
+    },
+    {
+      "id": "R1",
+      "page": 0,
+      "order": 2,
+      "bbox": [
+        920,
+        656,
+        800,
+        584
+      ],
+      "polygon": [
+        [
+          920,
+          656
+        ],
+        [
+          1720,
+          656
+        ],
+        [
+          1720,
+          1240
+        ],
+        [
+          920,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "L1",
+      "page": 1,
+      "order": 3,
+      "bbox": [
+        440,
+        656,
+        400,
+        584
+      ],
+      "polygon": [
+        [
+          440,
+          656
+        ],
+        [
+          840,
+          656
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          440,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "L2",
+      "page": 1,
+      "order": 4,
+      "bbox": [
+        40,
+        656,
+        384,
+        584
+      ],
+      "polygon": [
+        [
+          40,
+          656
+        ],
+        [
+          424,
+          656
+        ],
+        [
+          424,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "narration",
+      "shape": "rect",
+      "panel": "S",
+      "page": 0,
+      "order": 1,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        1630,
+        70,
+        60,
+        180
+      ],
+      "textBbox": [
+        1641,
+        116,
+        41,
+        88
+      ],
+      "ja": "千年の森",
+      "jaLines": [
+        "千年の森"
+      ],
+      "ruby": [
+        {
+          "base": "千年",
+          "rt": "せんねん"
+        },
+        {
+          "base": "森",
+          "rt": "もり"
+        }
+      ],
+      "reading": "せんねんのもり",
+      "zh": "千年之森"
+    },
+    {
+      "id": "t2",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "S",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        1395,
+        255,
+        130,
+        210
+      ],
+      "textBbox": [
+        1429,
+        316,
+        64,
+        88
+      ],
+      "ja": "ここが…伝説の",
+      "jaLines": [
+        "ここが…",
+        "伝説の"
+      ],
+      "ruby": [
+        {
+          "base": "伝説",
+          "rt": "でんせつ"
+        }
+      ],
+      "reading": "ここが…でんせつの",
+      "zh": "這裡就是…傳說中的"
+    },
+    {
+      "id": "t3",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "S",
+      "page": 0,
+      "order": 3,
+      "orientation": "horizontal",
+      "rotate": -4,
+      "bbox": [
+        687,
+        85,
+        386,
+        129
+      ],
+      "textBbox": [
+        687,
+        85,
+        386,
+        129
+      ],
+      "ja": "ザアアアア",
+      "jaLines": [
+        "ザアアアア"
+      ],
+      "ruby": [],
+      "reading": "ザアアアア",
+      "zh": "（風吹樹林）沙沙沙沙"
+    },
+    {
+      "id": "t4",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "R1",
+      "page": 0,
+      "order": 4,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        1545,
+        705,
+        150,
+        230
+      ],
+      "textBbox": [
+        1567,
+        776,
+        108,
+        88
+      ],
+      "ja": "地図だとこの先に村がある",
+      "jaLines": [
+        "地図だと",
+        "この先に",
+        "村がある"
+      ],
+      "ruby": [
+        {
+          "base": "地図",
+          "rt": "ちず"
+        },
+        {
+          "base": "先",
+          "rt": "さき"
+        },
+        {
+          "base": "村",
+          "rt": "むら"
+        }
+      ],
+      "reading": "ちずだとこのさきにむらがある",
+      "zh": "照地圖來看，前面有個村子"
+    },
+    {
+      "id": "t5",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "R1",
+      "page": 0,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        945,
+        705,
+        110,
+        190
+      ],
+      "textBbox": [
+        967,
+        767,
+        68,
+        66
+      ],
+      "ja": "行ってみよう",
+      "jaLines": [
+        "行って",
+        "みよう"
+      ],
+      "ruby": [
+        {
+          "base": "行",
+          "rt": "い"
+        }
+      ],
+      "reading": "いってみよう",
+      "zh": "去看看吧"
+    },
+    {
+      "id": "t6",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "L1",
+      "page": 1,
+      "order": 6,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        645,
+        700,
+        150,
+        200
+      ],
+      "textBbox": [
+        684,
+        745,
+        73,
+        110
+      ],
+      "ja": "足元に気をつけて",
+      "jaLines": [
+        "足元に",
+        "気をつけて"
+      ],
+      "ruby": [
+        {
+          "base": "足元",
+          "rt": "あしもと"
+        },
+        {
+          "base": "気",
+          "rt": "き"
+        }
+      ],
+      "reading": "あしもとにきをつけて",
+      "zh": "小心腳下"
+    },
+    {
+      "id": "t7",
+      "kind": "thought",
+      "shape": "thought",
+      "panel": "L2",
+      "page": 1,
+      "order": 7,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        85,
+        740,
+        170,
+        220
+      ],
+      "textBbox": [
+        143,
+        800,
+        56,
+        100
+      ],
+      "ja": "もう帰りたい…",
+      "jaLines": [
+        "もう",
+        "帰りたい…"
+      ],
+      "ruby": [
+        {
+          "base": "帰",
+          "rt": "かえ"
+        }
+      ],
+      "reading": "もうかえりたい…",
+      "zh": "好想回家…"
+    }
+  ]
+}

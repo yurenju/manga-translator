@@ -1,0 +1,670 @@
+{
+  "id": "p05-dense",
+  "description": "高密度：斜切格線、右側縱長格（先讀右長格再讀左邊上下兩格）、小字、橫跨格間空白的 Balloon",
+  "image": "p05-dense.png",
+  "width": 880,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "A",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        480,
+        40,
+        360,
+        300
+      ],
+      "polygon": [
+        [
+          520,
+          40
+        ],
+        [
+          840,
+          40
+        ],
+        [
+          840,
+          340
+        ],
+        [
+          480,
+          340
+        ]
+      ]
+    },
+    {
+      "id": "B",
+      "page": 0,
+      "order": 2,
+      "bbox": [
+        40,
+        40,
+        464,
+        300
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          504,
+          40
+        ],
+        [
+          464,
+          340
+        ],
+        [
+          40,
+          340
+        ]
+      ]
+    },
+    {
+      "id": "C",
+      "page": 0,
+      "order": 3,
+      "bbox": [
+        600,
+        356,
+        240,
+        544
+      ],
+      "polygon": [
+        [
+          600,
+          356
+        ],
+        [
+          840,
+          356
+        ],
+        [
+          840,
+          900
+        ],
+        [
+          600,
+          900
+        ]
+      ]
+    },
+    {
+      "id": "D",
+      "page": 0,
+      "order": 4,
+      "bbox": [
+        40,
+        356,
+        544,
+        264
+      ],
+      "polygon": [
+        [
+          40,
+          356
+        ],
+        [
+          584,
+          356
+        ],
+        [
+          584,
+          620
+        ],
+        [
+          40,
+          620
+        ]
+      ]
+    },
+    {
+      "id": "E",
+      "page": 0,
+      "order": 5,
+      "bbox": [
+        40,
+        636,
+        544,
+        264
+      ],
+      "polygon": [
+        [
+          40,
+          636
+        ],
+        [
+          584,
+          636
+        ],
+        [
+          584,
+          900
+        ],
+        [
+          40,
+          900
+        ]
+      ]
+    },
+    {
+      "id": "F",
+      "page": 0,
+      "order": 6,
+      "bbox": [
+        380,
+        916,
+        460,
+        324
+      ],
+      "polygon": [
+        [
+          420,
+          916
+        ],
+        [
+          840,
+          916
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          380,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "G",
+      "page": 0,
+      "order": 7,
+      "bbox": [
+        40,
+        916,
+        364,
+        324
+      ],
+      "polygon": [
+        [
+          40,
+          916
+        ],
+        [
+          404,
+          916
+        ],
+        [
+          364,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "A",
+      "page": 0,
+      "order": 1,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        730,
+        50,
+        100,
+        180
+      ],
+      "textBbox": [
+        751,
+        98,
+        59,
+        85
+      ],
+      "ja": "今夜の当番誰だっけ？",
+      "jaLines": [
+        "今夜の当番",
+        "誰だっけ？"
+      ],
+      "ruby": [
+        {
+          "base": "今夜",
+          "rt": "こんや"
+        },
+        {
+          "base": "当番",
+          "rt": "とうばん"
+        },
+        {
+          "base": "誰",
+          "rt": "だれ"
+        }
+      ],
+      "reading": "こんやのとうばんだれだっけ？",
+      "zh": "今晚輪到誰煮飯來著？"
+    },
+    {
+      "id": "t2",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "A",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        558,
+        55,
+        64,
+        110
+      ],
+      "textBbox": [
+        575,
+        85,
+        31,
+        51
+      ],
+      "ja": "…俺？",
+      "jaLines": [
+        "…俺？"
+      ],
+      "ruby": [
+        {
+          "base": "俺",
+          "rt": "おれ"
+        }
+      ],
+      "reading": "…おれ？",
+      "zh": "…我？"
+    },
+    {
+      "id": "t3",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "B",
+      "page": 0,
+      "order": 3,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        80,
+        55,
+        120,
+        190
+      ],
+      "textBbox": [
+        115,
+        116,
+        50,
+        68
+      ],
+      "ja": "そうだよ兄ちゃん",
+      "jaLines": [
+        "そうだよ",
+        "兄ちゃん"
+      ],
+      "ruby": [
+        {
+          "base": "兄",
+          "rt": "にい"
+        }
+      ],
+      "reading": "そうだよにいちゃん",
+      "zh": "對啊，哥"
+    },
+    {
+      "id": "t4",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "C",
+      "page": 0,
+      "order": 4,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        700,
+        385,
+        120,
+        170
+      ],
+      "textBbox": [
+        724,
+        445,
+        73,
+        51
+      ],
+      "ja": "えー面倒くさい",
+      "jaLines": [
+        "えー",
+        "面倒",
+        "くさい"
+      ],
+      "ruby": [
+        {
+          "base": "面倒",
+          "rt": "めんどう"
+        }
+      ],
+      "reading": "えーめんどうくさい",
+      "zh": "欸～好麻煩"
+    },
+    {
+      "id": "t5",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "C",
+      "page": 0,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        625,
+        560,
+        110,
+        160
+      ],
+      "textBbox": [
+        651,
+        606,
+        59,
+        68
+      ],
+      "ja": "昨日も作ったぞ",
+      "jaLines": [
+        "昨日も",
+        "作ったぞ"
+      ],
+      "ruby": [
+        {
+          "base": "昨日",
+          "rt": "きのう"
+        },
+        {
+          "base": "作",
+          "rt": "つく"
+        }
+      ],
+      "reading": "きのうもつくったぞ",
+      "zh": "我昨天也煮了啊"
+    },
+    {
+      "id": "t6",
+      "kind": "balloon",
+      "shape": "burst",
+      "panel": "D",
+      "page": 0,
+      "order": 6,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        195,
+        365,
+        210,
+        210
+      ],
+      "textBbox": [
+        260,
+        419,
+        81,
+        102
+      ],
+      "ja": "嘘つけ！カップ麺だったじゃん",
+      "jaLines": [
+        "嘘つけ！",
+        "カップ麺",
+        "だったじゃん"
+      ],
+      "ruby": [
+        {
+          "base": "嘘",
+          "rt": "うそ"
+        },
+        {
+          "base": "麺",
+          "rt": "めん"
+        }
+      ],
+      "reading": "うそつけ！カップめんだったじゃん",
+      "zh": "少騙人！那是泡麵吧"
+    },
+    {
+      "id": "t7",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "E",
+      "page": 0,
+      "order": 7,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        230,
+        575,
+        140,
+        150
+      ],
+      "textBbox": [
+        257,
+        608,
+        87,
+        85
+      ],
+      "ja": "お湯を入れたのは俺だ",
+      "jaLines": [
+        "お湯を",
+        "入れたのは",
+        "俺だ"
+      ],
+      "ruby": [
+        {
+          "base": "湯",
+          "rt": "ゆ"
+        },
+        {
+          "base": "入",
+          "rt": "い"
+        },
+        {
+          "base": "俺",
+          "rt": "おれ"
+        }
+      ],
+      "reading": "おゆをいれたのはおれだ",
+      "zh": "熱水是我倒的"
+    },
+    {
+      "id": "t8",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "E",
+      "page": 0,
+      "order": 8,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        65,
+        715,
+        110,
+        150
+      ],
+      "textBbox": [
+        84,
+        756,
+        73,
+        68
+      ],
+      "ja": "それは料理じゃない",
+      "jaLines": [
+        "それは",
+        "料理",
+        "じゃない"
+      ],
+      "ruby": [
+        {
+          "base": "料理",
+          "rt": "りょうり"
+        }
+      ],
+      "reading": "それはりょうりじゃない",
+      "zh": "那不叫做菜"
+    },
+    {
+      "id": "t9",
+      "kind": "narration",
+      "shape": "rect",
+      "panel": "F",
+      "page": 0,
+      "order": 9,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        778,
+        935,
+        44,
+        110
+      ],
+      "textBbox": [
+        784,
+        961,
+        33,
+        57
+      ],
+      "ja": "結局…",
+      "jaLines": [
+        "結局…"
+      ],
+      "ruby": [
+        {
+          "base": "結局",
+          "rt": "けっきょく"
+        }
+      ],
+      "reading": "けっきょく…",
+      "zh": "結果…"
+    },
+    {
+      "id": "t10",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "F",
+      "page": 0,
+      "order": 10,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        625,
+        930,
+        110,
+        140
+      ],
+      "textBbox": [
+        658,
+        966,
+        45,
+        68
+      ],
+      "ja": "カレーでいい？",
+      "jaLines": [
+        "カレーで",
+        "いい？"
+      ],
+      "ruby": [],
+      "reading": "カレーでいい？",
+      "zh": "咖哩可以嗎？"
+    },
+    {
+      "id": "t11",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "G",
+      "page": 0,
+      "order": 11,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        205,
+        935,
+        110,
+        150
+      ],
+      "textBbox": [
+        234,
+        985,
+        53,
+        51
+      ],
+      "ja": "辛口でね！",
+      "jaLines": [
+        "辛口で",
+        "ね！"
+      ],
+      "ruby": [
+        {
+          "base": "辛口",
+          "rt": "からくち"
+        }
+      ],
+      "reading": "からくちでね！",
+      "zh": "要辣味的喔！"
+    },
+    {
+      "id": "t12",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "G",
+      "page": 0,
+      "order": 12,
+      "orientation": "vertical",
+      "rotate": 4,
+      "bbox": [
+        86,
+        1027,
+        27,
+        66
+      ],
+      "textBbox": [
+        86,
+        1027,
+        27,
+        66
+      ],
+      "ja": "（甘口派）",
+      "jaLines": [
+        "（甘口派）"
+      ],
+      "ruby": [
+        {
+          "base": "甘口",
+          "rt": "あまくち"
+        },
+        {
+          "base": "派",
+          "rt": "は"
+        }
+      ],
+      "reading": "（あまくちは）",
+      "zh": "（我是甜味派）"
+    }
+  ]
+}

@@ -1,0 +1,420 @@
+{
+  "id": "p03-shapes",
+  "description": "Balloon 形狀：爆炸形、思考泡泡、虛線悄悄話、黑底白字、旁白框，以及橫跨格線的 Balloon",
+  "image": "p03-shapes.png",
+  "width": 880,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "A",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        440,
+        40,
+        400,
+        360
+      ],
+      "polygon": [
+        [
+          440,
+          40
+        ],
+        [
+          840,
+          40
+        ],
+        [
+          840,
+          400
+        ],
+        [
+          440,
+          400
+        ]
+      ]
+    },
+    {
+      "id": "B",
+      "page": 0,
+      "order": 2,
+      "bbox": [
+        40,
+        40,
+        384,
+        360
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          424,
+          40
+        ],
+        [
+          424,
+          400
+        ],
+        [
+          40,
+          400
+        ]
+      ]
+    },
+    {
+      "id": "C",
+      "page": 0,
+      "order": 3,
+      "bbox": [
+        40,
+        416,
+        800,
+        384
+      ],
+      "polygon": [
+        [
+          40,
+          416
+        ],
+        [
+          840,
+          416
+        ],
+        [
+          840,
+          800
+        ],
+        [
+          40,
+          800
+        ]
+      ]
+    },
+    {
+      "id": "D",
+      "page": 0,
+      "order": 4,
+      "bbox": [
+        520,
+        816,
+        320,
+        424
+      ],
+      "polygon": [
+        [
+          520,
+          816
+        ],
+        [
+          840,
+          816
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          520,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "E",
+      "page": 0,
+      "order": 5,
+      "bbox": [
+        40,
+        816,
+        464,
+        424
+      ],
+      "polygon": [
+        [
+          40,
+          816
+        ],
+        [
+          504,
+          816
+        ],
+        [
+          504,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "balloon",
+      "shape": "burst",
+      "panel": "A",
+      "page": 0,
+      "order": 1,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        655,
+        45,
+        170,
+        250
+      ],
+      "textBbox": [
+        721,
+        80,
+        39,
+        180
+      ],
+      "ja": "うるさーい!!",
+      "jaLines": [
+        "うるさーい!!"
+      ],
+      "ruby": [],
+      "reading": "うるさーい!!",
+      "zh": "吵死了!!"
+    },
+    {
+      "id": "t2",
+      "kind": "thought",
+      "shape": "thought",
+      "panel": "B",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        65,
+        65,
+        170,
+        210
+      ],
+      "textBbox": [
+        107,
+        110,
+        89,
+        120
+      ],
+      "ja": "明日のテストどうしよう…",
+      "jaLines": [
+        "明日の",
+        "テスト",
+        "どうしよう…"
+      ],
+      "ruby": [
+        {
+          "base": "明日",
+          "rt": "あした"
+        }
+      ],
+      "reading": "あしたのテストどうしよう…",
+      "zh": "明天的考試怎麼辦…"
+    },
+    {
+      "id": "t3",
+      "kind": "balloon",
+      "shape": "whisper",
+      "panel": "C",
+      "page": 0,
+      "order": 3,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        675,
+        460,
+        130,
+        200
+      ],
+      "textBbox": [
+        713,
+        510,
+        56,
+        100
+      ],
+      "ja": "ねえ…聞こえる？",
+      "jaLines": [
+        "ねえ…",
+        "聞こえる？"
+      ],
+      "ruby": [
+        {
+          "base": "聞",
+          "rt": "き"
+        }
+      ],
+      "reading": "ねえ…きこえる？",
+      "zh": "喂…聽得到嗎？"
+    },
+    {
+      "id": "t4",
+      "kind": "balloon",
+      "shape": "inverted",
+      "panel": "C",
+      "page": 0,
+      "order": 4,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        295,
+        455,
+        110,
+        210
+      ],
+      "textBbox": [
+        332,
+        516,
+        39,
+        88
+      ],
+      "ja": "……誰だ",
+      "jaLines": [
+        "……誰だ"
+      ],
+      "ruby": [
+        {
+          "base": "誰",
+          "rt": "だれ"
+        }
+      ],
+      "reading": "……だれだ",
+      "zh": "……是誰"
+    },
+    {
+      "id": "t5",
+      "kind": "narration",
+      "shape": "rect",
+      "panel": "D",
+      "page": 0,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        700,
+        830,
+        120,
+        140
+      ],
+      "textBbox": [
+        702,
+        864,
+        118,
+        72
+      ],
+      "ja": "その夜、町から音が消えた",
+      "jaLines": [
+        "その夜、",
+        "町から",
+        "音が",
+        "消えた"
+      ],
+      "ruby": [
+        {
+          "base": "夜",
+          "rt": "よる"
+        },
+        {
+          "base": "町",
+          "rt": "まち"
+        },
+        {
+          "base": "音",
+          "rt": "おと"
+        },
+        {
+          "base": "消",
+          "rt": "き"
+        }
+      ],
+      "reading": "そのよる、まちからおとがきえた",
+      "zh": "那一晚，鎮上的聲音消失了"
+    },
+    {
+      "id": "t6",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "E",
+      "page": 0,
+      "order": 6,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        345,
+        780,
+        110,
+        160
+      ],
+      "textBbox": [
+        382,
+        816,
+        39,
+        88
+      ],
+      "ja": "待って！",
+      "jaLines": [
+        "待って！"
+      ],
+      "ruby": [
+        {
+          "base": "待",
+          "rt": "ま"
+        }
+      ],
+      "reading": "まって！",
+      "zh": "等一下！"
+    },
+    {
+      "id": "t7",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "E",
+      "page": 0,
+      "order": 7,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        90,
+        860,
+        120,
+        200
+      ],
+      "textBbox": [
+        119,
+        916,
+        64,
+        88
+      ],
+      "ja": "どこ行くの？",
+      "jaLines": [
+        "どこ",
+        "行くの？"
+      ],
+      "ruby": [
+        {
+          "base": "行",
+          "rt": "い"
+        }
+      ],
+      "reading": "どこいくの？",
+      "zh": "你要去哪？"
+    }
+  ]
+}

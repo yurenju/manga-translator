@@ -1,0 +1,59 @@
+{
+  "id": "p07-spread",
+  "description": "雙頁跨頁（Kindle 寬視窗會把兩頁合成一張圖）：橫跨兩頁的大格、跨越中縫的狀聲詞、右頁先讀",
+  "width": 1760,
+  "height": 1280,
+  "pages": [
+    { "index": 0, "bbox": [880, 0, 880, 1280] },
+    { "index": 1, "bbox": [0, 0, 880, 1280] }
+  ],
+  "panels": [
+    { "id": "S", "order": 1, "page": null, "points": [[40, 40], [1720, 40], [1720, 640], [40, 640]],
+      "art": [
+        { "type": "line", "x1": 40, "y1": 520, "x2": 500, "y2": 260 },
+        { "type": "line", "x1": 500, "y1": 260, "x2": 900, "y2": 480 },
+        { "type": "line", "x1": 700, "y1": 370, "x2": 1150, "y2": 200 },
+        { "type": "line", "x1": 1150, "y1": 200, "x2": 1720, "y2": 520 },
+        { "type": "tone", "x": 40, "y": 520, "w": 1680, "h": 120 },
+        { "type": "face", "x": 1300, "y": 560, "r": 45, "hair": true },
+        { "type": "face", "x": 1190, "y": 570, "r": 40 }
+      ] },
+    { "id": "R1", "order": 2, "page": 0, "points": [[920, 656], [1720, 656], [1720, 1240], [920, 1240]],
+      "art": [
+        { "type": "rect", "x": 1100, "y": 900, "w": 260, "h": 200, "fill": "#fff" },
+        { "type": "line", "x1": 1130, "y1": 950, "x2": 1330, "y2": 1050 },
+        { "type": "circle", "x": 1300, "y": 960, "r": 14 },
+        { "type": "face", "x": 1550, "y": 1130, "r": 55, "hair": true }
+      ] },
+    { "id": "L1", "order": 3, "page": 1, "points": [[440, 656], [840, 656], [840, 1240], [440, 1240]],
+      "art": [
+        { "type": "line", "x1": 440, "y1": 1160, "x2": 840, "y2": 1100 },
+        { "type": "face", "x": 640, "y": 1010, "r": 55, "mouth": "flat" }
+      ] },
+    { "id": "L2", "order": 4, "page": 1, "points": [[40, 656], [424, 656], [424, 1240], [40, 1240]],
+      "art": [{ "type": "face", "x": 300, "y": 1120, "r": 55, "eyes": "closed", "mouth": "flat" }] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "narration", "shape": "rect", "panel": "S", "page": 0,
+      "cx": 1660, "cy": 160, "w": 60, "h": 180, "fontSize": 22, "weight": 400, "font": "mincho",
+      "ja": "{千年|せんねん}の{森|もり}", "reading": "せんねんのもり", "zh": "千年之森" },
+    { "id": "t2", "order": 2, "kind": "balloon", "shape": "ellipse", "panel": "S", "page": 0,
+      "cx": 1460, "cy": 360, "w": 130, "h": 210, "tail": [1320, 500],
+      "ja": "ここが…\n{伝説|でんせつ}の", "reading": "ここが…でんせつの", "zh": "這裡就是…傳說中的" },
+    { "id": "t3", "order": 3, "kind": "sfx", "panel": "S", "page": null, "orientation": "horizontal",
+      "cx": 880, "cy": 150, "fontSize": 80, "rotate": -4, "weight": 900,
+      "ja": "ザアアアア", "reading": "ザアアアア", "zh": "（風吹樹林）沙沙沙沙" },
+    { "id": "t4", "order": 4, "kind": "balloon", "shape": "ellipse", "panel": "R1", "page": 0,
+      "cx": 1620, "cy": 820, "w": 150, "h": 230, "tail": [1560, 1060],
+      "ja": "{地図|ちず}だと\nこの{先|さき}に\n{村|むら}がある", "reading": "ちずだとこのさきにむらがある", "zh": "照地圖來看，前面有個村子" },
+    { "id": "t5", "order": 5, "kind": "balloon", "shape": "ellipse", "panel": "R1", "page": 0,
+      "cx": 1000, "cy": 800, "w": 110, "h": 190,
+      "ja": "{行|い}って\nみよう", "reading": "いってみよう", "zh": "去看看吧" },
+    { "id": "t6", "order": 6, "kind": "balloon", "shape": "ellipse", "panel": "L1", "page": 1,
+      "cx": 720, "cy": 800, "w": 150, "h": 200, "tail": [660, 940],
+      "ja": "{足元|あしもと}に\n{気|き}をつけて", "reading": "あしもとにきをつけて", "zh": "小心腳下" },
+    { "id": "t7", "order": 7, "kind": "thought", "shape": "thought", "panel": "L2", "page": 1,
+      "cx": 170, "cy": 850, "w": 170, "h": 220, "tail": [280, 1060], "fontSize": 20,
+      "ja": "もう\n{帰|かえ}りたい…", "reading": "もうかえりたい…", "zh": "好想回家…" }
+  ]
+}
