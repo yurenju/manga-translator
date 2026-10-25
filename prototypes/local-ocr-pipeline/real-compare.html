@@ -1,0 +1,307 @@
+<!doctype html>
+<!-- PROTOTYPE（#13）：在真實漫畫頁面上並排比較兩條流水線，用完即丟。
+     A = Sonnet 5.5 整頁看圖（#6 / #15 的 image 模式）
+     B = 本機 OCR（#7 的 core.mjs，onnxruntime-web WebGPU）＋ Haiku 5.5 只翻文字（#15 的預設）
+     截圖從剪貼簿貼上，只活在記憶體裡；頁面不會存檔、不會上傳到 localhost 以外（除了送給 Anthropic API）。
+     參數：?ep=webgpu|wasm&maxEdge=1568 -->
+<meta charset="utf-8" />
+<title>PROTOTYPE 真實頁面比較</title>
+<style>
+  body { font: 13px system-ui, sans-serif; margin: 12px; }
+  #drop { border: 2px dashed #888; padding: 16px; text-align: center; }
+  .variant { border-top: 3px solid #333; margin-top: 16px; padding-top: 8px; }
+  .cols { display: flex; gap: 12px; align-items: flex-start; }
+  .col { flex: 1; min-width: 0; }
+  canvas.view { width: 100%; border: 1px solid #ccc; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border: 1px solid #ddd; padding: 2px 4px; vertical-align: top; }
+  .m { font-family: ui-monospace, monospace; background: #f4f4f4; padding: 4px; white-space: pre-wrap; }
+  .A { color: #c00; } .B { color: #06c; }
+  select { font-size: 12px; }
+</style>
+<h2>PROTOTYPE：真實頁面比較（#13）— 截圖不會被存檔</h2>
+<div id="status">載入本機模型中…</div>
+<div id="drop">在這裡按 Ctrl+V 貼上漫畫截圖（Win+Shift+S 框選漫畫區域），或把圖片拖進來</div>
+<p>
+  切法：
+  <label><input type="checkbox" id="vRaw" checked /> 整張（原樣）</label>
+  <label><input type="checkbox" id="vTrim" /> 去黑邊</label>
+  <label><input type="checkbox" id="vSplit" checked /> 去黑邊＋切成右頁／左頁（橫長圖才切）</label>
+  ｜跑：
+  <label><input type="checkbox" id="pA" checked /> <b class="A">A Sonnet 看圖</b></label>
+  <label><input type="checkbox" id="pB" checked /> <b class="B">B 本機 OCR＋Haiku</b></label>
+  <button id="go" disabled>跑</button>
+  <button id="copy">複製數字摘要（不含原文）</button>
+  <button id="clear">清除</button>
+</p>
+<div id="out"></div>
+<script src="/node_modules/kuromoji/build/kuromoji.js"></script>
+<script type="module">
+  import * as ort from "/node_modules/onnxruntime-web/dist/ort.webgpu.min.mjs";
+  import { runPage } from "/core.mjs";
+
+  const q = new URLSearchParams(location.search);
+  const ep = q.get("ep") ?? "webgpu";
+  const maxEdge = Number(q.get("maxEdge") ?? 1568);
+  const $ = (id) => document.getElementById(id);
+  const status = (s) => ($("status").textContent = s);
+
+  // ---------- 本機模型（同 browser.html：GPU 用 fp32 detector + fp32 OCR）----------
+  let models;
+  try {
+    ort.env.wasm.wasmPaths = "/node_modules/onnxruntime-web/dist/";
+    ort.env.wasm.numThreads = navigator.hardwareConcurrency;
+    const dtype = ep === "webgpu" ? "" : "_quantized";
+    const det = ep === "webgpu" ? "detector.onnx" : "detector-v4-s_int8.onnx";
+    const session = async (p) => ort.InferenceSession.create(await (await fetch(`/models/${p}`)).arrayBuffer(), { executionProviders: [ep] });
+    const t0 = performance.now();
+    models = {
+      ort, thr: 0.4, orderMode: "panels",
+      det: await session(`detector/${det}`),
+      encoder: await session(`ocr/encoder_model${dtype}.onnx`),
+      decoder: await session(`ocr/decoder_model${dtype}.onnx`),
+      vocab: (await (await fetch("/models/ocr/vocab.txt")).text()).split(/\r?\n/),
+      tokenizer: await new Promise((res, rej) => kuromoji.builder({ dicPath: "/node_modules/kuromoji/dict/" }).build((e, t) => (e ? rej(e) : res(t)))),
+    };
+    status(`本機模型就緒（${ep}，載入 ${Math.round(performance.now() - t0)} ms）。貼上截圖吧。`);
+  } catch (e) {
+    status(`本機模型載入失敗：${e}`);
+  }
+
+  // ---------- 取圖：貼上 / 拖放，只放記憶體 ----------
+  let src = null;
+  async function setImage(blob) {
+    src = await createImageBitmap(blob);
+    $("drop").textContent = `已貼上 ${src.width}×${src.height}（只在記憶體）。可以再貼一張取代。`;
+    $("go").disabled = !models;
+  }
+  document.addEventListener("paste", (e) => {
+    const f = [...e.clipboardData.items].find((i) => i.type.startsWith("image/"));
+    if (f) setImage(f.getAsFile());
+  });
+  $("drop").addEventListener("dragover", (e) => e.preventDefault());
+  $("drop").addEventListener("drop", (e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setImage(f); });
+
+  // ---------- 切法 ----------
+  const canvasOf = (bmp, sx, sy, sw, sh) => {
+    const c = new OffscreenCanvas(sw, sh);
+    c.getContext("2d").drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
+    return c;
+  };
+  // 去黑邊：從四邊往內找「非暗像素比例 > 5%」的第一行 / 列
+  function trimBox(bmp) {
+    const { width: w, height: h } = bmp;
+    const d = canvasOf(bmp, 0, 0, w, h).getContext("2d").getImageData(0, 0, w, h).data;
+    const lit = (i) => d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2] > 180;
+    const rowOk = (y) => { let n = 0; for (let x = 0; x < w; x += 2) n += lit(y * w + x); return n > 0.05 * w / 2; };
+    const colOk = (x) => { let n = 0; for (let y = 0; y < h; y += 2) n += lit(y * w + x); return n > 0.05 * h / 2; };
+    let t = 0, b = h - 1, l = 0, r = w - 1;
+    while (t < b && !rowOk(t)) t++;
+    while (b > t && !rowOk(b)) b--;
+    while (l < r && !colOk(l)) l++;
+    while (r > l && !colOk(r)) r--;
+    return [l, t, r - l + 1, b - t + 1];
+  }
+  function variants() {
+    const vs = [];
+    if ($("vRaw").checked) vs.push({ name: "整張", canvas: canvasOf(src, 0, 0, src.width, src.height) });
+    const [l, t, w, h] = trimBox(src);
+    if ($("vTrim").checked) vs.push({ name: `去黑邊 [${l},${t},${w},${h}]`, canvas: canvasOf(src, l, t, w, h) });
+    if ($("vSplit").checked) {
+      if (w > h * 1.1) {
+        const half = Math.floor(w / 2);
+        vs.push({ name: "右頁", canvas: canvasOf(src, l + half, t, w - half, h) });
+        vs.push({ name: "左頁", canvas: canvasOf(src, l, t, half, h) });
+      } else if (!$("vTrim").checked) vs.push({ name: `去黑邊（單頁）[${l},${t},${w},${h}]`, canvas: canvasOf(src, l, t, w, h) });
+    }
+    return vs;
+  }
+
+  // ---------- 本機 OCR 的影像介面（同 browser.html 的 loadImage，來源改成 canvas）----------
+  function imgFor(canvas) {
+    const w = canvas.width, h = canvas.height;
+    const draw = (sx, sy, sw, sh, dw, dh) => {
+      const c = new OffscreenCanvas(dw, dh);
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, dw, dh);
+      ctx.imageSmoothingQuality = "medium";
+      ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, dw, dh);
+      return ctx.getImageData(0, 0, dw, dh).data;
+    };
+    const toGray = (d) => { const g = new Uint8Array(d.length / 4); for (let i = 0; i < g.length; i++) g[i] = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]); return g; };
+    return {
+      w, h,
+      rgb640: () => { const d = draw(0, 0, w, h, 640, 640); const o = new Uint8Array(640 * 640 * 3); for (let i = 0; i < 640 * 640; i++) for (let c = 0; c < 3; c++) o[i * 3 + c] = d[i * 4 + c]; return o; },
+      gray: () => toGray(draw(0, 0, w, h, w, h)),
+      crop224: (l, t, cw, ch) => toGray(draw(l, t, cw, ch, 224, 224)),
+    };
+  }
+
+  // ---------- API（prompt / schema / 價格同 #15 的 run.mjs）----------
+  const MODELS = {
+    haiku: { id: "claude-haiku-5-5", in: 0.1, out: 0.5 },
+    sonnet: { id: "claude-sonnet-5-5", in: 2, out: 10 },
+  };
+  const obj = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
+  const imageSchema = obj({ texts: { type: "array", items: obj({
+    order: { type: "integer", description: "全頁閱讀順序，1 起算" },
+    kind: { type: "string", enum: ["balloon", "thought", "narration", "sfx", "sign", "outside"] },
+    bbox: { type: "array", items: { type: "integer" }, description: "[x, y, width, height]，圖片像素，原點左上；有外框時框住整個 Balloon / 旁白框" },
+    orientation: { type: "string", enum: ["vertical", "horizontal"] },
+    ja: { type: "string", description: "日文原文，不含振り仮名，不含換行" },
+    reading: { type: "string", description: "整句讀音（假名）；有振り仮名時以振り仮名為準" },
+    zh: { type: "string", description: "繁體中文（台灣）譯文" },
+  }) } });
+  const textSchema = obj({ texts: { type: "array", items: obj({
+    order: { type: "integer" },
+    reading: { type: "string", description: "整句假名讀音" },
+    zh: { type: "string", description: "繁體中文（台灣）譯文" },
+  }) } });
+  const systemImage = `你是日文漫畫翻譯助手。使用者會給你一張漫畫 Page 圖片，請找出圖中所有日文文字
+（對話 Balloon、思考泡泡、旁白框、狀聲詞、招牌或物件上的字、Balloon 外的手寫小字），
+依照日本漫畫的閱讀順序（右上到左下；雙頁時先右頁再左頁）排序，逐一回傳：
+- bbox：[x, y, width, height]，以圖片像素為單位、原點在左上。有外框（Balloon、旁白框）就框住整個外框；沒有外框就框住文字本身。
+- kind：balloon / thought / narration / sfx / sign / outside
+- orientation：vertical（直書）或 horizontal（橫書）
+- ja：日文原文（不含振り仮名，換行直接接起來）
+- reading：整句的假名讀音，有振り仮名時以振り仮名為準
+- zh：自然的台灣繁體中文譯文
+只輸出符合 schema 的 JSON。`;
+  const systemText = `你是日文漫畫翻譯助手。使用者會給你一張漫畫 Page 上、已經用 OCR 讀出來並依閱讀順序排好的日文文字（JSON）。
+kind 是 balloon（對話框）或 outside（對話框外的文字，例如狀聲詞、旁白、招牌）。OCR 偶爾會有錯字，請依上下文理解。
+請逐一回傳 order 與自然的台灣繁體中文譯文 zh，以及整句的假名讀音 reading（漢字一律寫成平假名）。
+只輸出符合 schema 的 JSON。`;
+
+  async function callApi(modelKey, system, content, schema) {
+    const m = MODELS[modelKey];
+    const t0 = performance.now();
+    const res = await fetch("/anthropic", {
+      method: "POST",
+      body: JSON.stringify({
+        model: m.id, max_tokens: 16000, system, messages: [{ role: "user", content }],
+        output_config: { effort: "low", format: { type: "json_schema", schema } },
+      }),
+    });
+    const ms = Math.round(performance.now() - t0);
+    const json = await res.json();
+    if (!res.ok) throw new Error(`${res.status} ${JSON.stringify(json)}`);
+    const u = json.usage;
+    const cost = ((u.input_tokens ?? 0) * m.in + (u.output_tokens ?? 0) * m.out) / 1e6;
+    let out = null;
+    try { out = JSON.parse(json.content.find((b) => b.type === "text")?.text ?? ""); } catch {}
+    return { out, ms, usage: { in: u.input_tokens, out: u.output_tokens }, cost, stop: json.stop_reason };
+  }
+
+  // A：縮到長邊 ≤ maxEdge 再送（避免 API 自己縮圖、座標對不上），回來的 bbox 再放大回原尺寸
+  async function pipelineA(canvas) {
+    const s = Math.min(1, maxEdge / Math.max(canvas.width, canvas.height));
+    const w = Math.round(canvas.width * s), h = Math.round(canvas.height * s);
+    const c = new OffscreenCanvas(w, h);
+    const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(canvas, 0, 0, w, h);
+    let blob = await c.convertToBlob({ type: "image/png" });
+    if (blob.size > 3.5e6) blob = await c.convertToBlob({ type: "image/jpeg", quality: 0.9 });
+    const b64 = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(",")[1]); fr.readAsDataURL(blob); });
+    const r = await callApi("sonnet", systemImage, [
+      { type: "image", source: { type: "base64", media_type: blob.type, data: b64 } },
+      { type: "text", text: `這張圖片的尺寸是 ${w}×${h} 像素。` },
+    ], imageSchema);
+    const texts = (r.out?.texts ?? []).map((t) => ({ ...t, bbox: t.bbox.map((v) => Math.round(v / s)) }));
+    return { texts, sent: [w, h, blob.type, Math.round(blob.size / 1024) + "KB"], lat: { apiMs: r.ms, totalMs: r.ms }, usage: r.usage, cost: r.cost, stop: r.stop };
+  }
+
+  // B：本機 OCR → 只送文字給 Haiku 翻譯＋讀音
+  async function pipelineB(canvas) {
+    const local = await runPage(models, imgFor(canvas));
+    let texts = local.texts, api = { ms: 0, usage: { in: 0, out: 0 }, cost: 0, stop: "-" };
+    if (texts.length) {
+      api = await callApi("haiku", systemText, [{ type: "text", text: JSON.stringify(texts.map(({ order, kind, ja }) => ({ order, kind, ja }))) }], textSchema);
+      const by = new Map((api.out?.texts ?? []).map((t) => [t.order, t]));
+      texts = texts.map((t) => ({ ...t, readingKuromoji: t.reading, reading: by.get(t.order)?.reading ?? t.reading, zh: by.get(t.order)?.zh ?? "" }));
+    }
+    return {
+      texts, sent: [canvas.width, canvas.height, "text only"],
+      lat: { localMs: local.latency.wallMs, detectMs: local.latency.detectMs, ocrMs: local.latency.ocrMs, apiMs: api.ms, totalMs: local.latency.wallMs + api.ms },
+      usage: api.usage, cost: api.cost, stop: api.stop, panels: local.debug.panels.length,
+    };
+  }
+
+  // ---------- 呈現與人工判讀 ----------
+  const JUDGE = ["", "Balloon✓", "Balloon框偏", "Balloon文字錯", "狀聲詞✓", "其他✓", "✗多抓/錯"];
+  const results = (window.__results = []);
+  function draw(view, canvas, texts, color) {
+    view.width = canvas.width; view.height = canvas.height;
+    const ctx = view.getContext("2d");
+    ctx.drawImage(canvas, 0, 0);
+    const lw = Math.max(2, canvas.width / 400);
+    ctx.lineWidth = lw; ctx.font = `bold ${lw * 9}px sans-serif`;
+    for (const t of texts) {
+      const [x, y, w, h] = t.bbox;
+      ctx.strokeStyle = color; ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = color; ctx.fillRect(x, y, lw * 12, lw * 10);
+      ctx.fillStyle = "#fff"; ctx.fillText(String(t.order), x + lw, y + lw * 8);
+    }
+  }
+  function render(v, key, r) {
+    const col = v.el.querySelector(`.col.${key}`);
+    const color = key === "A" ? "#d00" : "#06c";
+    col.innerHTML = `<h4 class="${key}">${key === "A" ? "A Sonnet 5.5 看圖" : "B 本機 OCR＋Haiku 5.5"}</h4>
+      <div class="m">${r.error ? "ERROR " + r.error : `送出 ${r.sent.join(" ")}｜延遲 ${JSON.stringify(r.lat)}
+tokens in ${r.usage.in} / out ${r.usage.out}｜$${r.cost.toFixed(5)}｜${r.texts.length} 則｜stop ${r.stop}${r.panels != null ? `｜Panel ${r.panels}` : ""}`}</div>
+      順序錯幾個：<input type="number" class="orderErr" style="width:4em" value="" />
+      <canvas class="view"></canvas>
+      <table><tr><th>判定</th><th>#</th><th>kind</th><th>原文</th><th>讀音</th><th>譯文</th></tr></table>`;
+    if (r.error) return;
+    draw(col.querySelector("canvas"), v.canvas, r.texts, color);
+    const table = col.querySelector("table");
+    for (const t of r.texts) {
+      const tr = table.insertRow();
+      tr.innerHTML = `<td><select>${JUDGE.map((j) => `<option>${j}</option>`).join("")}</select></td><td>${t.order}</td><td>${t.kind}</td><td>${t.ja}</td><td>${t.reading}</td><td>${t.zh}</td>`;
+      tr.querySelector("select").onchange = (e) => (t.judge = e.target.value);
+    }
+    col.querySelector(".orderErr").onchange = (e) => (r.orderErr = Number(e.target.value));
+  }
+
+  $("go").onclick = async () => {
+    $("go").disabled = true;
+    const shot = results.length + 1;
+    for (const v of variants()) {
+      v.shot = shot;
+      v.el = document.createElement("div");
+      v.el.className = "variant";
+      v.el.innerHTML = `<h3>截圖 ${shot}｜${v.name}（${v.canvas.width}×${v.canvas.height}）</h3>
+        真實 Balloon 數（要原地覆蓋的，含旁白框）：<input type="number" class="realB" style="width:4em" />
+        真實狀聲詞數：<input type="number" class="realS" style="width:4em" />
+        <div class="cols"><div class="col A"></div><div class="col B"></div></div>`;
+      $("out").prepend(v.el);
+      v.el.querySelector(".realB").onchange = (e) => (v.realBalloons = Number(e.target.value));
+      v.el.querySelector(".realS").onchange = (e) => (v.realSfx = Number(e.target.value));
+      results.push(v);
+      status(`跑 截圖 ${shot}｜${v.name}…`);
+      const jobs = [];
+      if ($("pA").checked) jobs.push(pipelineA(v.canvas).catch((e) => ({ error: String(e) })).then((r) => { v.A = r; render(v, "A", r); }));
+      if ($("pB").checked) jobs.push(pipelineB(v.canvas).catch((e) => ({ error: String(e) })).then((r) => { v.B = r; render(v, "B", r); }));
+      await Promise.all(jobs);
+    }
+    status("完成。請在每則的「判定」下拉選單標記，填上真實 Balloon / 狀聲詞數。");
+    $("go").disabled = false;
+  };
+
+  // 摘要：只有數字（尺寸、延遲、tokens、費用、判定計數），不含原文 / 譯文，可以貼回 issue
+  function summary() {
+    return results.map((v) => {
+      const s = { shot: v.shot, variant: v.name.replace(/ \[.*\]/, ""), size: [v.canvas.width, v.canvas.height], realBalloons: v.realBalloons ?? null, realSfx: v.realSfx ?? null };
+      for (const k of ["A", "B"]) {
+        const r = v[k];
+        if (!r) continue;
+        if (r.error) { s[k] = { error: r.error.slice(0, 200) }; continue; }
+        const count = {};
+        for (const t of r.texts) if (t.judge) count[t.judge] = (count[t.judge] ?? 0) + 1;
+        s[k] = { n: r.texts.length, kinds: r.texts.reduce((a, t) => ((a[t.kind] = (a[t.kind] ?? 0) + 1), a), {}), judge: count, orderErr: r.orderErr ?? null, lat: r.lat, usage: r.usage, cost: +r.cost.toFixed(5), sent: r.sent.slice(0, 2) };
+      }
+      return s;
+    });
+  }
+  window.__summary = summary;
+  $("copy").onclick = () => navigator.clipboard.writeText(JSON.stringify(summary(), null, 1)).then(() => status("已複製摘要到剪貼簿"));
+  $("clear").onclick = () => { results.length = 0; $("out").innerHTML = ""; src = null; $("drop").textContent = "已清除。再貼一張吧。"; $("go").disabled = true; };
+</script>
