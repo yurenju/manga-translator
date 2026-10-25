@@ -1,0 +1,649 @@
+{
+  "id": "p08-action",
+  "description": "戰鬥跨頁：右頁整格招式名大字（無 Balloon、片假名ルビ義訓）；左頁手寫風（抖動筆畫）狀聲詞、同一個狀聲詞重複出現（ガタ／ゴト）、深色網點上的大狀聲詞、小 Balloon 與有ルビ的對話",
+  "image": "p08-action.png",
+  "width": 1760,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        880,
+        0,
+        880,
+        1280
+      ]
+    },
+    {
+      "index": 1,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "R",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        920,
+        40,
+        800,
+        1200
+      ],
+      "polygon": [
+        [
+          920,
+          40
+        ],
+        [
+          1720,
+          40
+        ],
+        [
+          1720,
+          1240
+        ],
+        [
+          920,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "A",
+      "page": 1,
+      "order": 2,
+      "bbox": [
+        40,
+        40,
+        800,
+        290
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          840,
+          40
+        ],
+        [
+          840,
+          330
+        ],
+        [
+          40,
+          330
+        ]
+      ]
+    },
+    {
+      "id": "B",
+      "page": 1,
+      "order": 3,
+      "bbox": [
+        40,
+        346,
+        800,
+        274
+      ],
+      "polygon": [
+        [
+          40,
+          346
+        ],
+        [
+          840,
+          346
+        ],
+        [
+          840,
+          620
+        ],
+        [
+          40,
+          620
+        ]
+      ]
+    },
+    {
+      "id": "C",
+      "page": 1,
+      "order": 4,
+      "bbox": [
+        40,
+        636,
+        800,
+        204
+      ],
+      "polygon": [
+        [
+          40,
+          636
+        ],
+        [
+          840,
+          636
+        ],
+        [
+          840,
+          840
+        ],
+        [
+          40,
+          840
+        ]
+      ]
+    },
+    {
+      "id": "D",
+      "page": 1,
+      "order": 5,
+      "bbox": [
+        40,
+        856,
+        800,
+        384
+      ],
+      "polygon": [
+        [
+          40,
+          856
+        ],
+        [
+          840,
+          856
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "R",
+      "page": 0,
+      "order": 1,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        945,
+        77,
+        168,
+        506
+      ],
+      "textBbox": [
+        945,
+        77,
+        168,
+        506
+      ],
+      "ja": "雷槍!!",
+      "jaLines": [
+        "雷槍!!"
+      ],
+      "ruby": [
+        {
+          "base": "雷槍",
+          "rt": "ライトニングランス"
+        }
+      ],
+      "reading": "ライトニングランス!!",
+      "zh": "雷槍!!"
+    },
+    {
+      "id": "t2",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "R",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": 14,
+      "bbox": [
+        1571,
+        472,
+        138,
+        256
+      ],
+      "textBbox": [
+        1571,
+        472,
+        138,
+        256
+      ],
+      "ja": "バチィッ",
+      "jaLines": [
+        "バチィッ"
+      ],
+      "ruby": [],
+      "reading": "バチィッ",
+      "zh": "（電光）啪嘰"
+    },
+    {
+      "id": "t3",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "A",
+      "page": 1,
+      "order": 3,
+      "orientation": "vertical",
+      "rotate": -6,
+      "bbox": [
+        722,
+        150,
+        77,
+        160
+      ],
+      "textBbox": [
+        722,
+        150,
+        77,
+        160
+      ],
+      "ja": "ドサッ",
+      "jaLines": [
+        "ドサッ"
+      ],
+      "ruby": [],
+      "reading": "ドサッ",
+      "zh": "（倒下）咚"
+    },
+    {
+      "id": "t4",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "A",
+      "page": 1,
+      "order": 4,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        528,
+        50,
+        64,
+        120
+      ],
+      "textBbox": [
+        549,
+        92,
+        23,
+        36
+      ],
+      "ja": "え!?",
+      "jaLines": [
+        "え!?"
+      ],
+      "ruby": [],
+      "reading": "え!?",
+      "zh": "咦!?"
+    },
+    {
+      "id": "t5",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "A",
+      "page": 1,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 8,
+      "bbox": [
+        395,
+        220,
+        72,
+        140
+      ],
+      "textBbox": [
+        395,
+        220,
+        72,
+        140
+      ],
+      "ja": "ドサッ",
+      "jaLines": [
+        "ドサッ"
+      ],
+      "ruby": [],
+      "reading": "ドサッ",
+      "zh": "（倒下）咚"
+    },
+    {
+      "id": "t6",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "A",
+      "page": 1,
+      "order": 6,
+      "orientation": "vertical",
+      "rotate": -18,
+      "bbox": [
+        90,
+        40,
+        202,
+        299
+      ],
+      "textBbox": [
+        90,
+        40,
+        202,
+        299
+      ],
+      "ja": "ズバッ",
+      "jaLines": [
+        "ズバッ"
+      ],
+      "ruby": [],
+      "reading": "ズバッ",
+      "zh": "（斬擊）唰"
+    },
+    {
+      "id": "t7",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "B",
+      "page": 1,
+      "order": 7,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        160,
+        390,
+        120,
+        200
+      ],
+      "textBbox": [
+        187,
+        446,
+        68,
+        88
+      ],
+      "ja": "怪我はないか？",
+      "jaLines": [
+        "怪我は",
+        "ないか？"
+      ],
+      "ruby": [
+        {
+          "base": "怪我",
+          "rt": "けが"
+        }
+      ],
+      "reading": "けがはないか？",
+      "zh": "沒受傷吧？"
+    },
+    {
+      "id": "t8",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "C",
+      "page": 1,
+      "order": 8,
+      "orientation": "horizontal",
+      "rotate": 10,
+      "bbox": [
+        474,
+        659,
+        93,
+        82
+      ],
+      "textBbox": [
+        474,
+        659,
+        93,
+        82
+      ],
+      "ja": "ガタ",
+      "jaLines": [
+        "ガタ"
+      ],
+      "ruby": [],
+      "reading": "ガタ",
+      "zh": "（車輪）喀噠"
+    },
+    {
+      "id": "t9",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "C",
+      "page": 1,
+      "order": 9,
+      "orientation": "horizontal",
+      "rotate": 18,
+      "bbox": [
+        711,
+        754,
+        98,
+        70
+      ],
+      "textBbox": [
+        711,
+        754,
+        98,
+        70
+      ],
+      "ja": "ゴト",
+      "jaLines": [
+        "ゴト"
+      ],
+      "ruby": [],
+      "reading": "ゴト",
+      "zh": "（車輪）喀咚"
+    },
+    {
+      "id": "t10",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "C",
+      "page": 1,
+      "order": 10,
+      "orientation": "horizontal",
+      "rotate": 12,
+      "bbox": [
+        63,
+        677,
+        94,
+        84
+      ],
+      "textBbox": [
+        63,
+        677,
+        94,
+        84
+      ],
+      "ja": "ガタ",
+      "jaLines": [
+        "ガタ"
+      ],
+      "ruby": [],
+      "reading": "ガタ",
+      "zh": "（車輪）喀噠"
+    },
+    {
+      "id": "t11",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "C",
+      "page": 1,
+      "order": 11,
+      "orientation": "horizontal",
+      "rotate": 20,
+      "bbox": [
+        251,
+        753,
+        99,
+        73
+      ],
+      "textBbox": [
+        251,
+        753,
+        99,
+        73
+      ],
+      "ja": "ゴト",
+      "jaLines": [
+        "ゴト"
+      ],
+      "ruby": [],
+      "reading": "ゴト",
+      "zh": "（車輪）喀咚"
+    },
+    {
+      "id": "t12",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "D",
+      "page": 1,
+      "order": 12,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        595,
+        890,
+        170,
+        260
+      ],
+      "textBbox": [
+        630,
+        976,
+        103,
+        88
+      ],
+      "ja": "本当に助かりました!!",
+      "jaLines": [
+        "本当に",
+        "助かり",
+        "ました!!"
+      ],
+      "ruby": [
+        {
+          "base": "本当",
+          "rt": "ほんとう"
+        },
+        {
+          "base": "助",
+          "rt": "たす"
+        }
+      ],
+      "reading": "ほんとうにたすかりました!!",
+      "zh": "真的得救了!!"
+    },
+    {
+      "id": "t13",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "D",
+      "page": 1,
+      "order": 13,
+      "orientation": "vertical",
+      "rotate": -10,
+      "bbox": [
+        534,
+        1144,
+        55,
+        71
+      ],
+      "textBbox": [
+        534,
+        1144,
+        55,
+        71
+      ],
+      "ja": "ガタ",
+      "jaLines": [
+        "ガタ"
+      ],
+      "ruby": [],
+      "reading": "ガタ",
+      "zh": "（車輪）喀噠"
+    },
+    {
+      "id": "t14",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "D",
+      "page": 1,
+      "order": 14,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        60,
+        885,
+        160,
+        250
+      ],
+      "textBbox": [
+        87,
+        955,
+        108,
+        110
+      ],
+      "ja": "気にするな街まで送るよ",
+      "jaLines": [
+        "気にするな",
+        "街まで",
+        "送るよ"
+      ],
+      "ruby": [
+        {
+          "base": "気",
+          "rt": "き"
+        },
+        {
+          "base": "街",
+          "rt": "まち"
+        },
+        {
+          "base": "送",
+          "rt": "おく"
+        }
+      ],
+      "reading": "きにするなまちまでおくるよ",
+      "zh": "別在意，我送你們到鎮上"
+    },
+    {
+      "id": "t15",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "D",
+      "page": 1,
+      "order": 15,
+      "orientation": "vertical",
+      "rotate": 12,
+      "bbox": [
+        223,
+        1144,
+        56,
+        72
+      ],
+      "textBbox": [
+        223,
+        1144,
+        56,
+        72
+      ],
+      "ja": "ゴト",
+      "jaLines": [
+        "ゴト"
+      ],
+      "ruby": [],
+      "reading": "ゴト",
+      "zh": "（車輪）喀咚"
+    }
+  ]
+}
