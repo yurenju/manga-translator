@@ -15,7 +15,7 @@ export type Message =
   /** SW → side panel：某個 tab 的 Page 更新了。 */
   | { type: 'pages:updated'; tabId: number; pages: PageThumb[] }
   /** SW → content script：量畫面上完整可見的 Page 候選。回應 PageCandidatesResponse。 */
-  | { type: 'content:findPages' }
+  | { type: 'content:findPageCandidates' }
   /** SW → offscreen：依候選裁切截圖並做縮圖。回應 CropResponse。 */
   | ({ type: 'offscreen:crop' } & CropRequest)
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
@@ -50,11 +50,9 @@ export interface PageCandidatesResponse {
   candidates: PageCandidate[];
 }
 
-export interface CropRequest {
+export interface CropRequest extends PageCandidatesResponse {
   /** captureVisibleTab 的 data URL。 */
   screenshot: string;
-  viewport: Size;
-  candidates: PageCandidate[];
 }
 
 export interface PageThumb extends PageCandidate {

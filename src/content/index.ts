@@ -13,7 +13,10 @@ declare global {
 if (!globalThis.__mangaTranslator) {
   globalThis.__mangaTranslator = { active: true };
 
-  /** anchor：Page 候選的元素。同一個元素一直用同一個 id，之後的覆蓋層靠 id 找回元素。 */
+  /**
+   * anchor：最近一次量到的 Page 候選元素，之後的覆蓋層靠 id 找回元素。每次重量就重建，
+   * 翻頁後被拿掉的元素才不會一直留著。同一個元素一直用同一個 id（WeakMap 不擋回收）。
+   */
   const anchors = new Map<string, Element>();
   const anchorIds = new WeakMap<Element, string>();
   let nextAnchorId = 1;
@@ -28,11 +31,12 @@ if (!globalThis.__mangaTranslator) {
     return id;
   }
 
-  function findPages(): PageCandidatesResponse {
+  function findPageCandidates(): PageCandidatesResponse {
     // 完整可見用 clientWidth/Height（不含捲軸）判斷；換算截圖倍率用 innerWidth/Height，
     // 因為 captureVisibleTab 截的是含捲軸的整個可視區域。
     const visible = { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight };
     const candidates: PageCandidate[] = [];
+    anchors.clear();
     for (const element of document.querySelectorAll('img, canvas')) {
       const { x, y, width, height } = element.getBoundingClientRect();
       const rect = { x, y, width, height };
@@ -43,8 +47,8 @@ if (!globalThis.__mangaTranslator) {
 
   const onMessage = (message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void) => {
     switch (message.type) {
-      case 'content:findPages':
-        sendResponse(findPages());
+      case 'content:findPageCandidates':
+        sendResponse(findPageCandidates());
         return;
       case 'content:stop':
         chrome.runtime.onMessage.removeListener(onMessage);

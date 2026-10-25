@@ -22,9 +22,14 @@ chrome.runtime.onStartup.addListener(() => {
   void store.clear();
 });
 
+/** side panel 沒開時沒有接收者，sendMessage 會 reject，忽略即可。 */
+function notifyPanel(message: Message): void {
+  chrome.runtime.sendMessage(message).catch(() => {});
+}
+
 const scanner = createScanner({
-  findPages: (tabId) =>
-    chrome.tabs.sendMessage<Message, PageCandidatesResponse>(tabId, { type: 'content:findPages' }),
+  findPageCandidates: (tabId) =>
+    chrome.tabs.sendMessage<Message, PageCandidatesResponse>(tabId, { type: 'content:findPageCandidates' }),
   async getVisibleWindowId(tabId) {
     const tab = await chrome.tabs.get(tabId);
     return tab.active ? tab.windowId : undefined;
@@ -40,8 +45,7 @@ const scanner = createScanner({
     return response.pages;
   },
   publish(tabId, pages) {
-    // side panel 沒開時沒有接收者，sendMessage 會 reject，忽略即可。
-    chrome.runtime.sendMessage({ type: 'pages:updated', tabId, pages } satisfies Message).catch(() => {});
+    notifyPanel({ type: 'pages:updated', tabId, pages });
   },
 });
 
@@ -68,8 +72,7 @@ const activation = createActivation({
     await chrome.tabs.sendMessage(tabId, { type: 'content:stop' } satisfies Message);
   },
   onStatusChanged(tabId, active) {
-    // side panel 沒開時沒有接收者，sendMessage 會 reject，忽略即可。
-    chrome.runtime.sendMessage({ type: 'status:changed', tabId, active } satisfies Message).catch(() => {});
+    notifyPanel({ type: 'status:changed', tabId, active });
     if (active) scan(tabId);
     else scanner.clear(tabId);
   },

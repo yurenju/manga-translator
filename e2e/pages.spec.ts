@@ -11,6 +11,9 @@ test.use({ viewport: null });
 
 const SYNTHETIC = new URL('../testdata/synthetic/out/', import.meta.url);
 
+/** 仿 Jump+ 前三頁；第 3 頁永遠只露出一部分，用來確認縮圖不會誤認成它。 */
+const FIRST_PAGES = ['p01-basic', 'p02-ruby', 'p03-shapes'];
+
 /**
  * 縮圖跟原合成頁的 dHash 距離在這以內算「內容一致」（256 bits）。
  * 實測同一頁約 21–22（大片白底的相鄰區塊亮度幾乎一樣，縮放雜訊就會翻轉），不同頁 100 以上。
@@ -67,10 +70,10 @@ async function hashDistance(panel: Page, a: string, b: string): Promise<number> 
 async function expectThumbnailsMatch(panel: Page, ids: string[]): Promise<void> {
   await expect.poll(async () => (await thumbnails(panel)).length).toBe(ids.length);
   const thumbs = await thumbnails(panel);
-  const originals = await Promise.all(['p01-basic', 'p02-ruby', 'p03-shapes'].map(syntheticDataUrl));
+  const originals = await Promise.all(FIRST_PAGES.map(syntheticDataUrl));
   for (const [i, thumb] of thumbs.entries()) {
     const distances = await Promise.all(originals.map((o) => hashDistance(panel, thumb, o)));
-    const expected = ['p01-basic', 'p02-ruby', 'p03-shapes'].indexOf(ids[i]!);
+    const expected = FIRST_PAGES.indexOf(ids[i]!);
     expect(distances[expected], `縮圖 ${i} 與 ${ids[i]} 的距離（全部：${distances}）`).toBeLessThanOrEqual(
       SAME_PAGE_MAX_DISTANCE,
     );

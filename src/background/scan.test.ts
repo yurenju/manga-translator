@@ -20,7 +20,7 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
     onCapture: () => {},
   };
   const deps: ScannerDeps = {
-    findPages: async () => {
+    findPageCandidates: async () => {
       const delay = env.findDelays.shift() ?? 0;
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
       return { viewport: env.viewport, candidates: env.candidates };

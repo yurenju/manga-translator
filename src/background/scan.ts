@@ -14,7 +14,7 @@ export const CAPTURE_INTERVAL_MS = 550;
 const MAX_ATTEMPTS = 3;
 
 export interface ScannerDeps {
-  findPages(tabId: number): Promise<PageCandidatesResponse>;
+  findPageCandidates(tabId: number): Promise<PageCandidatesResponse>;
   /** tab 是它視窗裡的作用中 tab 就回傳 windowId；否則 undefined（captureVisibleTab 只截得到作用中 tab）。 */
   getVisibleWindowId(tabId: number): Promise<number | undefined>;
   /** 截圖。要在呼叫當下就送出 captureVisibleTab，限速是以呼叫的時間計算。 */
@@ -41,15 +41,15 @@ export function createScanner(deps: ScannerDeps) {
     return JSON.stringify(a) === JSON.stringify(b);
   }
 
-  async function run(tabId: number, generation: number): Promise<void> {
-    const current = () => (generations.get(tabId) ?? 0) === generation;
+  async function scanOnce(tabId: number, generation: number): Promise<void> {
+    const isCurrentGeneration = () => (generations.get(tabId) ?? 0) === generation;
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       // 等完才量 rect，rect 才不會在等待期間過時。
       await waitForCaptureAllowed();
-      if (!current()) return;
-      const before = await deps.findPages(tabId);
+      if (!isCurrentGeneration()) return;
+      const before = await deps.findPageCandidates(tabId);
       if (before.candidates.length === 0) {
-        if (current()) publish(tabId, []);
+        if (isCurrentGeneration()) publish(tabId, []);
         return;
       }
       const windowId = await deps.getVisibleWindowId(tabId);
@@ -57,9 +57,9 @@ export function createScanner(deps: ScannerDeps) {
       lastCaptureAt = Date.now();
       const screenshot = await deps.captureWindow(windowId);
       // side panel 剛打開造成重排、使用者在截圖時捲動……rect 跟截圖對不上就重來。
-      if (!sameLayout(before, await deps.findPages(tabId))) continue;
-      const result = await deps.crop({ screenshot, viewport: before.viewport, candidates: before.candidates });
-      if (current()) publish(tabId, result);
+      if (!sameLayout(before, await deps.findPageCandidates(tabId))) continue;
+      const result = await deps.crop({ screenshot, ...before });
+      if (isCurrentGeneration()) publish(tabId, result);
       return;
     }
     throw new Error(`layout kept changing during capture (tab ${tabId})`);
@@ -72,7 +72,7 @@ export function createScanner(deps: ScannerDeps) {
 
   function scan(tabId: number): Promise<void> {
     const generation = generations.get(tabId) ?? 0;
-    const task = queue.then(() => run(tabId, generation));
+    const task = queue.then(() => scanOnce(tabId, generation));
     queue = task.catch(() => {});
     return task;
   }
