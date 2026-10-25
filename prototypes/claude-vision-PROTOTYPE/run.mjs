@@ -33,11 +33,16 @@ const scale = Number(opt("--scale", "1"));
 const notesPath = opt("--notes", null);
 const effort = opt("--effort", null);
 const resident = flag("--resident");
-const ids = args.length
+// 真實頁面：--image 指定任意 PNG（沒有 ground truth），--out 把結果寫到 repo 外面（真實頁面不進 repo）
+const imagePath = opt("--image", null);
+const outOpt = opt("--out", null);
+const ids = imagePath
+  ? [imagePath.replace(/^.*[\\/]/, "").replace(/\.png$/, "")]
+  : args.length
   ? args
   : readdirSync(dataDir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
 
-const outDir = join(here, "results", runName);
+const outDir = outOpt ?? join(here, "results", runName);
 mkdirSync(outDir, { recursive: true });
 
 const schema = {
@@ -81,6 +86,22 @@ const systemPrompt = `你是日文漫畫翻譯助手。使用者會給你一張�
 只輸出符合 schema 的 JSON。`;
 
 function userMessage(id) {
+  if (imagePath) {
+    const png = readFileSync(imagePath);
+    const w = png.readUInt32BE(16), h = png.readUInt32BE(20);
+    let text = `這張圖片的尺寸是 ${w}×${h} 像素。`;
+    if (notesPath) text += `
+
+以下是這部作品的 Series Notes，翻譯時請遵守：
+${readFileSync(notesPath, "utf8")}`;
+    return {
+      msg: { type: "user", message: { role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: "image/png", data: png.toString("base64") } },
+        { type: "text", text },
+      ] } },
+      w, h,
+    };
+  }
   const gt = JSON.parse(readFileSync(join(dataDir, `${id}.json`), "utf8"));
   let png = readFileSync(join(dataDir, `${id}.png`));
   let w = gt.width, h = gt.height;

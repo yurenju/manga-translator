@@ -1,0 +1,285 @@
+{
+  "id": "p08-action",
+  "model": "opus",
+  "scale": 1,
+  "resident": false,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "latency": {
+    "wallMs": 19352,
+    "turnMs": 19342,
+    "durationMs": 18655,
+    "durationApiMs": 18535
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3807,
+    "cache_read_input_tokens": 1160,
+    "output_tokens": 1600,
+    "output_tokens_details": {
+      "thinking_tokens": 490
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 3807,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1600,
+        "cache_read_input_tokens": 1160,
+        "cache_creation_input_tokens": 3807,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 3807
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-opus-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 1600,
+      "cacheReadInputTokens": 1160,
+      "cacheCreationInputTokens": 3807,
+      "webSearchRequests": 0,
+      "costUSD": 0.062696,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 490,
+      "canonicalModel": "claude-opus-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.062696,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "sfx",
+        "bbox": [
+          960,
+          75,
+          145,
+          515
+        ],
+        "orientation": "vertical",
+        "ja": "雷槍!!",
+        "reading": "ライトニングランス",
+        "zh": "雷槍!!"
+      },
+      {
+        "order": 2,
+        "kind": "sfx",
+        "bbox": [
+          1600,
+          490,
+          95,
+          230
+        ],
+        "orientation": "vertical",
+        "ja": "バチイッ",
+        "reading": "バチイッ",
+        "zh": "劈啪——"
+      },
+      {
+        "order": 3,
+        "kind": "sfx",
+        "bbox": [
+          735,
+          155,
+          60,
+          140
+        ],
+        "orientation": "vertical",
+        "ja": "ドサッ",
+        "reading": "ドサッ",
+        "zh": "咚"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          527,
+          50,
+          66,
+          120
+        ],
+        "orientation": "vertical",
+        "ja": "え!?",
+        "reading": "え",
+        "zh": "咦!?"
+      },
+      {
+        "order": 5,
+        "kind": "sfx",
+        "bbox": [
+          405,
+          225,
+          50,
+          120
+        ],
+        "orientation": "vertical",
+        "ja": "ドサッ",
+        "reading": "ドサッ",
+        "zh": "咚"
+      },
+      {
+        "order": 6,
+        "kind": "sfx",
+        "bbox": [
+          115,
+          65,
+          150,
+          260
+        ],
+        "orientation": "vertical",
+        "ja": "ズバッ",
+        "reading": "ズバッ",
+        "zh": "唰！"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          160,
+          390,
+          120,
+          205
+        ],
+        "orientation": "vertical",
+        "ja": "怪我はないか?",
+        "reading": "けがはないか",
+        "zh": "有沒有受傷？"
+      },
+      {
+        "order": 8,
+        "kind": "sfx",
+        "bbox": [
+          720,
+          765,
+          75,
+          45
+        ],
+        "orientation": "horizontal",
+        "ja": "ゴト",
+        "reading": "ゴト",
+        "zh": "喀隆"
+      },
+      {
+        "order": 9,
+        "kind": "sfx",
+        "bbox": [
+          480,
+          670,
+          80,
+          50
+        ],
+        "orientation": "horizontal",
+        "ja": "ガタ",
+        "reading": "ガタ",
+        "zh": "喀噠"
+      },
+      {
+        "order": 10,
+        "kind": "sfx",
+        "bbox": [
+          260,
+          770,
+          75,
+          45
+        ],
+        "orientation": "horizontal",
+        "ja": "ゴト",
+        "reading": "ゴト",
+        "zh": "喀隆"
+      },
+      {
+        "order": 11,
+        "kind": "sfx",
+        "bbox": [
+          65,
+          690,
+          90,
+          50
+        ],
+        "orientation": "horizontal",
+        "ja": "ガタ",
+        "reading": "ガタ",
+        "zh": "喀噠"
+      },
+      {
+        "order": 12,
+        "kind": "balloon",
+        "bbox": [
+          595,
+          890,
+          170,
+          240
+        ],
+        "orientation": "vertical",
+        "ja": "本当に助かりました!!",
+        "reading": "ほんとうにたすかりました",
+        "zh": "真的太感謝您了！！"
+      },
+      {
+        "order": 13,
+        "kind": "sfx",
+        "bbox": [
+          545,
+          1145,
+          40,
+          70
+        ],
+        "orientation": "vertical",
+        "ja": "ガタ",
+        "reading": "ガタ",
+        "zh": "喀噠"
+      },
+      {
+        "order": 14,
+        "kind": "balloon",
+        "bbox": [
+          62,
+          890,
+          160,
+          245
+        ],
+        "orientation": "vertical",
+        "ja": "気にするな街まで送るよ",
+        "reading": "きにするなまちまでおくるよ",
+        "zh": "別在意，我送你到鎮上吧"
+      },
+      {
+        "order": 15,
+        "kind": "sfx",
+        "bbox": [
+          235,
+          1150,
+          40,
+          65
+        ],
+        "orientation": "vertical",
+        "ja": "ゴト",
+        "reading": "ゴト",
+        "zh": "喀隆"
+      }
+    ]
+  }
+}
