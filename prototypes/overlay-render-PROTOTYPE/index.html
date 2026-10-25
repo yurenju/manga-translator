@@ -1,0 +1,497 @@
+<!doctype html>
+<!--
+  PROTOTYPE（#19，throwaway，不會 merge）
+  問題：覆蓋層掛在哪裡、怎麼跟著捲動／縮放／翻頁；譯文太長時怎麼辦。
+  三個變體（?variant=A|B|C），兩個模擬主頁面（?host=jumpplus|kindle）。
+  擦除／直書／縮字的做法沿用 #21 的結論，三個變體共用，只差「掛在哪、怎麼跟」。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE 覆蓋渲染</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700&display=swap">
+<style>
+  html, body { margin: 0; font-family: system-ui, sans-serif; background: #f3f3f3; color: #222; }
+  /* ---------- 模擬 Jump+ ---------- */
+  .jp-head { background: #fff; border-bottom: 1px solid #ddd; padding: 14px 20px; font-weight: 700; position: sticky; top: 0; z-index: 10; }
+  .jp-head small { font-weight: 400; color: #888; margin-left: 8px; }
+  .jp-viewer { position: relative; margin: 24px auto; overflow: hidden; background: #fff; box-shadow: 0 2px 12px #0002; cursor: pointer; }
+  .jp-track { position: absolute; top: 0; right: 0; height: 100%; display: flex; flex-direction: row-reverse; transition: transform 450ms ease; }
+  .jp-slot { position: relative; height: 100%; flex: none; }
+  .jp-slot canvas { width: 100%; height: 100%; display: block; }
+  .jp-nav { text-align: center; color: #666; font-size: 13px; }
+  .jp-comments { max-width: 720px; margin: 24px auto 300px; background: #fff; padding: 16px 20px; line-height: 2; color: #777; }
+  /* ---------- 模擬 Kindle ---------- */
+  .kd-root { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; }
+  .kd-bar { background: #232f3e; color: #fff; padding: 10px 16px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .kd-bar button { background: #37475a; color: #fff; border: 0; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+  .kd-stage { flex: 1; overflow: hidden; position: relative; cursor: pointer; }
+  .kd-zoom { width: 100%; height: 100%; transform-origin: 50% 50%; transition: transform 250ms ease; }
+  .kd-zoom.dragging { transition: none; }
+  .kd-img { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+  /* ---------- prototype 自己的工具（黃色，不是設計的一部分） ---------- */
+  .proto { font: 12px/1.5 system-ui, sans-serif; color: #222; }
+  #hud { position: fixed; top: 10px; right: 10px; z-index: 2147483647; background: #fff8c5; border: 2px solid #d4a72c; border-radius: 8px; padding: 8px 10px; width: 270px; box-shadow: 0 4px 16px #0003; }
+  #hud h4 { margin: 0 0 4px; font-size: 12px; }
+  #hud label { display: block; }
+  #hud select { font-size: 12px; }
+  #hud .bad { color: #c5221f; font-weight: 700; }
+  #hud .ok { color: #137333; font-weight: 700; }
+  #hud .row { display: flex; justify-content: space-between; }
+  #hud .muted { color: #777; }
+  #hud.min > :not(h4) { display: none; }
+  #switcher { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 2147483647; background: #222; color: #fff; border-radius: 999px; padding: 6px 8px; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 16px #0006; outline: 3px solid #f9ab00; }
+  #switcher button { background: #444; color: #fff; border: 0; border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 15px; }
+  #switcher span { min-width: 230px; text-align: center; font-weight: 600; }
+</style>
+<!-- 覆蓋層自己的樣式：A/C 放進頂層 shadow root，B 放進每個 host 的 shadow root，不會被主頁面 CSS 影響 -->
+<template id="ovStyle"><style>
+  :host { all: initial; }
+  .pl { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+  .pl.hidden { display: none; }
+  .erase { position: absolute; }
+  .tx { position: absolute; font-family: 'Noto Sans TC', sans-serif; font-weight: 700; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; overflow: hidden; }
+  .pl.off .erase, .pl.off .tx { visibility: hidden; }
+  .pl.boxes .tx.fit-1 { outline: 2px solid #1a73e8aa; }
+  .pl.boxes .tx.fit-2 { outline: 2px solid #f9ab00; }
+  .pl.boxes .tx.fit-3 { outline: 3px dashed #d93025; }
+  .tx.hl { box-shadow: 0 0 0 4px #1a73e8; border-radius: 6px; }
+  .tip { position: absolute; z-index: 5; background: #222; color: #fff; font: 600 26px/1.4 'Noto Sans TC', sans-serif; padding: 8px 12px; border-radius: 8px; white-space: pre-wrap; max-width: 600px; pointer-events: none; }
+</style></template>
+<script src="data.js"></script>
+</head>
+<body>
+<div id="host"></div>
+
+<div id="hud" class="proto">
+  <h4>PROTOTYPE 控制台 <a href="#" onclick="hud.classList.toggle('min');return false" style="float:right">收合</a></h4>
+  <label>主頁面 <select id="hostSel" onchange="setParam('host', this.value)">
+    <option value="jumpplus">Jump+（canvas、橫向翻頁動畫、可捲動）</option>
+    <option value="kindle">Kindle（一張 img 含雙頁、縮放／拖曳、換 src）</option>
+  </select></label>
+  <label><input type="checkbox" id="optLong" onchange="setParam('long', this.checked ? 1 : '')"> 譯文加長 ×3（壓力測試）</label>
+  <label><input type="checkbox" id="optBoxes" onchange="setParam('boxes', this.checked ? 1 : '')"> 顯示排版框（藍＝放得下／橘＝擴到 Balloon／紅虛線＝仍溢出）</label>
+  <label><input type="checkbox" id="optReattach" checked onchange="state.reattach=this.checked"> 主頁面 DOM 變動時重新 sync</label>
+  <div style="margin:4px 0"><button onclick="hostApi.rerender()">模擬主頁面重繪（框架換掉子節點）</button></div>
+  <div class="muted">翻頁：點頁面左半＝下一頁、右半＝上一頁，或 <b>[</b> <b>]</b>。按住 <b>Shift</b> 看原文。</div>
+  <hr>
+  <div id="stats"></div>
+</div>
+
+<div id="switcher" class="proto">
+  <button onclick="cycle(-1)">←</button><span id="vlabel"></span><button onclick="cycle(1)">→</button>
+</div>
+
+<script>
+// ============================================================
+// 共用：資料、取樣、排版（沿用 #21 的做法）
+// ============================================================
+const params = new URLSearchParams(location.search);
+const VARIANTS = {
+  A: '頂層 fixed 層＋每幀追蹤 (rAF)',
+  B: '插在 anchor 旁邊（跟主頁面一起動）',
+  C: '頂層 fixed 層＋事件觸發更新',
+};
+const variant = VARIANTS[params.get('variant')] ? params.get('variant') : 'A';
+const hostName = params.get('host') === 'kindle' ? 'kindle' : 'jumpplus';
+const LONG = !!params.get('long');
+const BOXES = !!params.get('boxes');
+const PAGES = Object.fromEntries(window.PAGES.map((p) => [p.id, p]));
+const imgs = {};
+const state = { reattach: true, shift: false, hoverId: null };
+
+function setParam(k, v) { const u = new URL(location); v ? u.searchParams.set(k, v) : u.searchParams.delete(k); location = u; }
+function cycle(d) { const ks = Object.keys(VARIANTS); setParam('variant', ks[(ks.indexOf(variant) + d + ks.length) % ks.length]); }
+document.getElementById('vlabel').textContent = `${variant}（${VARIANTS[variant]}）`;
+document.getElementById('hostSel').value = hostName;
+document.getElementById('optLong').checked = LONG;
+document.getElementById('optBoxes').checked = BOXES;
+const hud = document.getElementById('hud');
+
+// 擦除底色：取擦除範圍內最常出現的亮度（#21）。真實外掛是從截圖取樣，這裡用原圖代替
+const samplers = {};
+function sampleBg(pageId, r) {
+  if (!samplers[pageId]) {
+    const im = imgs[pageId], c = document.createElement('canvas');
+    c.width = im.naturalWidth; c.height = im.naturalHeight;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(im, 0, 0);
+    samplers[pageId] = ctx;
+  }
+  const [x, y, w, h] = r.map(Math.round);
+  const d = samplers[pageId].getImageData(x, y, Math.max(1, w), Math.max(1, h)).data;
+  const hist = new Array(16).fill(0), sum = new Array(16).fill(0);
+  for (let i = 0; i < d.length; i += 4) { const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11, b = Math.min(15, l >> 4); hist[b]++; sum[b] += l; }
+  const best = hist.indexOf(Math.max(...hist));
+  const m = Math.round(sum[best] / hist[best]);
+  return { css: `rgb(${m},${m},${m})`, dark: m < 128 };
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function verticalize(s) {
+  s = s.replace(/\.{2,}/g, '……').replace(/!/g, '！').replace(/\?/g, '？').replace(/~/g, '～').replace(/,/g, '，');
+  return esc(s).replace(/[0-9A-Za-z]{1,3}|！？|！！/g, (m) => `<span style="text-combine-upright:all">${m}</span>`);
+}
+const zhOf = (t) => (LONG ? t.zh + t.zh.replace(/[。！？!?]+$/, '，') + t.zh : t.zh);
+
+// 一個 Page 的覆蓋層：用 Page 原始像素座標排版（880×1280），整層再用 transform: scale 縮放到畫面大小。
+// 這樣縮字只要量一次，縮放／捲動時不用重排。
+function buildPageLayer(page) {
+  const pl = document.createElement('div');
+  pl.className = 'pl' + (BOXES ? ' boxes' : '');
+  Object.assign(pl.style, { width: page.width + 'px', height: page.height + 'px' });
+  const px = (r) => ({ left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
+  const texts = [];
+  for (const t of page.texts) {
+    if (!t.isBalloon || t.unreadable) continue; // Loose Text 與 unreadable 不覆蓋
+    const [x, y, w, h] = t.bbox, [tx, ty, tw, th] = t.textBbox;
+    const pad = 3, er = [tx - pad, ty - pad, tw + pad * 2, th + pad * 2];
+    const bg = sampleBg(page.id, er);
+    const e = document.createElement('div');
+    e.className = 'erase';
+    Object.assign(e.style, px(er), { background: bg.css });
+    pl.appendChild(e);
+    const gx = w * 0.12, gy = h * 0.12;
+    const lx = Math.max(x + w * 0.08, tx - gx), ly = Math.max(y + h * 0.08, ty - gy);
+    const r1 = [lx, ly, Math.min(x + w * 0.92, tx + tw + gx) - lx, Math.min(y + h * 0.92, ty + th + gy) - ly];
+    const r2 = [x + w * 0.1, y + h * 0.1, w * 0.8, h * 0.8]; // 第二階：擴到 Balloon 外框往內 10%
+    const vertical = !(t.orientation === 'horizontal' && w >= h);
+    const d = document.createElement('div');
+    d.className = 'tx';
+    d.dataset.id = t.id;
+    const zh = zhOf(t);
+    Object.assign(d.style, px(r1), { color: bg.dark ? '#fff' : '#111', writingMode: vertical ? 'vertical-rl' : 'horizontal-tb' });
+    d.innerHTML = vertical ? verticalize(zh) : esc(zh);
+    d._r = [r1, r2]; d._t = t; d._zh = zh;
+    pl.appendChild(d);
+    texts.push(d);
+  }
+  pl._texts = texts;
+  return pl;
+}
+// 譯文太長時的三階段（單位是 Page 原始像素）：
+// 1) 文字框外擴範圍內從 26px 縮到 14px；2) 擴到 Balloon 外框往內 10%，再縮到 12px；3) 仍放不下 → 縮到 10px 並截斷，滑過出 tooltip
+function fitLayer(pl) {
+  const over = (d) => d.scrollHeight > d.clientHeight + 1 || d.scrollWidth > d.clientWidth + 1;
+  const counts = [0, 0, 0, 0];
+  for (const d of pl._texts) {
+    const px = (r) => Object.assign(d.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
+    px(d._r[0]);
+    let fs = 26, level = 1;
+    d.style.fontSize = fs + 'px';
+    while (fs > 14 && over(d)) d.style.fontSize = --fs + 'px';
+    if (over(d)) {
+      level = 2; px(d._r[1]);
+      while (fs > 12 && over(d)) d.style.fontSize = --fs + 'px';
+      if (over(d)) { level = 3; fs = 10; d.style.fontSize = fs + 'px'; }
+    }
+    d.className = 'tx fit-' + level;
+    d._fs = fs; d._level = level;
+    counts[level]++;
+  }
+  pl._counts = counts;
+}
+
+// ============================================================
+// 模擬主頁面
+// ============================================================
+let hostApi;
+function buildJumpPlus() {
+  const ids = ['p01-basic', 'p02-ruby', 'p03-shapes', 'p04-outside', 'p05-dense', 'p06-horizontal'];
+  const root = document.getElementById('host');
+  root.innerHTML = `<div class="jp-head">少年ジャンプ＋（模擬）<small>第 1 話 · URL 不會因翻頁改變</small></div>
+    <div class="jp-viewer"><div class="jp-track"></div></div>
+    <div class="jp-nav">點左半＝下一頁 · 點右半＝上一頁 · <span id="jpIdx"></span></div>
+    <div class="jp-comments">${'（模擬的留言區，讓頁面可以上下捲動。） '.repeat(40)}</div>`;
+  const viewer = root.querySelector('.jp-viewer'), track = root.querySelector('.jp-track');
+  let idx = 0, W = 0;
+  const makeCanvas = (id) => {
+    const c = document.createElement('canvas');
+    c.width = 880; c.height = 1280; c.dataset.page = id; // data-page＝「#18 用 hash 認出這是哪個 Page」的結果
+    c.getContext('2d').drawImage(imgs[id], 0, 0);
+    return c;
+  };
+  for (const id of ids) {
+    const s = document.createElement('div');
+    s.className = 'jp-slot';
+    s.appendChild(makeCanvas(id));
+    track.appendChild(s);
+  }
+  const layout = (anim) => {
+    W = Math.round(Math.min(innerWidth * 0.94, (innerHeight * 0.82 * 880) / 1280));
+    Object.assign(viewer.style, { width: W + 'px', height: Math.round((W * 1280) / 880) + 'px' });
+    track.querySelectorAll('.jp-slot').forEach((s) => (s.style.width = W + 'px'));
+    track.style.transition = anim ? '' : 'none';
+    track.style.transform = `translateX(${idx * W}px)`;
+    document.getElementById('jpIdx').textContent = `${idx + 1} / ${ids.length}`;
+  };
+  addEventListener('resize', () => layout(false));
+  layout(false);
+  const go = (d) => { idx = Math.max(0, Math.min(ids.length - 1, idx + d)); layout(true); };
+  viewer.addEventListener('click', (e) => go(e.clientX < viewer.getBoundingClientRect().left + W / 2 ? 1 : -1));
+  return {
+    go,
+    // 像 React 那樣重新 render slot 的子節點：canvas 還是同一個，但我們插進去的東西會被丟掉
+    rerender() { track.querySelectorAll('.jp-slot').forEach((s) => s.replaceChildren(s.querySelector('canvas'))); },
+  };
+}
+
+function buildKindle() {
+  // Kindle：整個可視區域合成一張 img（雙頁＋黑邊），翻頁＝換 src；沒有單一 Page 元素，用 subRect 指出 Page 在 img 裡的位置
+  const spreads = [['p01-basic', 'p02-ruby'], ['p03-shapes', 'p04-outside'], ['p05-dense', 'p06-horizontal'], ['p07-spread']];
+  const root = document.getElementById('host');
+  root.innerHTML = `<div class="kd-root"><div class="kd-bar">Kindle（模擬）
+      <button data-z="-1">－</button><button data-z="1">＋</button><span id="kdInfo"></span></div>
+    <div class="kd-stage"><div class="kd-zoom"><img class="kd-img" alt=""></div></div></div>`;
+  const stage = root.querySelector('.kd-stage'), zoom = root.querySelector('.kd-zoom');
+  let img = root.querySelector('.kd-img');
+  let si = 0, z = 1, pan = [0, 0], composeTimer;
+  const compose = () => {
+    const sw = stage.clientWidth, sh = stage.clientHeight, dpr = 2;
+    const c = document.createElement('canvas');
+    c.width = sw * dpr; c.height = sh * dpr;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, c.width, c.height);
+    const ids = spreads[si];
+    const totalW = ids.reduce((a, id) => a + PAGES[id].width, 0), H = 1280;
+    const s = Math.min(c.width / totalW, c.height / H);
+    let x = (c.width - totalW * s) / 2;
+    const y = (c.height - H * s) / 2, meta = [];
+    for (const id of [...ids].reverse()) { // 日漫右翻：先讀的頁在右邊
+      const w = PAGES[id].width * s;
+      ctx.drawImage(imgs[id], x, y, w, H * s);
+      meta.push({ id, sub: [x / c.width, y / c.height, w / c.width, (H * s) / c.height] });
+      x += w;
+    }
+    img.src = c.toDataURL('image/jpeg', 0.9);
+    img.dataset.pages = JSON.stringify(meta);
+    document.getElementById('kdInfo').textContent = `第 ${si + 1}/${spreads.length} 跨頁 · 縮放 ${z.toFixed(1)}×（縮放後可拖曳）`;
+  };
+  const applyZoom = () => { zoom.style.transform = `translate(${pan[0]}px, ${pan[1]}px) scale(${z})`; compose(); };
+  addEventListener('resize', () => { clearTimeout(composeTimer); composeTimer = setTimeout(compose, 150); });
+  root.querySelectorAll('[data-z]').forEach((b) => (b.onclick = () => {
+    z = Math.max(1, Math.min(3, z + 0.6 * +b.dataset.z));
+    if (z === 1) pan = [0, 0];
+    applyZoom();
+  }));
+  let drag = null, moved = false;
+  stage.addEventListener('pointerdown', (e) => { drag = [e.clientX - pan[0], e.clientY - pan[1]]; moved = false; });
+  addEventListener('pointermove', (e) => {
+    if (!drag || z === 1) return;
+    moved = true; zoom.classList.add('dragging');
+    pan = [e.clientX - drag[0], e.clientY - drag[1]];
+    zoom.style.transform = `translate(${pan[0]}px, ${pan[1]}px) scale(${z})`;
+  });
+  addEventListener('pointerup', () => { drag = null; zoom.classList.remove('dragging'); });
+  const go = (d) => { si = Math.max(0, Math.min(spreads.length - 1, si + d)); compose(); };
+  stage.addEventListener('click', (e) => { if (moved) return; go(e.clientX < stage.getBoundingClientRect().left + stage.clientWidth / 2 ? 1 : -1); });
+  compose();
+  return { go, rerender() { zoom.replaceChildren(img); } };
+}
+
+// ============================================================
+// 覆蓋管理：找 anchor → 建 Page 層 → 依變體決定掛哪、怎麼更新
+// ============================================================
+const ov = {
+  entries: [], // { anchor, page, sub, pl, host?, clips }
+  root: null, // A/C：頂層 shadow root
+  updates: 0, rebuildMs: 0, bChangedPosition: 0, lastSync: '',
+};
+function wantedEntries() {
+  const out = [];
+  document.querySelectorAll('#host canvas[data-page]').forEach((a) => out.push({ anchor: a, id: a.dataset.page, sub: [0, 0, 1, 1] }));
+  document.querySelectorAll('#host img[data-pages]').forEach((a) => JSON.parse(a.dataset.pages).forEach((m) => out.push({ anchor: a, id: m.id, sub: m.sub })));
+  return out;
+}
+function clipAncestors(el) {
+  const out = [];
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    const cs = getComputedStyle(p);
+    if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible') out.push(p);
+  }
+  return out;
+}
+function makeShadowHost(styleTarget) {
+  const h = document.createElement('div');
+  const sr = h.attachShadow({ mode: 'open' });
+  sr.appendChild(document.getElementById('ovStyle').content.cloneNode(true));
+  return [h, sr];
+}
+function sync(reason) {
+  const t0 = performance.now();
+  const want = wantedEntries();
+  const same = (e, w) => e.anchor === w.anchor && e.page.id === w.id && e.sub.join() === w.sub.join();
+  // 移除不要的
+  ov.entries = ov.entries.filter((e) => {
+    const keep = want.some((w) => same(e, w)) && (variant !== 'B' || e.host.isConnected);
+    if (!keep) { e.pl.remove(); if (e.host && !ov.entries.some((o) => o !== e && o.host === e.host)) e.host.remove(); }
+    return keep;
+  });
+  // 新增
+  for (const w of want) {
+    if (ov.entries.some((e) => same(e, w))) continue;
+    const page = PAGES[w.id], pl = buildPageLayer(page);
+    const e = { anchor: w.anchor, page, sub: w.sub, pl };
+    if (variant === 'B') {
+      // 同一個 anchor 共用一個 host，插成 anchor 的下一個兄弟節點
+      let host = ov.entries.find((o) => o.anchor === w.anchor)?.host;
+      if (!host || !host.isConnected) {
+        const [h, sr] = makeShadowHost();
+        Object.assign(h.style, { position: 'absolute', left: '0', top: '0', width: '0', height: '0', overflow: 'visible', pointerEvents: 'none', zIndex: '1' });
+        const parent = w.anchor.parentElement;
+        if (getComputedStyle(parent).position === 'static') { parent.style.position = 'relative'; ov.bChangedPosition++; }
+        w.anchor.after(h);
+        h._sr = sr; host = h;
+        ro.observe(w.anchor);
+      }
+      e.host = host;
+      host._sr.appendChild(pl);
+    } else {
+      ov.root.appendChild(pl);
+      e.clips = clipAncestors(w.anchor);
+      ro.observe(w.anchor);
+    }
+    fitLayer(pl);
+    ov.entries.push(e);
+  }
+  placeAll();
+  ov.rebuildMs = performance.now() - t0;
+  ov.lastSync = reason;
+}
+
+// 依 anchor 現在的位置換算 Page 層的 transform
+function expectedRect(e) {
+  const r = e.anchor.getBoundingClientRect();
+  return { x: r.left + e.sub[0] * r.width, y: r.top + e.sub[1] * r.height, w: e.sub[2] * r.width, h: e.sub[3] * r.height };
+}
+function place(e) {
+  ov.updates++;
+  const pw = e.page.width, ph = e.page.height;
+  if (variant === 'B') {
+    // 用 offset*（不含 transform）：祖先的 transform／捲動由瀏覽器自然套用
+    const a = e.anchor;
+    const x = a.offsetLeft + e.sub[0] * a.offsetWidth, y = a.offsetTop + e.sub[1] * a.offsetHeight;
+    e.pl.style.transform = `translate(${x}px, ${y}px) scale(${(e.sub[2] * a.offsetWidth) / pw}, ${(e.sub[3] * a.offsetHeight) / ph})`;
+    return;
+  }
+  if (!e.anchor.isConnected) { e.pl.classList.add('hidden'); return; }
+  e.pl.classList.remove('hidden');
+  const r = expectedRect(e), sx = r.w / pw, sy = r.h / ph;
+  e.pl.style.transform = `translate(${r.x}px, ${r.y}px) scale(${sx}, ${sy})`;
+  // 頂層層不會被主頁面的 overflow:hidden 裁到，要自己裁：可視區域 ∩ 每個會裁切的祖先
+  let c = { l: 0, t: 0, r: innerWidth, b: innerHeight };
+  for (const p of e.clips) {
+    const pr = p.getBoundingClientRect();
+    c = { l: Math.max(c.l, pr.left), t: Math.max(c.t, pr.top), r: Math.min(c.r, pr.right), b: Math.min(c.b, pr.bottom) };
+  }
+  const inset = [(c.t - r.y) / sy, (r.x + r.w - c.r) / sx, (r.y + r.h - c.b) / sy, (c.l - r.x) / sx].map((v) => Math.max(0, v) + 'px');
+  e.pl.style.clipPath = `inset(${inset.join(' ')})`;
+  e.pl.style.visibility = c.r <= c.l || c.b <= c.t ? 'hidden' : '';
+}
+function placeAll() { ov.entries.forEach(place); }
+const ro = new ResizeObserver(() => { if (variant !== 'A') placeAll(); });
+
+function startOverlay() {
+  if (variant !== 'B') {
+    const [h, sr] = makeShadowHost();
+    Object.assign(h.style, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '2147483000' });
+    document.documentElement.appendChild(h);
+    ov.root = sr;
+  }
+  // 主頁面 DOM 變動（翻頁換 src、框架重繪）→ 重新 sync
+  new MutationObserver((muts) => {
+    if (muts.every((m) => m.target.closest?.('#hud,#switcher'))) return;
+    if (state.reattach) sync('DOM 變動');
+    else if (variant === 'C') placeAll();
+  }).observe(document.getElementById('host'), { childList: true, subtree: true, attributes: true, attributeFilter: ['data-pages', 'style', 'class'] });
+  if (variant === 'C') {
+    // 只在事件發生時更新：捲動（capture 才收得到內層捲動）、resize、ResizeObserver、transition 結束、上面 MutationObserver 看到 style 變動
+    addEventListener('scroll', placeAll, { capture: true, passive: true });
+    addEventListener('resize', placeAll);
+    addEventListener('transitionend', placeAll, true);
+  }
+  sync('啟動');
+  requestAnimationFrame(frame);
+}
+
+// ============================================================
+// 量測：每一幀「一開始」先量畫面上的覆蓋層跟 anchor 差多少（＝使用者這一幀看到的偏移），再讓 A 更新
+// ============================================================
+const drift = []; // [time, px]
+let frames = 0, fpsT = performance.now(), fps = 0, updatesPerSec = 0, lastUpdates = 0;
+function frame(now) {
+  let worst = 0, missing = 0;
+  for (const e of ov.entries) {
+    if (!e.anchor.isConnected) continue;
+    const want = expectedRect(e);
+    if (variant === 'B' && !e.host.isConnected) { missing++; continue; }
+    if (want.x > innerWidth || want.x + want.w < 0 || want.y > innerHeight || want.y + want.h < 0) continue;
+    const got = e.pl.getBoundingClientRect();
+    worst = Math.max(worst, Math.abs(got.left - want.x), Math.abs(got.top - want.y), Math.abs(got.width - want.w), Math.abs(got.height - want.h));
+  }
+  drift.push([now, worst]);
+  while (drift.length && drift[0][0] < now - 1500) drift.shift();
+  if (variant === 'A') placeAll();
+  frames++;
+  if (now - fpsT > 500) { fps = (frames * 1000) / (now - fpsT); updatesPerSec = ((ov.updates - lastUpdates) * 1000) / (now - fpsT); frames = 0; fpsT = now; lastUpdates = ov.updates; renderStats(missing); }
+  requestAnimationFrame(frame);
+}
+function renderStats(missing) {
+  const maxD = Math.max(0, ...drift.map((d) => d[1]));
+  const cur = drift.at(-1)?.[1] ?? 0;
+  const cls = (v) => (v < 1 ? 'ok' : 'bad');
+  const counts = [0, 0, 0, 0];
+  let minFs = Infinity, scale = 0;
+  for (const e of ov.entries) {
+    e.pl._counts.forEach((c, i) => (counts[i] += c));
+    const r = expectedRect(e), s = r.w / e.page.width;
+    if (r.x < innerWidth && r.x + r.w > 0 && r.y < innerHeight && r.y + r.h > 0) { scale = Math.max(scale, s); for (const d of e.pl._texts) minFs = Math.min(minFs, d._fs * s); }
+  }
+  document.getElementById('stats').innerHTML = `
+    <div class="row"><span>偏移（這一幀）</span><span class="${cls(cur)}">${cur.toFixed(1)} px</span></div>
+    <div class="row"><span>偏移（最近 1.5 秒最大）</span><span class="${cls(maxD)}">${maxD.toFixed(1)} px</span></div>
+    <div class="row"><span>place() 次數／秒</span><span>${updatesPerSec.toFixed(0)}</span></div>
+    <div class="row"><span>FPS</span><span>${fps.toFixed(0)}</span></div>
+    <div class="row"><span>覆蓋層還在 DOM</span><span class="${missing ? 'bad' : 'ok'}">${missing ? `少了 ${missing} 個 Page` : '是'}</span></div>
+    ${variant === 'B' ? `<div class="row"><span>B 改了主頁面元素 position</span><span class="${ov.bChangedPosition ? 'bad' : 'ok'}">${ov.bChangedPosition} 個</span></div>` : ''}
+    <div class="row"><span>上次 sync</span><span>${ov.lastSync}・${ov.rebuildMs.toFixed(0)} ms</span></div>
+    <hr>
+    <div class="row"><span>Page 顯示倍率</span><span>${scale.toFixed(2)}×</span></div>
+    <div class="row"><span>畫面上最小譯文字級</span><span class="${minFs < 9 ? 'bad' : ''}">${isFinite(minFs) ? minFs.toFixed(1) + ' px' : '—'}</span></div>
+    <div class="row"><span>放得下／擴到 Balloon／溢出</span><span>${counts[1]}／${counts[2]}／<b class="${counts[3] ? 'bad' : ''}">${counts[3]}</b></span></div>
+    <div class="muted">（${ov.entries.length} 個 Page 層，含預先渲染的鄰頁）</div>`;
+}
+
+// 滑過 Balloon：覆蓋層一律 pointer-events: none（不擋主頁面點擊翻頁），用座標自己 hit-test
+addEventListener('pointermove', (ev) => {
+  let hit = null;
+  for (const e of ov.entries) for (const d of e.pl._texts) {
+    const r = d.getBoundingClientRect();
+    if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom && e.pl.style.visibility !== 'hidden') hit = [e, d];
+  }
+  document.querySelectorAll('.tip').forEach(() => {});
+  for (const e of ov.entries) { e.pl.querySelectorAll('.tip').forEach((t) => t.remove()); e.pl._texts.forEach((d) => d.classList.toggle('hl', !!hit && d === hit[1])); }
+  if (hit && hit[1]._level === 3) {
+    const [e, d] = hit, tip = document.createElement('div');
+    tip.className = 'tip';
+    tip.textContent = d._zh;
+    Object.assign(tip.style, { left: d.style.left, top: parseFloat(d.style.top) + parseFloat(d.style.height) + 8 + 'px' });
+    e.pl.appendChild(tip);
+  }
+});
+addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') cycle(-1);
+  if (e.key === 'ArrowRight') cycle(1);
+  if (e.key === '[') hostApi.go(-1);
+  if (e.key === ']') hostApi.go(1);
+  if (e.key === 'Shift') ov.entries.forEach((x) => x.pl.classList.add('off'));
+});
+addEventListener('keyup', (e) => { if (e.key === 'Shift') ov.entries.forEach((x) => x.pl.classList.remove('off')); });
+
+// ============================================================
+Promise.all(window.PAGES.map((p) => new Promise((r) => { const i = new Image(); i.onload = () => { imgs[p.id] = i; r(); }; i.src = p.image; })))
+  .then(() => document.fonts.load('26px "Noto Sans TC"', '欸～好'))
+  .then(() => { hostApi = hostName === 'kindle' ? buildKindle() : buildJumpPlus(); startOverlay(); });
+</script>
+</body>
+</html>

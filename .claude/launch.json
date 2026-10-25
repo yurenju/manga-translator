@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "overlay-prototype", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8722"], "port": 8722 }
+  ]
+}
