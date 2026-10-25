@@ -9,8 +9,12 @@ One installment of a Series, as published.
 _Avoid_: chapter (unless the site itself uses it), issue
 
 **Page** (頁)
-One manga page image as the reader sees it on the site.
+One manga page image as the reader sees it on the site. The same Page read on different sites is still one Page.
 _Avoid_: image, screen
+
+**Spread** (跨頁 / 見開き)
+Two Pages shown side by side as the reader sees them.
+_Avoid_: double page, two-page view
 
 **Panel** (格 / コマ)
 One frame of a Page, bounded by panel borders.
