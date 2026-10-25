@@ -23,7 +23,7 @@
   .page-wrap img { height: 100%; display: block; user-select: none; }
   .ov { position: absolute; cursor: pointer; }
   .erase { position: absolute; border-radius: 4px; pointer-events: none; }
-  .ov.cover { background: transparent; border-radius: 30%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 4%; font-weight: 600; color: #111; }
+  .ov.cover { background: transparent; border-radius: 30%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 2%; font-weight: 600; color: #111; }
   .ov.cover.off { color: transparent; }
   .ov.unread { outline: 2px dashed #d33; outline-offset: 2px; border-radius: 30%; }
   .ov.loose { }
@@ -209,12 +209,11 @@ function sampleBg(r) {
     sampler = { src: img.src, ctx };
   }
   const [x, y, w, h] = r.map(Math.round);
-  const lums = [];
-  const pts = [];
-  for (let i = 0; i <= 20; i++) { pts.push([x + (w * i) / 20, y], [x + (w * i) / 20, y + h], [x, y + (h * i) / 20], [x + w, y + (h * i) / 20]); }
-  for (const [px, py] of pts) { const d = sampler.ctx.getImageData(px, py, 1, 1).data; lums.push(d[0] * 0.3 + d[1] * 0.59 + d[2] * 0.11); }
-  lums.sort((a, b) => a - b);
-  const m = Math.round(lums[lums.length >> 1]);
+  const d = sampler.ctx.getImageData(x, y, Math.max(1, w), Math.max(1, h)).data;
+  const hist = new Array(16).fill(0), sum = new Array(16).fill(0);
+  for (let i = 0; i < d.length; i += 4) { const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11, b = Math.min(15, l >> 4); hist[b]++; sum[b] += l; }
+  const best = hist.indexOf(Math.max(...hist));
+  const m = Math.round(sum[best] / hist[best]);
   return { css: `rgb(${m},${m},${m})`, dark: m < 128 };
 }
 function renderPage() {
@@ -227,6 +226,7 @@ function renderPage() {
   const showTexts = ['cached', 'notes'].includes(state.tr[p.id]);
   // 圖片還沒載入完就取樣會讀到透明像素（被當成黑底 → 整頁反白），等 onload 再畫
   if (!showTexts || !img.complete || !img.naturalWidth || !img.src.endsWith(p.image.replace('../../', ''))) return;
+  const fitLater = [];
   const pct = (r) => ({ left: (r[0] / p.width) * 100 + '%', top: (r[1] / p.height) * 100 + '%', width: (r[2] / p.width) * 100 + '%', height: (r[3] / p.height) * 100 + '%' });
   for (const t of p.texts) {
     const [x, y, w, h] = t.bbox;
@@ -250,11 +250,12 @@ function renderPage() {
       const gx = w * 0.12, gy = h * 0.12;
       const lx = Math.max(x + w * 0.08, tx - gx), ly = Math.max(y + h * 0.08, ty - gy);
       const lr = [lx, ly, Math.min(x + w * 0.92, tx + tw + gx) - lx, Math.min(y + h * 0.92, ty + th + gy) - ly];
-      Object.assign(d.style, pct(lr), { color: bg.dark ? '#fff' : '#111' });
-      const imgH = img.clientHeight || 800, scale = imgH / p.height;
-      const fs = Math.max(9, Math.min(22, Math.sqrt((lr[2] * lr[3] * 0.5) / Math.max(4, t.zh.length)) * scale));
-      d.style.fontSize = fs + 'px';
-      d.textContent = t.zh;
+      // 上游的 orientation 偶爾判錯（p05「えー面倒くさい」被標成橫書）。日漫預設直書，
+      // 只有標成橫書「而且」Balloon 本身是寬的才橫書
+      const vertical = !(t.orientation === 'horizontal' && w >= h);
+      Object.assign(d.style, pct(lr), { color: bg.dark ? '#fff' : '#111', writingMode: vertical ? 'vertical-rl' : 'horizontal-tb' });
+      d.innerHTML = vertical ? verticalize(t.zh) : esc(t.zh);
+      fitLater.push(d);
     } else {
       Object.assign(d.style, pct(t.bbox));
     }
@@ -264,6 +265,20 @@ function renderPage() {
     d.onclick = () => V[variant].onPageClick?.(t);
     wrap.appendChild(d);
   }
+  // 量測縮字：從 22px 往下縮到放得進去為止（最小 8px）
+  for (const d of fitLater) {
+    const num = d.querySelector('.num');
+    num.remove(); // 編號徽章在框外，量測時先拿掉
+    let fs = 22;
+    d.style.fontSize = fs + 'px';
+    while (fs > 8 && (d.scrollHeight > d.clientHeight + 1 || d.scrollWidth > d.clientWidth + 1)) d.style.fontSize = --fs + 'px';
+    d.appendChild(num);
+  }
+}
+// 直書用：半形標點換全形（直書字形會轉向）、… 統一、短數字縱中橫
+function verticalize(s) {
+  s = s.replace(/\.{2,}/g, '……').replace(/!/g, '！').replace(/\?/g, '？').replace(/~/g, '～').replace(/,/g, '，');
+  return esc(s).replace(/[0-9A-Za-z]{1,3}|！？|！！/g, (m) => `<span style="text-combine-upright:all">${m}</span>`);
 }
 function setHover(id, from) {
   state.hover = id;
