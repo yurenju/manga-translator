@@ -4,6 +4,10 @@
 A single manga title, e.g. one ongoing work, regardless of which site it is read on.
 _Avoid_: book, comic, manga (when meaning one title)
 
+**Provisional Series** (臨時作品)
+A Series created automatically when translation starts with no Series chosen. It behaves like any other Series until the reader names it or merges it into an existing one.
+_Avoid_: unsorted, inbox
+
 **Episode** (話)
 One installment of a Series, as published.
 _Avoid_: chapter (unless the site itself uses it), issue
