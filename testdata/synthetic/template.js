@@ -197,6 +197,10 @@ window.build = function build(spec) {
     const p = svgEl("pattern", { id, width: 7, height: 7, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
     svgEl("circle", { cx: 3.5, cy: 3.5, r, fill: "#111" }, p);
   }
+  // Hand-drawn look for sfx: wobble the glyph outlines with turbulence.
+  const rough = svgEl("filter", { id: "rough", x: "-10%", y: "-10%", width: "120%", height: "120%" }, defs);
+  svgEl("feTurbulence", { type: "fractalNoise", baseFrequency: 0.045, numOctaves: 2, seed: 7, result: "noise" }, rough);
+  svgEl("feDisplacementMap", { in: "SourceGraphic", in2: "noise", scale: 7, xChannelSelector: "R", yChannelSelector: "G" }, rough);
 
   // Page edges of a spread: a faint gutter shadow so it looks like Kindle's spread.
   for (const pg of spec.pages ?? []) {
@@ -232,7 +236,7 @@ window.build = function build(spec) {
     const color = t.shape === "inverted" || t.color === "white" ? "#fff" : "#111";
     const size = t.fontSize ?? 22;
     let css = `position:absolute;left:${t.cx}px;top:${t.cy}px;` +
-      `transform:translate(-50%,-50%) rotate(${t.rotate ?? 0}deg);` +
+      `transform:translate(-50%,-50%) rotate(${t.rotate ?? 0}deg) skewY(${t.skewY ?? 0}deg);` +
       `writing-mode:${vertical ? "vertical-rl" : "horizontal-tb"};` +
       `font-size:${size}px;line-height:${t.lineHeight ?? 1.35};font-weight:${t.weight ?? 700};` +
       `color:${color};white-space:nowrap;text-align:${vertical ? "start" : "center"};` +
@@ -242,6 +246,7 @@ window.build = function build(spec) {
       if (t.color === "black") css += "color:#111;-webkit-text-stroke:0;";
     }
     if (t.skew) css += `font-style:italic;`;
+    if (t.rough) css += `filter:url(#rough);`;
     div.style.cssText = css;
     div.innerHTML = markupToHtml(t.ja);
     document.body.appendChild(div);

@@ -1,0 +1,482 @@
+{
+  "id": "p02-ruby",
+  "pipeline": "local-ocr",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 533,
+    "detectMs": 186,
+    "layoutMs": 28,
+    "ocrMs": 205,
+    "readingMs": 1,
+    "ocrCrops": 7,
+    "runs": [
+      572,
+      389,
+      533
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          751,
+          129,
+          72,
+          128
+        ],
+        "textBbox": [
+          751,
+          129,
+          72,
+          128
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう4つき12にち",
+        "zh": "",
+        "src": "text_free",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "潮見坂",
+            "rt": "しおみさか"
+          }
+        ],
+        "jaRuby": "{潮見坂|しおみさか}高校4月12日",
+        "columns": [
+          "潮見坂高校",
+          "4月12日"
+        ]
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          219,
+          65,
+          241,
+          270
+        ],
+        "textBbox": [
+          285,
+          133,
+          116,
+          153
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊ですよろしく",
+        "reading": "てんこうせいのきりしまみなとですよろしく",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "転校生",
+            "rt": "てんこうせい"
+          },
+          {
+            "col": 2,
+            "base": "霧島湊",
+            "rt": "きりしまみなと"
+          }
+        ],
+        "jaRuby": "{転校生|てんこうせい}の{霧島湊|きりしまみなと}ですよろしく",
+        "columns": [
+          "転校生の",
+          "霧島湊です",
+          "よろしく"
+        ]
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          689,
+          415,
+          141,
+          248
+        ],
+        "textBbox": [
+          706,
+          483,
+          109,
+          131
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか!?",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "本気",
+            "rt": "マッ"
+          }
+        ],
+        "jaRuby": "{本気|マッ}で言ってるのか!?",
+        "columns": [
+          "本気で",
+          "言ってる",
+          "のか!?"
+        ]
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          479,
+          490,
+          101,
+          138
+        ],
+        "textBbox": [
+          508,
+          531,
+          46,
+          58
+        ],
+        "orientation": "vertical",
+        "ja": "嘘...",
+        "reading": "うそ...",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "嘘",
+            "rt": "うそ"
+          }
+        ],
+        "jaRuby": "{嘘|うそ}...",
+        "columns": [
+          "嘘..."
+        ]
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          68,
+          414,
+          244,
+          291
+        ],
+        "textBbox": [
+          114,
+          507,
+          154,
+          123
+        ],
+        "orientation": "horizontal",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのあいぼうだ",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "今日",
+            "rt": "きょう"
+          },
+          {
+            "col": 2,
+            "base": "君",
+            "rt": "きみ"
+          },
+          {
+            "col": 3,
+            "base": "僕",
+            "rt": "ぼく"
+          },
+          {
+            "col": 4,
+            "base": "相棒",
+            "rt": "バートナー"
+          }
+        ],
+        "jaRuby": "{今日|きょう}から{君|きみ}が{僕|ぼく}の{相棒|バートナー}だ",
+        "columns": [
+          "今日から",
+          "君が",
+          "僕の",
+          "相棒だ"
+        ]
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          590,
+          911,
+          201,
+          257
+        ],
+        "textBbox": [
+          621,
+          964,
+          138,
+          166
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれじのやくそく、わすれるなよ",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "黄昏時",
+            "rt": "たそがれとき"
+          },
+          {
+            "col": 2,
+            "base": "約束",
+            "rt": "やくそく"
+          },
+          {
+            "col": 3,
+            "base": "忘",
+            "rt": "わす"
+          }
+        ],
+        "jaRuby": "{黄昏時|たそがれとき}の{約束|やくそく}、{忘|わす}れるなよ",
+        "columns": [
+          "黄昏時の",
+          "約束、",
+          "忘れるなよ"
+        ]
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          103,
+          945,
+          133,
+          208
+        ],
+        "textBbox": [
+          132,
+          1002,
+          76,
+          109
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 2,
+            "base": "必",
+            "rt": "かなら"
+          }
+        ],
+        "jaRuby": "ああ。{必|かなら}ず",
+        "columns": [
+          "ああ。",
+          "必ず"
+        ]
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.958,
+        "box": [
+          590,
+          911,
+          201,
+          257
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.956,
+        "box": [
+          68,
+          414,
+          244,
+          291
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.949,
+        "box": [
+          219,
+          65,
+          241,
+          270
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.938,
+        "box": [
+          689,
+          415,
+          141,
+          248
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.931,
+        "box": [
+          103,
+          945,
+          133,
+          208
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.916,
+        "box": [
+          479,
+          490,
+          101,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.753,
+        "box": [
+          706,
+          483,
+          109,
+          131
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.731,
+        "box": [
+          621,
+          964,
+          138,
+          166
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.709,
+        "box": [
+          508,
+          531,
+          46,
+          58
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.692,
+        "box": [
+          114,
+          507,
+          154,
+          123
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.673,
+        "box": [
+          132,
+          1002,
+          76,
+          109
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.654,
+        "box": [
+          285,
+          133,
+          116,
+          153
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.595,
+        "box": [
+          751,
+          129,
+          72,
+          128
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.41,
+        "box": [
+          415,
+          1054,
+          111,
+          108
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        344
+      ],
+      [
+        438,
+        394,
+        404,
+        468
+      ],
+      [
+        38,
+        394,
+        388,
+        468
+      ],
+      [
+        38,
+        874,
+        804,
+        368
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 688,
+    "ocr": 751,
+    "kuromoji": 336
+  },
+  "rssPeakMB": 1089,
+  "rubyLatency": {
+    "analyzeMs": 242,
+    "ocrMs": 696,
+    "alignMs": 1,
+    "wallMs": 938,
+    "crops": 34
+  },
+  "rubyScale": 1.5
+}

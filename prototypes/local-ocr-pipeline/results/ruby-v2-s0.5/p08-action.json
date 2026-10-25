@@ -1,0 +1,297 @@
+{
+  "id": "p08-action",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-node",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "latency": {
+    "wallMs": 941,
+    "detectMs": 678,
+    "layoutMs": 97,
+    "ocrMs": 173,
+    "readingMs": 1,
+    "ocrCrops": 4,
+    "runs": [
+      910,
+      1014,
+      941
+    ]
+  },
+  "loadMs": {
+    "detector": 875,
+    "ocr": 765,
+    "kuromoji": 323
+  },
+  "rssPeakMB": 1029,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          521,
+          45,
+          79,
+          129
+        ],
+        "textBbox": [
+          545,
+          83,
+          33,
+          55
+        ],
+        "orientation": "vertical",
+        "ja": "え!?",
+        "reading": "え!?",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "え!?"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          153,
+          384,
+          134,
+          211
+        ],
+        "textBbox": [
+          177,
+          428,
+          86,
+          135
+        ],
+        "orientation": "vertical",
+        "ja": "怪我はないか?",
+        "reading": "けがはないか?",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "我",
+            "rt": "が"
+          }
+        ],
+        "jaRuby": "怪{我|が}はないか?",
+        "columns": [
+          "怪我は",
+          "ないか?"
+        ]
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          587,
+          884,
+          186,
+          272
+        ],
+        "textBbox": [
+          619,
+          951,
+          123,
+          157
+        ],
+        "orientation": "vertical",
+        "ja": "本当に助かりました!!",
+        "reading": "ほんとうにたすかりました!!",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "本当",
+            "rt": "ほんとう"
+          },
+          {
+            "col": 2,
+            "base": "助",
+            "rt": "たす"
+          }
+        ],
+        "jaRuby": "{本当|ほんとう}に{助|たす}かりました!!",
+        "columns": [
+          "本当に",
+          "助かり",
+          "ました!!"
+        ]
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          53,
+          879,
+          175,
+          263
+        ],
+        "textBbox": [
+          79,
+          934,
+          123,
+          164
+        ],
+        "orientation": "vertical",
+        "ja": "気にするな街まで送るよ",
+        "reading": "きにするなまちまでおくるよ",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 2,
+            "base": "街",
+            "rt": "また"
+          }
+        ],
+        "jaRuby": "気にするな{街|また}まで送るよ",
+        "columns": [
+          "気にするな",
+          "街まで",
+          "送るよ"
+        ]
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          587,
+          884,
+          186,
+          272
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          53,
+          879,
+          175,
+          263
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          153,
+          384,
+          134,
+          211
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.858,
+        "box": [
+          521,
+          45,
+          79,
+          129
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.839,
+        "box": [
+          79,
+          934,
+          123,
+          164
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.808,
+        "box": [
+          177,
+          428,
+          86,
+          135
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.793,
+        "box": [
+          619,
+          951,
+          123,
+          157
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.563,
+        "box": [
+          545,
+          83,
+          33,
+          55
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.515,
+        "box": [
+          427,
+          135,
+          86,
+          86
+        ]
+      }
+    ],
+    "panels": [
+      [
+        918,
+        38,
+        804,
+        1204
+      ],
+      [
+        38,
+        38,
+        804,
+        584
+      ],
+      [
+        38,
+        634,
+        804,
+        208
+      ],
+      [
+        38,
+        854,
+        804,
+        388
+      ]
+    ]
+  },
+  "rubyLatency": {
+    "analyzeMs": 68,
+    "ocrMs": 149,
+    "alignMs": 0,
+    "wallMs": 217,
+    "crops": 14
+  },
+  "rubyScale": 0.5
+}

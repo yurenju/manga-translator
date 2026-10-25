@@ -1,0 +1,334 @@
+{
+  "id": "p08-action",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-node",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "latency": {
+    "wallMs": 941,
+    "detectMs": 678,
+    "layoutMs": 97,
+    "ocrMs": 173,
+    "readingMs": 1,
+    "ocrCrops": 4,
+    "runs": [
+      910,
+      1014,
+      941
+    ],
+    "turnMs": 4488,
+    "turns": [
+      4488
+    ]
+  },
+  "loadMs": {
+    "detector": 875,
+    "ocr": 765,
+    "kuromoji": 323
+  },
+  "rssPeakMB": 1029,
+  "usage": {
+    "input_tokens": 1609,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 157,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.004788,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          521,
+          45,
+          79,
+          129
+        ],
+        "textBbox": [
+          545,
+          83,
+          33,
+          55
+        ],
+        "orientation": "vertical",
+        "ja": "え!?",
+        "reading": "え!?",
+        "zh": "咦!?",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "え!?",
+        "readingKuromoji": "え!?"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          153,
+          384,
+          134,
+          211
+        ],
+        "textBbox": [
+          177,
+          428,
+          86,
+          135
+        ],
+        "orientation": "vertical",
+        "ja": "怪我はないか?",
+        "reading": "けがはないか?",
+        "zh": "你沒受傷吧?",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "怪我",
+            "rt": "けが"
+          }
+        ],
+        "jaRuby": "{怪我|けが}はないか?",
+        "columns": [
+          "怪我は",
+          "ないか?"
+        ],
+        "readingKuromoji": "けがはないか?"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          587,
+          884,
+          186,
+          272
+        ],
+        "textBbox": [
+          619,
+          951,
+          123,
+          157
+        ],
+        "orientation": "vertical",
+        "ja": "本当に助かりました!!",
+        "reading": "ほんとうにたすかりました!!",
+        "zh": "真的幫了大忙!!",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "本当",
+            "rt": "ほんとう"
+          },
+          {
+            "col": 2,
+            "base": "助",
+            "rt": "たす"
+          }
+        ],
+        "jaRuby": "{本当|ほんとう}に{助|たす}かりました!!",
+        "columns": [
+          "本当に",
+          "助かり",
+          "ました!!"
+        ],
+        "readingKuromoji": "ほんとうにたすかりました!!"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          53,
+          879,
+          175,
+          263
+        ],
+        "textBbox": [
+          79,
+          934,
+          123,
+          164
+        ],
+        "orientation": "vertical",
+        "ja": "気にするな街まで送るよ",
+        "reading": "きにするなまちまでおくるよ",
+        "zh": "別放在心上，我送你到城鎮吧。",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "気",
+            "rt": "き"
+          },
+          {
+            "col": 2,
+            "base": "街",
+            "rt": "まち"
+          },
+          {
+            "col": 3,
+            "base": "送",
+            "rt": "おく"
+          }
+        ],
+        "jaRuby": "{気|き}にするな{街|まち}まで{送|おく}るよ",
+        "columns": [
+          "気にするな",
+          "街まで",
+          "送るよ"
+        ],
+        "readingKuromoji": "きにするなまちまでおくるよ"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          587,
+          884,
+          186,
+          272
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          53,
+          879,
+          175,
+          263
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          153,
+          384,
+          134,
+          211
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.858,
+        "box": [
+          521,
+          45,
+          79,
+          129
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.839,
+        "box": [
+          79,
+          934,
+          123,
+          164
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.808,
+        "box": [
+          177,
+          428,
+          86,
+          135
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.793,
+        "box": [
+          619,
+          951,
+          123,
+          157
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.563,
+        "box": [
+          545,
+          83,
+          33,
+          55
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.515,
+        "box": [
+          427,
+          135,
+          86,
+          86
+        ]
+      }
+    ],
+    "panels": [
+      [
+        918,
+        38,
+        804,
+        1204
+      ],
+      [
+        38,
+        38,
+        804,
+        584
+      ],
+      [
+        38,
+        634,
+        804,
+        208
+      ],
+      [
+        38,
+        854,
+        804,
+        388
+      ]
+    ]
+  },
+  "rubyLatency": {
+    "analyzeMs": 207,
+    "ocrMs": 162,
+    "alignMs": 0,
+    "wallMs": 369,
+    "crops": 15
+  },
+  "rubyScale": 1,
+  "model": "claude-sonnet-5-5",
+  "hints": "image",
+  "zoom": 3,
+  "images": 3
+}

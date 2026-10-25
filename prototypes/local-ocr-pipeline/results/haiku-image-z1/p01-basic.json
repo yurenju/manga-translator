@@ -1,0 +1,446 @@
+{
+  "id": "p01-basic",
+  "pipeline": "local-ocr",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 587,
+    "detectMs": 248,
+    "layoutMs": 32,
+    "ocrMs": 289,
+    "readingMs": 1,
+    "ocrCrops": 8,
+    "runs": [
+      587,
+      767,
+      587
+    ],
+    "turnMs": 2058,
+    "turns": [
+      2172,
+      1764,
+      2058
+    ]
+  },
+  "usage": {
+    "input_tokens": 919,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 257,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.00022040000000000002,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          694,
+          55,
+          132,
+          210
+        ],
+        "textBbox": [
+          719,
+          79,
+          84,
+          163
+        ],
+        "orientation": "vertical",
+        "ja": "おはよう!今日は早いね",
+        "reading": "おはよう!きょうははやいね",
+        "zh": "早安！今天好早啊",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "おはよう!今日は早いね",
+        "readingKuromoji": "おはよう!きょうははやいね"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          43,
+          59,
+          174,
+          222
+        ],
+        "textBbox": [
+          66,
+          111,
+          128,
+          124
+        ],
+        "orientation": "horizontal",
+        "ja": "うん、パンを買いに行くんだ",
+        "reading": "うん、パンをかいにいくんだ",
+        "zh": "嗯，我要去買麵包",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "うん、パンを買いに行くんだ",
+        "readingKuromoji": "うん、ぱんをかいにいくんだ"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          624,
+          490,
+          153,
+          180
+        ],
+        "textBbox": [
+          648,
+          521,
+          106,
+          124
+        ],
+        "orientation": "vertical",
+        "ja": "一緒に行ってもいい?",
+        "reading": "いっしょにいってもいい?",
+        "zh": "可以跟你一起去嗎？",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "一緒に行ってもいい?",
+        "readingKuromoji": "いっしょにいってもいい?"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          147,
+          504,
+          105,
+          190
+        ],
+        "textBbox": [
+          171,
+          531,
+          58,
+          142
+        ],
+        "orientation": "vertical",
+        "ja": "もちろん!",
+        "reading": "もちろん!",
+        "zh": "當然！",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "もちろん!",
+        "readingKuromoji": "もちろん!"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          502,
+          894,
+          174,
+          190
+        ],
+        "textBbox": [
+          524,
+          930,
+          130,
+          126
+        ],
+        "orientation": "horizontal",
+        "ja": "あ、お店がもう開いてる",
+        "reading": "あ、おみせがもうあいてる",
+        "zh": "啊，店已經開了",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "あ、お店がもう開いてる",
+        "readingKuromoji": "あ、おみせがもうひらいてる"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          394,
+          886,
+          62,
+          127
+        ],
+        "textBbox": [
+          406,
+          908,
+          39,
+          86
+        ],
+        "orientation": "vertical",
+        "ja": "朝七時",
+        "reading": "あさしちじ",
+        "zh": "早上七點",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "朝七時",
+        "readingKuromoji": "あさななじ"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          69,
+          880,
+          121,
+          98
+        ],
+        "textBbox": [
+          86,
+          902,
+          85,
+          56
+        ],
+        "orientation": "horizontal",
+        "ja": "「いいにおい!",
+        "reading": "「いいにおい!",
+        "zh": "「好香啊！",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "「いいにおい!",
+        "readingKuromoji": "「いいにおい!"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.956,
+        "box": [
+          502,
+          894,
+          174,
+          190
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.955,
+        "box": [
+          624,
+          490,
+          153,
+          180
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.954,
+        "box": [
+          694,
+          55,
+          132,
+          210
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.949,
+        "box": [
+          43,
+          59,
+          174,
+          222
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.94,
+        "box": [
+          69,
+          880,
+          121,
+          98
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.934,
+        "box": [
+          147,
+          504,
+          105,
+          190
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.87,
+        "box": [
+          658,
+          1070,
+          125,
+          120
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.842,
+        "box": [
+          86,
+          902,
+          85,
+          56
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.81,
+        "box": [
+          719,
+          79,
+          84,
+          163
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.802,
+        "box": [
+          648,
+          521,
+          106,
+          124
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.793,
+        "box": [
+          66,
+          111,
+          128,
+          124
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.779,
+        "box": [
+          524,
+          930,
+          130,
+          126
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.695,
+        "box": [
+          406,
+          908,
+          39,
+          86
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.691,
+        "box": [
+          171,
+          531,
+          58,
+          142
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.682,
+        "box": [
+          394,
+          886,
+          62,
+          127
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.445,
+        "box": [
+          512,
+          263,
+          135,
+          131
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.445,
+        "box": [
+          687,
+          1096,
+          70,
+          77
+        ]
+      }
+    ],
+    "panels": [
+      [
+        458,
+        38,
+        384,
+        404
+      ],
+      [
+        38,
+        38,
+        408,
+        404
+      ],
+      [
+        38,
+        454,
+        804,
+        404
+      ],
+      [
+        478,
+        870,
+        364,
+        372
+      ],
+      [
+        38,
+        870,
+        428,
+        372
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 688,
+    "ocr": 751,
+    "kuromoji": 336
+  },
+  "rssPeakMB": 1083,
+  "rubyLatency": {
+    "analyzeMs": 39,
+    "ocrMs": 0,
+    "alignMs": 0,
+    "wallMs": 40,
+    "crops": 0
+  },
+  "rubyScale": 1,
+  "model": "claude-haiku-5-5",
+  "hints": "image",
+  "zoom": 1,
+  "images": 0
+}

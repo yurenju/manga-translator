@@ -1,0 +1,382 @@
+{
+  "id": "p04-outside",
+  "pipeline": "local-ocr",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 424,
+    "detectMs": 205,
+    "layoutMs": 29,
+    "ocrMs": 192,
+    "readingMs": 0,
+    "ocrCrops": 7,
+    "runs": [
+      409,
+      600,
+      424
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          694,
+          55,
+          132,
+          229
+        ],
+        "textBbox": [
+          724,
+          97,
+          74,
+          161
+        ],
+        "orientation": "vertical",
+        "ja": "遅刻だー!!",
+        "reading": "ちこくだー!!",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "遅刻",
+            "rt": "ちこく"
+          }
+        ],
+        "jaRuby": "{遅刻|ちこく}だー!!",
+        "columns": [
+          "遅刻だー!!"
+        ]
+      },
+      {
+        "order": 2,
+        "kind": "outside",
+        "bbox": [
+          747,
+          605,
+          69,
+          74
+        ],
+        "textBbox": [
+          747,
+          605,
+          69,
+          74
+        ],
+        "orientation": "vertical",
+        "ja": "ハァ...ハァ...",
+        "reading": "ハァ...ハァ...",
+        "zh": "",
+        "src": "text_free",
+        "rubyHints": [],
+        "jaRuby": "ハァ...ハァ..."
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          458,
+          549,
+          123,
+          199
+        ],
+        "textBbox": [
+          477,
+          589,
+          86,
+          128
+        ],
+        "orientation": "vertical",
+        "ja": "間に合った...",
+        "reading": "まにあった...",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "間",
+            "rt": "ま"
+          },
+          {
+            "col": 2,
+            "base": "合",
+            "rt": "あ"
+          }
+        ],
+        "jaRuby": "{間|ま}に{合|あ}った...",
+        "columns": [
+          "間に",
+          "合った..."
+        ]
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          94,
+          583,
+          272,
+          72
+        ],
+        "textBbox": [
+          111,
+          596,
+          236,
+          42
+        ],
+        "orientation": "horizontal",
+        "ja": "ひだまりベーカリー",
+        "reading": "ひだまりべーかりー",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [],
+        "jaRuby": "ひだまりベーカリー"
+      },
+      {
+        "order": 5,
+        "kind": "outside",
+        "bbox": [
+          725,
+          932,
+          93,
+          127
+        ],
+        "textBbox": [
+          725,
+          932,
+          93,
+          127
+        ],
+        "orientation": "vertical",
+        "ja": "誰もいない店の中",
+        "reading": "だれもいないみせのなか",
+        "zh": "",
+        "src": "text_free",
+        "rubyHints": [],
+        "jaRuby": "誰もいない店の中"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          461,
+          962,
+          117,
+          195
+        ],
+        "textBbox": [
+          477,
+          999,
+          85,
+          134
+        ],
+        "orientation": "vertical",
+        "ja": "静かだな...",
+        "reading": "しずかだな...",
+        "zh": "",
+        "src": "bubble",
+        "rubyHints": [
+          {
+            "col": 1,
+            "base": "静",
+            "rt": "しず"
+          }
+        ],
+        "jaRuby": "{静|しず}かだな...",
+        "columns": [
+          "静か",
+          "だな..."
+        ]
+      },
+      {
+        "order": 7,
+        "kind": "outside",
+        "bbox": [
+          69,
+          926,
+          85,
+          46
+        ],
+        "textBbox": [
+          69,
+          926,
+          85,
+          46
+        ],
+        "orientation": "horizontal",
+        "ja": "x閉店後",
+        "reading": "xへいてんご",
+        "zh": "",
+        "src": "text_free",
+        "rubyHints": [],
+        "jaRuby": "x閉店後"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.943,
+        "box": [
+          461,
+          962,
+          117,
+          195
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.936,
+        "box": [
+          458,
+          549,
+          123,
+          199
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.929,
+        "box": [
+          694,
+          55,
+          132,
+          229
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.831,
+        "box": [
+          477,
+          999,
+          85,
+          134
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.81,
+        "box": [
+          725,
+          932,
+          93,
+          127
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.773,
+        "box": [
+          111,
+          596,
+          236,
+          42
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.743,
+        "box": [
+          477,
+          589,
+          86,
+          128
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.688,
+        "box": [
+          724,
+          97,
+          74,
+          161
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.685,
+        "box": [
+          94,
+          583,
+          272,
+          72
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.581,
+        "box": [
+          747,
+          605,
+          69,
+          74
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.518,
+        "box": [
+          69,
+          926,
+          85,
+          46
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        17,
+        804,
+        505
+      ],
+      [
+        438,
+        534,
+        404,
+        368
+      ],
+      [
+        38,
+        534,
+        388,
+        368
+      ],
+      [
+        38,
+        914,
+        804,
+        328
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 688,
+    "ocr": 751,
+    "kuromoji": 336
+  },
+  "rssPeakMB": 1096,
+  "rubyLatency": {
+    "analyzeMs": 81,
+    "ocrMs": 132,
+    "alignMs": 0,
+    "wallMs": 214,
+    "crops": 9
+  },
+  "rubyScale": 1
+}
