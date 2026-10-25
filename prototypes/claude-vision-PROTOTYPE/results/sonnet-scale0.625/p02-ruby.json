@@ -1,0 +1,173 @@
+{
+  "id": "p02-ruby",
+  "model": "sonnet",
+  "scale": 0.625,
+  "resident": false,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    550,
+    800
+  ],
+  "latency": {
+    "wallMs": 7274,
+    "turnMs": 7268,
+    "durationMs": 6609,
+    "durationApiMs": 6372
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1492,
+    "cache_read_input_tokens": 1160,
+    "output_tokens": 679,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1492,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 679,
+        "cache_read_input_tokens": 1160,
+        "cache_creation_input_tokens": 1492,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 1492
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-sonnet-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 679,
+      "cacheReadInputTokens": 1160,
+      "cacheCreationInputTokens": 1492,
+      "webSearchRequests": 0,
+      "costUSD": 0.012878,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-sonnet-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.012878,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "narration",
+        "bbox": [
+          746,
+          54,
+          83,
+          272
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこうしがつじゅうににち",
+        "zh": "潮見坂高中 4月12日"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          229,
+          85,
+          219,
+          227
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊です よろしく",
+        "reading": "てんこうせいのきりしまみなとです よろしく",
+        "zh": "我是轉學生霧島湊，請多指教。"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          694,
+          411,
+          147,
+          256
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "マジでいってるのか",
+        "zh": "你是認真的嗎!?"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          480,
+          493,
+          93,
+          120
+        ],
+        "orientation": "vertical",
+        "ja": "嘘…",
+        "reading": "うそ",
+        "zh": "騙人……"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          74,
+          432,
+          189,
+          272
+        ],
+        "orientation": "vertical",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのパートナーだ",
+        "zh": "從今天起，你就是我的搭檔。"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          594,
+          917,
+          178,
+          221
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれどきのやくそく、わすれるなよ",
+        "zh": "黃昏時的約定，可別忘了喔。"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          106,
+          947,
+          152,
+          200
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "嗯。一定。"
+      }
+    ]
+  }
+}

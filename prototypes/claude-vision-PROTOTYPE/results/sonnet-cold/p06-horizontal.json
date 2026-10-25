@@ -1,0 +1,187 @@
+{
+  "id": "p06-horizontal",
+  "model": "sonnet",
+  "scale": 1,
+  "resident": false,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 6183,
+    "turnMs": 6176,
+    "durationMs": 5491,
+    "durationApiMs": 5404
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2381,
+    "cache_read_input_tokens": 1160,
+    "output_tokens": 689,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 2381,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 689,
+        "cache_read_input_tokens": 1160,
+        "cache_creation_input_tokens": 2381,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 2381
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-sonnet-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 689,
+      "cacheReadInputTokens": 1160,
+      "cacheCreationInputTokens": 2381,
+      "webSearchRequests": 0,
+      "costUSD": 0.016534,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-sonnet-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.016534,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "sign",
+        "bbox": [
+          420,
+          86,
+          44,
+          28
+        ],
+        "orientation": "horizontal",
+        "ja": "ミオ",
+        "reading": "みお",
+        "zh": "澪"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          289,
+          159,
+          232,
+          62
+        ],
+        "orientation": "horizontal",
+        "ja": "駅前に7時ね",
+        "reading": "えきまえにしちじね",
+        "zh": "七點在車站前面喔"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          439,
+          249,
+          152,
+          58
+        ],
+        "orientation": "horizontal",
+        "ja": "OK！",
+        "reading": "おーけー",
+        "zh": "OK！"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          289,
+          339,
+          252,
+          92
+        ],
+        "orientation": "horizontal",
+        "ja": "遅れたらアイス奢りね",
+        "reading": "おくれたらあいすおごりね",
+        "zh": "遲到的話就請吃冰喔"
+      },
+      {
+        "order": 5,
+        "kind": "sign",
+        "bbox": [
+          571,
+          552,
+          40,
+          16
+        ],
+        "orientation": "horizontal",
+        "ja": "18:42",
+        "reading": "じゅうはちじよんじゅうに",
+        "zh": "18:42"
+      },
+      {
+        "order": 6,
+        "kind": "sfx",
+        "bbox": [
+          460,
+          665,
+          362,
+          205
+        ],
+        "orientation": "horizontal",
+        "ja": "え、もう6:50!?",
+        "reading": "え、もうろくじごじゅっぷん",
+        "zh": "咦，已經6:50了!?"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          69,
+          669,
+          162,
+          260
+        ],
+        "orientation": "vertical",
+        "ja": "あと10分で着く訳ない！",
+        "reading": "あとじゅっぷんでつくわけない",
+        "zh": "剩10分鐘怎麼可能趕到！"
+      },
+      {
+        "order": 8,
+        "kind": "sign",
+        "bbox": [
+          249,
+          760,
+          162,
+          60
+        ],
+        "orientation": "horizontal",
+        "ja": "BUS STOP",
+        "reading": "ばすすとっぷ",
+        "zh": "公車站牌"
+      }
+    ]
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "id": "p05-dense",
+  "model": "sonnet",
+  "scale": 1,
+  "resident": true,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 7322,
+    "turnMs": 7322,
+    "durationMs": 7314,
+    "durationApiMs": 28185
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2893,
+    "cache_read_input_tokens": 11923,
+    "output_tokens": 1017,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 2893,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1017,
+        "cache_read_input_tokens": 11923,
+        "cache_creation_input_tokens": 2893,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 2893
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-sonnet-5-5": {
+      "inputTokens": 10,
+      "outputTokens": 3760,
+      "cacheReadInputTokens": 33938,
+      "cacheCreationInputTokens": 11911,
+      "webSearchRequests": 0,
+      "costUSD": 0.08865780000000001,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-sonnet-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.08865780000000001,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          730,
+          50,
+          112,
+          210
+        ],
+        "orientation": "vertical",
+        "ja": "今夜の当番誰だっけ?",
+        "reading": "こんやのとうばんだれだっけ",
+        "zh": "今晚輪到誰值班來著?"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          558,
+          55,
+          64,
+          110
+        ],
+        "orientation": "vertical",
+        "ja": "…俺?",
+        "reading": "…おれ",
+        "zh": "……我?"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          78,
+          55,
+          124,
+          190
+        ],
+        "orientation": "vertical",
+        "ja": "そうだよ兄ちゃん",
+        "reading": "そうだよにいちゃん",
+        "zh": "對啊,哥。"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          700,
+          385,
+          122,
+          170
+        ],
+        "orientation": "vertical",
+        "ja": "えー面倒くさい",
+        "reading": "えーめんどうくさい",
+        "zh": "欸~好麻煩。"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          626,
+          560,
+          110,
+          160
+        ],
+        "orientation": "vertical",
+        "ja": "昨日も作ったぞ",
+        "reading": "きのうもつくったぞ",
+        "zh": "昨天也是我做的欸。"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          176,
+          358,
+          240,
+          225
+        ],
+        "orientation": "vertical",
+        "ja": "嘘つけ!カップ麺だったじゃん",
+        "reading": "うそつけ!かっぷめんだったじゃん",
+        "zh": "騙人!明明就是泡麵。"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          229,
+          575,
+          142,
+          150
+        ],
+        "orientation": "vertical",
+        "ja": "お湯を入れたのは俺だ",
+        "reading": "おゆをいれたのはおれだ",
+        "zh": "倒熱水的人是我。"
+      },
+      {
+        "order": 8,
+        "kind": "balloon",
+        "bbox": [
+          64,
+          714,
+          112,
+          152
+        ],
+        "orientation": "vertical",
+        "ja": "それは料理じゃない",
+        "reading": "それはりょうりじゃない",
+        "zh": "那不算料理。"
+      },
+      {
+        "order": 9,
+        "kind": "balloon",
+        "bbox": [
+          204,
+          935,
+          112,
+          150
+        ],
+        "orientation": "vertical",
+        "ja": "辛口でね!",
+        "reading": "からくちでね",
+        "zh": "要辣的喔!"
+      },
+      {
+        "order": 10,
+        "kind": "outside",
+        "bbox": [
+          80,
+          1038,
+          26,
+          52
+        ],
+        "orientation": "vertical",
+        "ja": "(甘口派)",
+        "reading": "あまくちは",
+        "zh": "(甜口派)"
+      },
+      {
+        "order": 11,
+        "kind": "narration",
+        "bbox": [
+          777,
+          934,
+          70,
+          112
+        ],
+        "orientation": "vertical",
+        "ja": "結局…",
+        "reading": "けっきょく",
+        "zh": "結果……"
+      },
+      {
+        "order": 12,
+        "kind": "balloon",
+        "bbox": [
+          624,
+          930,
+          112,
+          162
+        ],
+        "orientation": "vertical",
+        "ja": "カレーでいい?",
+        "reading": "かれーでいい",
+        "zh": "吃咖哩可以嗎?"
+      }
+    ]
+  }
+}

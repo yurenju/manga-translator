@@ -1,0 +1,173 @@
+{
+  "id": "p01-basic",
+  "model": "haiku",
+  "scale": 1,
+  "resident": false,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 10341,
+    "turnMs": 10328,
+    "durationMs": 9643,
+    "durationApiMs": 9580
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 3544,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 2005,
+    "output_tokens_details": {
+      "thinking_tokens": 1385
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 3544,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 2005,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 3544,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 3544
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-haiku-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 2005,
+      "cacheReadInputTokens": 0,
+      "cacheCreationInputTokens": 3544,
+      "webSearchRequests": 0,
+      "costUSD": 0.0017115,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 1385,
+      "canonicalModel": "claude-haiku-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.0017115,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          49,
+          63,
+          162,
+          213
+        ],
+        "orientation": "vertical",
+        "ja": "うん、パンを買いに行くんだ",
+        "reading": "うん、ぱんをかいにいくんだ",
+        "zh": "嗯，我要去買麵包。"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          698,
+          58,
+          124,
+          203
+        ],
+        "orientation": "vertical",
+        "ja": "おはよう！今日は早いね",
+        "reading": "おはよう！きょうははやいね",
+        "zh": "早安！今天好早呢。"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          630,
+          494,
+          141,
+          172
+        ],
+        "orientation": "vertical",
+        "ja": "一緒に行ってもいい？",
+        "reading": "いっしょにいってもいい？",
+        "zh": "我可以一起去嗎？"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          154,
+          509,
+          92,
+          182
+        ],
+        "orientation": "vertical",
+        "ja": "もちろん！",
+        "reading": "もちろん！",
+        "zh": "當然好！"
+      },
+      {
+        "order": 5,
+        "kind": "sign",
+        "bbox": [
+          400,
+          890,
+          50,
+          120
+        ],
+        "orientation": "vertical",
+        "ja": "朝七時",
+        "reading": "あさしちじ",
+        "zh": "早上七點"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          75,
+          884,
+          111,
+          92
+        ],
+        "orientation": "horizontal",
+        "ja": "いいにおい！",
+        "reading": "いいにおい！",
+        "zh": "好香啊！"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          510,
+          898,
+          162,
+          183
+        ],
+        "orientation": "vertical",
+        "ja": "あ、お店がもう開いてる",
+        "reading": "あ、おみせがもうあいてる",
+        "zh": "啊，店已經開了呢。"
+      }
+    ]
+  }
+}

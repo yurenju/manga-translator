@@ -1,0 +1,173 @@
+{
+  "id": "p03-shapes",
+  "model": "haiku",
+  "scale": 1,
+  "resident": false,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 10450,
+    "turnMs": 10444,
+    "durationMs": 9788,
+    "durationApiMs": 9720
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2383,
+    "cache_read_input_tokens": 1160,
+    "output_tokens": 1805,
+    "output_tokens_details": {
+      "thinking_tokens": 1196
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 2383,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 1805,
+        "cache_read_input_tokens": 1160,
+        "cache_creation_input_tokens": 2383,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 2383
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-haiku-5-5": {
+      "inputTokens": 2,
+      "outputTokens": 1805,
+      "cacheReadInputTokens": 1160,
+      "cacheCreationInputTokens": 2383,
+      "webSearchRequests": 0,
+      "costUSD": 0.0013909,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 1196,
+      "canonicalModel": "claude-haiku-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.0013909,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          650,
+          38,
+          190,
+          265
+        ],
+        "orientation": "vertical",
+        "ja": "うるさーい!!",
+        "reading": "うるさーい!!",
+        "zh": "吵死了！！"
+      },
+      {
+        "order": 2,
+        "kind": "thought",
+        "bbox": [
+          45,
+          50,
+          210,
+          240
+        ],
+        "orientation": "vertical",
+        "ja": "明日のテストどうしよう…",
+        "reading": "あしたのテストどうしよう…",
+        "zh": "明天的考試怎麼辦…"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          673,
+          458,
+          134,
+          205
+        ],
+        "orientation": "vertical",
+        "ja": "ねえ…聞こえる？",
+        "reading": "ねえ…きこえる？",
+        "zh": "喂…你聽得到嗎？"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          293,
+          453,
+          113,
+          213
+        ],
+        "orientation": "vertical",
+        "ja": "……誰だ",
+        "reading": "……だれだ",
+        "zh": "……是誰？"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          344,
+          778,
+          113,
+          165
+        ],
+        "orientation": "vertical",
+        "ja": "待って！",
+        "reading": "まって！",
+        "zh": "等一下！"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          88,
+          857,
+          123,
+          205
+        ],
+        "orientation": "vertical",
+        "ja": "どこ行くの？",
+        "reading": "どこいくの？",
+        "zh": "你要去哪裡？"
+      },
+      {
+        "order": 7,
+        "kind": "narration",
+        "bbox": [
+          698,
+          828,
+          123,
+          143
+        ],
+        "orientation": "vertical",
+        "ja": "その夜、町から音が消えた",
+        "reading": "そのよる、まちから おとが きえた",
+        "zh": "那天夜裡，城鎮的聲響消失了。"
+      }
+    ]
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "id": "p07-spread",
+  "model": "sonnet",
+  "scale": 1,
+  "resident": true,
+  "notes": null,
+  "effort": null,
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "latency": {
+    "wallMs": 4763,
+    "turnMs": 4763,
+    "durationMs": 4757,
+    "durationApiMs": 39089
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 4164,
+    "cache_read_input_tokens": 18260,
+    "output_tokens": 660,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 4164,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 660,
+        "cache_read_input_tokens": 18260,
+        "cache_creation_input_tokens": 4164,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 4164
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "modelUsage": {
+    "claude-sonnet-5-5": {
+      "inputTokens": 14,
+      "outputTokens": 5171,
+      "cacheReadInputTokens": 67014,
+      "cacheCreationInputTokens": 19519,
+      "webSearchRequests": 0,
+      "costUSD": 0.1365154,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-sonnet-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "costUsd": 0.1365154,
+  "isError": false,
+  "subtype": "success",
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "narration",
+        "bbox": [
+          1629,
+          69,
+          62,
+          182
+        ],
+        "orientation": "vertical",
+        "ja": "千年の森",
+        "reading": "せんねんのもり",
+        "zh": "千年之森"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          1394,
+          254,
+          132,
+          212
+        ],
+        "orientation": "vertical",
+        "ja": "ここが…伝説の",
+        "reading": "ここが…でんせつの",
+        "zh": "這裡就是…傳說中的"
+      },
+      {
+        "order": 3,
+        "kind": "sfx",
+        "bbox": [
+          690,
+          100,
+          380,
+          100
+        ],
+        "orientation": "horizontal",
+        "ja": "ザアアアア",
+        "reading": "ざあああああ",
+        "zh": "嘩啦啦啦啦"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          1544,
+          704,
+          152,
+          232
+        ],
+        "orientation": "vertical",
+        "ja": "地図だとこの先に村がある",
+        "reading": "ちずだとこのさきにむらがある",
+        "zh": "照地圖看，前面有個村子。"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          944,
+          704,
+          112,
+          192
+        ],
+        "orientation": "vertical",
+        "ja": "行ってみよう",
+        "reading": "いってみよう",
+        "zh": "去看看吧。"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          644,
+          698,
+          152,
+          204
+        ],
+        "orientation": "vertical",
+        "ja": "足元に気をつけて",
+        "reading": "あしもとにきをつけて",
+        "zh": "小心腳下。"
+      },
+      {
+        "order": 7,
+        "kind": "thought",
+        "bbox": [
+          64,
+          726,
+          212,
+          248
+        ],
+        "orientation": "vertical",
+        "ja": "もう帰りたい…",
+        "reading": "もうかえりたい",
+        "zh": "好想回家……"
+      }
+    ]
+  }
+}
