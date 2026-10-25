@@ -1,0 +1,365 @@
+{
+  "id": "p02-ruby",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-web (Chrome/152.0.7977.167)",
+  "device": "wasm",
+  "det": "v4s",
+  "ocrDtype": "q8",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 1966,
+    "detectMs": 402,
+    "layoutMs": 77,
+    "ocrMs": 1485,
+    "readingMs": 2,
+    "ocrCrops": 7,
+    "runs": [
+      1966
+    ]
+  },
+  "loadMs": {
+    "detector": 469,
+    "ocr": 487,
+    "kuromoji": 991
+  },
+  "jsHeapMB": 212,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          750,
+          130,
+          74,
+          122
+        ],
+        "textBbox": [
+          750,
+          130,
+          74,
+          122
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう4つき12にち",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          219,
+          64,
+          241,
+          271
+        ],
+        "textBbox": [
+          286,
+          134,
+          115,
+          140
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊ですよろしく",
+        "reading": "てんこうせいのきりしまみなとですよろしく",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          689,
+          415,
+          141,
+          248
+        ],
+        "textBbox": [
+          706,
+          486,
+          109,
+          125
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか!?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          480,
+          490,
+          100,
+          137
+        ],
+        "textBbox": [
+          508,
+          531,
+          45,
+          57
+        ],
+        "orientation": "vertical",
+        "ja": "嘘...",
+        "reading": "うそ...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          67,
+          414,
+          244,
+          291
+        ],
+        "textBbox": [
+          113,
+          507,
+          155,
+          117
+        ],
+        "orientation": "horizontal",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのあいぼうだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          590,
+          911,
+          201,
+          257
+        ],
+        "textBbox": [
+          625,
+          968,
+          132,
+          157
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれじのやくそく、わすれるなよ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          103,
+          945,
+          133,
+          209
+        ],
+        "textBbox": [
+          135,
+          1011,
+          71,
+          74
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.958,
+        "box": [
+          67,
+          414,
+          244,
+          291
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.955,
+        "box": [
+          219,
+          64,
+          241,
+          271
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          590,
+          911,
+          201,
+          257
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.936,
+        "box": [
+          103,
+          945,
+          133,
+          209
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.931,
+        "box": [
+          689,
+          415,
+          141,
+          248
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.904,
+        "box": [
+          480,
+          490,
+          100,
+          137
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.738,
+        "box": [
+          286,
+          134,
+          115,
+          140
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.736,
+        "box": [
+          706,
+          486,
+          109,
+          125
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.732,
+        "box": [
+          508,
+          531,
+          45,
+          57
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.716,
+        "box": [
+          113,
+          507,
+          155,
+          117
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.69,
+        "box": [
+          625,
+          968,
+          132,
+          157
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.673,
+        "box": [
+          135,
+          1011,
+          71,
+          74
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.638,
+        "box": [
+          750,
+          130,
+          74,
+          122
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.426,
+        "box": [
+          303,
+          1064,
+          111,
+          109
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.414,
+        "box": [
+          415,
+          1054,
+          110,
+          108
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        344
+      ],
+      [
+        438,
+        394,
+        404,
+        468
+      ],
+      [
+        38,
+        394,
+        388,
+        468
+      ],
+      [
+        38,
+        874,
+        804,
+        368
+      ]
+    ]
+  }
+}

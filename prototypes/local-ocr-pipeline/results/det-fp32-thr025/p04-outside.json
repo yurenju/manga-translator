@@ -1,0 +1,375 @@
+{
+  "id": "p04-outside",
+  "pipeline": "local-ocr",
+  "device": "cpu",
+  "det": "fp32",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.25,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 3852,
+    "detectMs": 903,
+    "layoutMs": 69,
+    "ocrMs": 2879,
+    "readingMs": 1,
+    "ocrCrops": 9,
+    "runs": [
+      3852
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          691,
+          52,
+          136,
+          238
+        ],
+        "textBbox": [
+          719,
+          91,
+          80,
+          166
+        ],
+        "orientation": "vertical",
+        "ja": "遅刻だー!!",
+        "reading": "ちこくだー!!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "outside",
+        "bbox": [
+          425,
+          7,
+          98,
+          283
+        ],
+        "textBbox": [
+          425,
+          7,
+          98,
+          283
+        ],
+        "orientation": "vertical",
+        "ja": "ドドドドド",
+        "reading": "ドドドドド",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 3,
+        "kind": "outside",
+        "bbox": [
+          744,
+          599,
+          74,
+          82
+        ],
+        "textBbox": [
+          744,
+          599,
+          74,
+          82
+        ],
+        "orientation": "vertical",
+        "ja": "ハァ...ハァ...",
+        "reading": "ハァ...ハァ...",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          457,
+          547,
+          126,
+          206
+        ],
+        "textBbox": [
+          476,
+          588,
+          86,
+          128
+        ],
+        "orientation": "vertical",
+        "ja": "間に合った...",
+        "reading": "まにあった...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          93,
+          581,
+          274,
+          76
+        ],
+        "textBbox": [
+          111,
+          595,
+          234,
+          44
+        ],
+        "orientation": "horizontal",
+        "ja": "ひだまりベーカリー",
+        "reading": "ひだまりべーかりー",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "outside",
+        "bbox": [
+          724,
+          927,
+          96,
+          132
+        ],
+        "textBbox": [
+          724,
+          927,
+          96,
+          132
+        ],
+        "orientation": "vertical",
+        "ja": "誰もいない店の中",
+        "reading": "だれもいないみせのなか",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          458,
+          959,
+          122,
+          201
+        ],
+        "textBbox": [
+          476,
+          1004,
+          87,
+          125
+        ],
+        "orientation": "vertical",
+        "ja": "静かだな...",
+        "reading": "しずかだな...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 8,
+        "kind": "outside",
+        "bbox": [
+          69,
+          926,
+          84,
+          44
+        ],
+        "textBbox": [
+          69,
+          926,
+          84,
+          44
+        ],
+        "orientation": "horizontal",
+        "ja": "X閉店後",
+        "reading": "Xへいてんご",
+        "zh": "",
+        "src": "text_free"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.95,
+        "box": [
+          457,
+          547,
+          126,
+          206
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.949,
+        "box": [
+          691,
+          52,
+          136,
+          238
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.943,
+        "box": [
+          458,
+          959,
+          122,
+          201
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.889,
+        "box": [
+          724,
+          927,
+          96,
+          132
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.883,
+        "box": [
+          93,
+          581,
+          274,
+          76
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.874,
+        "box": [
+          476,
+          588,
+          86,
+          128
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.873,
+        "box": [
+          476,
+          1004,
+          87,
+          125
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.848,
+        "box": [
+          719,
+          91,
+          80,
+          166
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.808,
+        "box": [
+          111,
+          595,
+          234,
+          44
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.76,
+        "box": [
+          69,
+          926,
+          84,
+          44
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.756,
+        "box": [
+          744,
+          599,
+          74,
+          82
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.618,
+        "box": [
+          425,
+          7,
+          98,
+          283
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.595,
+        "box": [
+          551,
+          722,
+          138,
+          137
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.44,
+        "box": [
+          580,
+          766,
+          78,
+          69
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        17,
+        804,
+        505
+      ],
+      [
+        438,
+        534,
+        404,
+        368
+      ],
+      [
+        38,
+        534,
+        388,
+        368
+      ],
+      [
+        38,
+        914,
+        804,
+        328
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 1017,
+    "ocr": 694,
+    "kuromoji": 307
+  },
+  "rssPeakMB": 1360
+}

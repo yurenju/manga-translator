@@ -1,0 +1,309 @@
+{
+  "id": "p06-horizontal",
+  "pipeline": "local-ocr",
+  "device": "cpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 2271,
+    "detectMs": 285,
+    "layoutMs": 82,
+    "ocrMs": 1873,
+    "readingMs": 0,
+    "ocrCrops": 6,
+    "runs": [
+      2238,
+      2402,
+      2271
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          434,
+          244,
+          161,
+          66
+        ],
+        "textBbox": [
+          481,
+          261,
+          62,
+          30
+        ],
+        "orientation": "horizontal",
+        "ja": "OK!",
+        "reading": "OK!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          284,
+          154,
+          241,
+          68
+        ],
+        "textBbox": [
+          342,
+          168,
+          126,
+          40
+        ],
+        "orientation": "horizontal",
+        "ja": "駅前に7時ね",
+        "reading": "えきまえに7じね",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          283,
+          334,
+          265,
+          100
+        ],
+        "textBbox": [
+          348,
+          349,
+          134,
+          70
+        ],
+        "orientation": "horizontal",
+        "ja": "遅れたらアイス奢りね",
+        "reading": "おくれたらあいすおごりね",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          462,
+          662,
+          357,
+          189
+        ],
+        "textBbox": [
+          529,
+          737,
+          225,
+          44
+        ],
+        "orientation": "horizontal",
+        "ja": "え、もう650!?",
+        "reading": "え、もう650!?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          244,
+          753,
+          172,
+          71
+        ],
+        "textBbox": [
+          264,
+          772,
+          132,
+          33
+        ],
+        "orientation": "horizontal",
+        "ja": "BUSSTOP",
+        "reading": "BUSSTOP",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          62,
+          663,
+          175,
+          273
+        ],
+        "textBbox": [
+          94,
+          737,
+          115,
+          125
+        ],
+        "orientation": "vertical",
+        "ja": "あと10分で着く訳ない!",
+        "reading": "あと10ふんでつくわけない!",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.949,
+        "box": [
+          62,
+          663,
+          175,
+          273
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          283,
+          334,
+          265,
+          100
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.94,
+        "box": [
+          284,
+          154,
+          241,
+          68
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.938,
+        "box": [
+          434,
+          244,
+          161,
+          66
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.898,
+        "box": [
+          462,
+          662,
+          357,
+          189
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.897,
+        "box": [
+          342,
+          168,
+          126,
+          40
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.89,
+        "box": [
+          244,
+          753,
+          172,
+          71
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.874,
+        "box": [
+          348,
+          349,
+          134,
+          70
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.866,
+        "box": [
+          264,
+          772,
+          132,
+          33
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.818,
+        "box": [
+          481,
+          261,
+          62,
+          30
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.815,
+        "box": [
+          529,
+          737,
+          225,
+          44
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.812,
+        "box": [
+          94,
+          737,
+          115,
+          125
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        564
+      ],
+      [
+        438,
+        614,
+        404,
+        628
+      ],
+      [
+        38,
+        614,
+        388,
+        628
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 282,
+    "ocr": 831,
+    "kuromoji": 280
+  },
+  "rssPeakMB": 1378
+}

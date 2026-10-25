@@ -1,0 +1,379 @@
+{
+  "id": "p06-horizontal",
+  "pipeline": "local-ocr",
+  "device": "cpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.25,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 2878,
+    "detectMs": 611,
+    "layoutMs": 172,
+    "ocrMs": 2088,
+    "readingMs": 7,
+    "ocrCrops": 9,
+    "runs": [
+      2878
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          560,
+          547,
+          58,
+          26
+        ],
+        "textBbox": [
+          560,
+          547,
+          58,
+          26
+        ],
+        "orientation": "horizontal",
+        "ja": "1842",
+        "reading": "1842",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          434,
+          244,
+          161,
+          66
+        ],
+        "textBbox": [
+          481,
+          261,
+          62,
+          30
+        ],
+        "orientation": "horizontal",
+        "ja": "OK!",
+        "reading": "OK!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          284,
+          154,
+          241,
+          68
+        ],
+        "textBbox": [
+          342,
+          168,
+          126,
+          40
+        ],
+        "orientation": "horizontal",
+        "ja": "駅前に7時ね",
+        "reading": "えきまえに7じね",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          283,
+          334,
+          265,
+          100
+        ],
+        "textBbox": [
+          348,
+          349,
+          134,
+          70
+        ],
+        "orientation": "horizontal",
+        "ja": "遅れたらアイス奢りね",
+        "reading": "おくれたらあいすおごりね",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "outside",
+        "bbox": [
+          414,
+          85,
+          53,
+          29
+        ],
+        "textBbox": [
+          414,
+          85,
+          53,
+          29
+        ],
+        "orientation": "horizontal",
+        "ja": "ミオ",
+        "reading": "ミオ",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          462,
+          662,
+          357,
+          189
+        ],
+        "textBbox": [
+          529,
+          737,
+          225,
+          44
+        ],
+        "orientation": "horizontal",
+        "ja": "え、もう650!?",
+        "reading": "え、もう650!?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          244,
+          753,
+          172,
+          71
+        ],
+        "textBbox": [
+          264,
+          772,
+          132,
+          33
+        ],
+        "orientation": "horizontal",
+        "ja": "BUSSTOP",
+        "reading": "BUSSTOP",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 8,
+        "kind": "balloon",
+        "bbox": [
+          62,
+          663,
+          175,
+          273
+        ],
+        "textBbox": [
+          94,
+          737,
+          115,
+          125
+        ],
+        "orientation": "vertical",
+        "ja": "あと10分で着く訳ない!",
+        "reading": "あと10ふんでつくわけない!",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.949,
+        "box": [
+          62,
+          663,
+          175,
+          273
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          283,
+          334,
+          265,
+          100
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.94,
+        "box": [
+          284,
+          154,
+          241,
+          68
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.938,
+        "box": [
+          434,
+          244,
+          161,
+          66
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.898,
+        "box": [
+          462,
+          662,
+          357,
+          189
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.897,
+        "box": [
+          342,
+          168,
+          126,
+          40
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.89,
+        "box": [
+          244,
+          753,
+          172,
+          71
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.874,
+        "box": [
+          348,
+          349,
+          134,
+          70
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.866,
+        "box": [
+          264,
+          772,
+          132,
+          33
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.818,
+        "box": [
+          481,
+          261,
+          62,
+          30
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.815,
+        "box": [
+          529,
+          737,
+          225,
+          44
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.812,
+        "box": [
+          94,
+          737,
+          115,
+          125
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.349,
+        "box": [
+          414,
+          85,
+          53,
+          29
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.3,
+        "box": [
+          597,
+          1031,
+          88,
+          84
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.256,
+        "box": [
+          560,
+          547,
+          58,
+          26
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        564
+      ],
+      [
+        438,
+        614,
+        404,
+        628
+      ],
+      [
+        38,
+        614,
+        388,
+        628
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 458,
+    "ocr": 712,
+    "kuromoji": 268
+  },
+  "rssPeakMB": 1410
+}

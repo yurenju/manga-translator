@@ -1,0 +1,454 @@
+{
+  "id": "p03-shapes",
+  "pipeline": "local-ocr",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 2692,
+    "detectMs": 427,
+    "layoutMs": 33,
+    "ocrMs": 283,
+    "readingMs": 1,
+    "ocrCrops": 8,
+    "runs": [
+      739,
+      506,
+      739
+    ],
+    "localMs": 739,
+    "turnMs": 1953,
+    "durationMs": 1950,
+    "durationApiMs": 6999
+  },
+  "usage": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 703,
+    "cache_read_input_tokens": 2551,
+    "output_tokens": 210,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 703,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "global",
+    "iterations": [
+      {
+        "input_tokens": 2,
+        "output_tokens": 210,
+        "cache_read_input_tokens": 2551,
+        "cache_creation_input_tokens": 703,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 703
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard",
+    "fallback_credit": null
+  },
+  "costUsd": 0.016728800000000002,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          652,
+          37,
+          182,
+          269
+        ],
+        "textBbox": [
+          717,
+          73,
+          49,
+          190
+        ],
+        "orientation": "vertical",
+        "ja": "うるさーい!!",
+        "reading": "うるさーい!!",
+        "zh": "吵死了——!!",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          44,
+          47,
+          210,
+          244
+        ],
+        "textBbox": [
+          100,
+          102,
+          101,
+          136
+        ],
+        "orientation": "vertical",
+        "ja": "明日のテストどうしよう・・・",
+        "reading": "あしたのてすとどうしよう・・・",
+        "zh": "明天的考試該怎麼辦……",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          672,
+          456,
+          135,
+          206
+        ],
+        "textBbox": [
+          707,
+          503,
+          65,
+          114
+        ],
+        "orientation": "vertical",
+        "ja": "ねえ...聞こえる?",
+        "reading": "ねえ...きこえる?",
+        "zh": "喂……你聽得到嗎？",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          340,
+          777,
+          119,
+          167
+        ],
+        "textBbox": [
+          372,
+          810,
+          53,
+          102
+        ],
+        "orientation": "vertical",
+        "ja": "待って!",
+        "reading": "まって!",
+        "zh": "等一下！",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          289,
+          446,
+          123,
+          225
+        ],
+        "textBbox": [
+          326,
+          511,
+          51,
+          100
+        ],
+        "orientation": "vertical",
+        "ja": "......誰だ",
+        "reading": "......だれだ",
+        "zh": "……是誰",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          84,
+          855,
+          131,
+          209
+        ],
+        "textBbox": [
+          113,
+          908,
+          71,
+          103
+        ],
+        "orientation": "vertical",
+        "ja": "どこ行くの?",
+        "reading": "どこいくの?",
+        "zh": "你要去哪裡？",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          693,
+          827,
+          132,
+          147
+        ],
+        "textBbox": [
+          702,
+          855,
+          115,
+          85
+        ],
+        "orientation": "horizontal",
+        "ja": "その夜、町から音が消えた",
+        "reading": "そのよる、まちからおとがきえた",
+        "zh": "那一夜，小鎮裡的聲音消失了",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.925,
+        "box": [
+          84,
+          855,
+          131,
+          209
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.919,
+        "box": [
+          340,
+          777,
+          119,
+          167
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.913,
+        "box": [
+          693,
+          827,
+          132,
+          147
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.893,
+        "box": [
+          672,
+          456,
+          135,
+          206
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.866,
+        "box": [
+          44,
+          47,
+          210,
+          244
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.837,
+        "box": [
+          652,
+          37,
+          182,
+          269
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.789,
+        "box": [
+          717,
+          73,
+          49,
+          190
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.771,
+        "box": [
+          702,
+          855,
+          115,
+          85
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.758,
+        "box": [
+          707,
+          503,
+          65,
+          114
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.747,
+        "box": [
+          289,
+          446,
+          123,
+          225
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.742,
+        "box": [
+          84,
+          1093,
+          112,
+          111
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.738,
+        "box": [
+          113,
+          908,
+          71,
+          103
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.731,
+        "box": [
+          100,
+          102,
+          101,
+          136
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.714,
+        "box": [
+          372,
+          810,
+          53,
+          102
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.658,
+        "box": [
+          338,
+          1057,
+          123,
+          122
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.604,
+        "box": [
+          260,
+          259,
+          121,
+          120
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.599,
+        "box": [
+          326,
+          511,
+          51,
+          100
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.404,
+        "box": [
+          106,
+          1122,
+          67,
+          64
+        ]
+      }
+    ],
+    "panels": [
+      [
+        438,
+        35,
+        404,
+        367
+      ],
+      [
+        38,
+        38,
+        388,
+        364
+      ],
+      [
+        38,
+        414,
+        804,
+        828
+      ],
+      [
+        518,
+        814,
+        324,
+        428
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 688,
+    "ocr": 751,
+    "kuromoji": 336
+  },
+  "rssPeakMB": 1096,
+  "model": "sonnet",
+  "readingFrom": "kuromoji",
+  "resident": true,
+  "notes": null,
+  "modelUsage": {
+    "claude-sonnet-5-5": {
+      "inputTokens": 8,
+      "outputTokens": 688,
+      "cacheReadInputTokens": 7048,
+      "cacheCreationInputTokens": 2282,
+      "webSearchRequests": 0,
+      "costUSD": 0.016728800000000002,
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "thinkingTokens": 0,
+      "canonicalModel": "claude-sonnet-5-5",
+      "provider": "firstParty",
+      "costBasis": "list"
+    }
+  },
+  "isError": false
+}

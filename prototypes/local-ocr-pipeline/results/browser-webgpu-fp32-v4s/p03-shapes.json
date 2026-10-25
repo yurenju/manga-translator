@@ -1,0 +1,387 @@
+{
+  "id": "p03-shapes",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-web (Chrome/152.0.7977.167)",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 937,
+    "detectMs": 674,
+    "layoutMs": 28,
+    "ocrMs": 234,
+    "readingMs": 0,
+    "ocrCrops": 7,
+    "runs": [
+      955,
+      937,
+      937
+    ]
+  },
+  "loadMs": {
+    "detector": 1042,
+    "ocr": 1579,
+    "kuromoji": 599
+  },
+  "jsHeapMB": 221,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          651,
+          38,
+          183,
+          268
+        ],
+        "textBbox": [
+          717,
+          74,
+          50,
+          188
+        ],
+        "orientation": "vertical",
+        "ja": "うるさーい!!",
+        "reading": "うるさーい!!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          45,
+          47,
+          210,
+          243
+        ],
+        "textBbox": [
+          99,
+          102,
+          103,
+          136
+        ],
+        "orientation": "vertical",
+        "ja": "明日のテストどうしよう・・・",
+        "reading": "あしたのてすとどうしよう・・・",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          672,
+          456,
+          136,
+          206
+        ],
+        "textBbox": [
+          705,
+          501,
+          69,
+          119
+        ],
+        "orientation": "vertical",
+        "ja": "ねえ...聞こえる?",
+        "reading": "ねえ...きこえる?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          341,
+          777,
+          118,
+          166
+        ],
+        "textBbox": [
+          372,
+          810,
+          55,
+          102
+        ],
+        "orientation": "vertical",
+        "ja": "待って!",
+        "reading": "まって!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          289,
+          446,
+          122,
+          224
+        ],
+        "textBbox": [
+          325,
+          510,
+          52,
+          102
+        ],
+        "orientation": "vertical",
+        "ja": "......誰だ",
+        "reading": "......だれだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          84,
+          855,
+          130,
+          208
+        ],
+        "textBbox": [
+          113,
+          907,
+          73,
+          105
+        ],
+        "orientation": "vertical",
+        "ja": "どこ行くの?",
+        "reading": "どこいくの?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          693,
+          827,
+          132,
+          147
+        ],
+        "textBbox": [
+          702,
+          854,
+          116,
+          89
+        ],
+        "orientation": "horizontal",
+        "ja": "その夜、町から音が消えた",
+        "reading": "そのよる、まちからおとがきえた",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.919,
+        "box": [
+          341,
+          777,
+          118,
+          166
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.915,
+        "box": [
+          84,
+          855,
+          130,
+          208
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.89,
+        "box": [
+          693,
+          827,
+          132,
+          147
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.867,
+        "box": [
+          672,
+          456,
+          136,
+          206
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.861,
+        "box": [
+          45,
+          47,
+          210,
+          243
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.86,
+        "box": [
+          651,
+          38,
+          183,
+          268
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.771,
+        "box": [
+          702,
+          854,
+          116,
+          89
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.771,
+        "box": [
+          717,
+          74,
+          50,
+          188
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.76,
+        "box": [
+          289,
+          446,
+          122,
+          224
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.752,
+        "box": [
+          99,
+          102,
+          103,
+          136
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.727,
+        "box": [
+          113,
+          907,
+          73,
+          105
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.708,
+        "box": [
+          84,
+          1093,
+          111,
+          110
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.705,
+        "box": [
+          372,
+          810,
+          55,
+          102
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.702,
+        "box": [
+          705,
+          501,
+          69,
+          119
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.641,
+        "box": [
+          325,
+          510,
+          52,
+          102
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.631,
+        "box": [
+          338,
+          1059,
+          122,
+          121
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.496,
+        "box": [
+          260,
+          260,
+          120,
+          118
+        ]
+      }
+    ],
+    "panels": [
+      [
+        438,
+        35,
+        404,
+        367
+      ],
+      [
+        38,
+        38,
+        388,
+        364
+      ],
+      [
+        38,
+        414,
+        804,
+        828
+      ],
+      [
+        518,
+        814,
+        324,
+        428
+      ]
+    ]
+  }
+}

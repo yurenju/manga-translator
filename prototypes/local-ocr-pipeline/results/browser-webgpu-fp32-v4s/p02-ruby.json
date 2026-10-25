@@ -1,0 +1,357 @@
+{
+  "id": "p02-ruby",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-web (Chrome/152.0.7977.167)",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 906,
+    "detectMs": 658,
+    "layoutMs": 29,
+    "ocrMs": 224,
+    "readingMs": 1,
+    "ocrCrops": 7,
+    "runs": [
+      906,
+      935,
+      906
+    ]
+  },
+  "loadMs": {
+    "detector": 1042,
+    "ocr": 1579,
+    "kuromoji": 599
+  },
+  "jsHeapMB": 268,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          750,
+          131,
+          74,
+          123
+        ],
+        "textBbox": [
+          750,
+          131,
+          74,
+          123
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう4つき12にち",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          219,
+          64,
+          241,
+          271
+        ],
+        "textBbox": [
+          286,
+          134,
+          115,
+          140
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊ですよろしく",
+        "reading": "てんこうせいのきりしまみなとですよろしく",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          689,
+          414,
+          141,
+          249
+        ],
+        "textBbox": [
+          706,
+          486,
+          109,
+          122
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか!?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          480,
+          490,
+          100,
+          138
+        ],
+        "textBbox": [
+          508,
+          532,
+          45,
+          57
+        ],
+        "orientation": "vertical",
+        "ja": "嘘...",
+        "reading": "うそ...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          68,
+          414,
+          245,
+          291
+        ],
+        "textBbox": [
+          113,
+          507,
+          155,
+          115
+        ],
+        "orientation": "horizontal",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのあいぼうだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          590,
+          911,
+          201,
+          257
+        ],
+        "textBbox": [
+          626,
+          968,
+          129,
+          154
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれじのやくそく、わすれるなよ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          103,
+          945,
+          133,
+          209
+        ],
+        "textBbox": [
+          134,
+          1010,
+          72,
+          81
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.955,
+        "box": [
+          219,
+          64,
+          241,
+          271
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          68,
+          414,
+          245,
+          291
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.952,
+        "box": [
+          590,
+          911,
+          201,
+          257
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.937,
+        "box": [
+          103,
+          945,
+          133,
+          209
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.933,
+        "box": [
+          689,
+          414,
+          141,
+          249
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.9,
+        "box": [
+          480,
+          490,
+          100,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.743,
+        "box": [
+          286,
+          134,
+          115,
+          140
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.726,
+        "box": [
+          706,
+          486,
+          109,
+          122
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.724,
+        "box": [
+          113,
+          507,
+          155,
+          115
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.719,
+        "box": [
+          508,
+          532,
+          45,
+          57
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.69,
+        "box": [
+          134,
+          1010,
+          72,
+          81
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.682,
+        "box": [
+          626,
+          968,
+          129,
+          154
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.601,
+        "box": [
+          750,
+          131,
+          74,
+          123
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.447,
+        "box": [
+          303,
+          1064,
+          111,
+          109
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        344
+      ],
+      [
+        438,
+        394,
+        404,
+        468
+      ],
+      [
+        38,
+        394,
+        388,
+        468
+      ],
+      [
+        38,
+        874,
+        804,
+        368
+      ]
+    ]
+  }
+}

@@ -1,0 +1,100 @@
+<!doctype html>
+<!-- PROTOTYPE（#7）：在 Chrome 裡用 onnxruntime-web 跑同一份 core.mjs，量「外掛內」路線的延遲與 op 支援。
+     參數：?ep=webgpu|wasm&ocr=fp32|q8&det=v4s|fp32&repeat=3&run=<結果名稱>&ids=p01-basic,p02-ruby -->
+<meta charset="utf-8" />
+<title>PROTOTYPE 本機 OCR（瀏覽器）</title>
+<style>
+  body { font: 14px system-ui, sans-serif; margin: 16px; }
+  pre { white-space: pre-wrap; }
+</style>
+<h1>PROTOTYPE：本機 OCR 流水線（瀏覽器）</h1>
+<pre id="log"></pre>
+<script src="/node_modules/kuromoji/build/kuromoji.js"></script>
+<script type="module">
+  import * as ort from "/node_modules/onnxruntime-web/dist/ort.webgpu.min.mjs";
+  import { runPage, benchPage } from "/core.mjs";
+
+  const q = new URLSearchParams(location.search);
+  const ep = q.get("ep") ?? "webgpu";
+  const ocrDtype = q.get("ocr") ?? "fp32";
+  const detName = q.get("det") ?? "v4s";
+  const repeat = Number(q.get("repeat") ?? 3);
+  const run = q.get("run") ?? `browser-${ep}-${ocrDtype}-${detName}`;
+  const ids = (q.get("ids") ?? "p01-basic,p02-ruby,p03-shapes,p04-outside,p05-dense,p06-horizontal,p07-spread").split(",");
+  const logEl = document.getElementById("log");
+  const log = (s) => { logEl.textContent += s + "\n"; console.log(s); };
+  window.__status = "running";
+
+  try {
+    ort.env.wasm.wasmPaths = "/node_modules/onnxruntime-web/dist/";
+    ort.env.wasm.numThreads = navigator.hardwareConcurrency;
+    log(`ep=${ep} ocr=${ocrDtype} det=${detName} crossOriginIsolated=${crossOriginIsolated} threads=${ort.env.wasm.numThreads}`);
+    if (ep === "webgpu") {
+      const adapter = await navigator.gpu?.requestAdapter();
+      log(`WebGPU adapter: ${adapter ? JSON.stringify(adapter.info ?? {}) : "無"}`);
+    }
+    const DET = { v4s: "detector-v4-s_int8.onnx", fp32: "detector.onnx" }[detName];
+    const SUF = { fp32: "", q8: "_quantized" }[ocrDtype];
+    const session = async (p) => {
+      const buf = await (await fetch(`/models/${p}`)).arrayBuffer();
+      return ort.InferenceSession.create(buf, { executionProviders: [ep] });
+    };
+    const t0 = performance.now();
+    const det = await session(`detector/${DET}`);
+    const t1 = performance.now();
+    const encoder = await session(`ocr/encoder_model${SUF}.onnx`);
+    const decoder = await session(`ocr/decoder_model${SUF}.onnx`);
+    const vocab = (await (await fetch("/models/ocr/vocab.txt")).text()).split(/\r?\n/);
+    const t2 = performance.now();
+    const tokenizer = await new Promise((res, rej) =>
+      kuromoji.builder({ dicPath: "/node_modules/kuromoji/dict/" }).build((e, t) => (e ? rej(e) : res(t))),
+    );
+    const t3 = performance.now();
+    const loadMs = { detector: Math.round(t1 - t0), ocr: Math.round(t2 - t1), kuromoji: Math.round(t3 - t2) };
+    log(`load ${JSON.stringify(loadMs)}`);
+    const models = { ort, det, encoder, decoder, vocab, tokenizer, thr: 0.4, orderMode: "panels" };
+
+    async function loadImage(id) {
+      const bmp = await createImageBitmap(await (await fetch(`/testdata/synthetic/out/${id}.png`)).blob());
+      const w = bmp.width, h = bmp.height;
+      const draw = (sx, sy, sw, sh, dw, dh) => {
+        const c = new OffscreenCanvas(dw, dh);
+        const ctx = c.getContext("2d", { willReadFrequently: true });
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, dw, dh);
+        ctx.imageSmoothingQuality = "medium";
+        ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, dw, dh);
+        return ctx.getImageData(0, 0, dw, dh).data;
+      };
+      const toGray = (d) => { const g = new Uint8Array(d.length / 4); for (let i = 0; i < g.length; i++) g[i] = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]); return g; };
+      return {
+        w, h,
+        rgb640: () => { const d = draw(0, 0, w, h, 640, 640); const o = new Uint8Array(640 * 640 * 3); for (let i = 0; i < 640 * 640; i++) for (let c = 0; c < 3; c++) o[i * 3 + c] = d[i * 4 + c]; return o; },
+        gray: () => toGray(draw(0, 0, w, h, w, h)),
+        crop224: (l, t, cw, ch) => toGray(draw(l, t, cw, ch, 224, 224)),
+      };
+    }
+
+    await runPage(models, await loadImage(ids[0])); // 暖機（編 shader）
+    const rows = [];
+    for (const id of ids) {
+      const img = await loadImage(id);
+      const res = await benchPage(models, img, repeat);
+      const rec = {
+        id, pipeline: "local-ocr", runtime: `onnxruntime-web (${navigator.userAgent.match(/Chrome\/[\d.]+/)?.[0]})`,
+        device: ep, det: detName, ocrDtype, orderMode: "panels", scale: 1, thr: 0.4,
+        imageSize: [img.w, img.h], latency: res.latency, loadMs,
+        jsHeapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 2 ** 20) : null,
+        usage: null, costUsd: 0, output: { texts: res.texts }, debug: res.debug,
+      };
+      await fetch(`/save/${run}/${id}`, { method: "POST", body: JSON.stringify(rec) });
+      const l = res.latency;
+      log(`${id}: wall ${l.wallMs}ms (det ${l.detectMs} layout ${l.layoutMs} ocr ${l.ocrMs}/${l.ocrCrops} read ${l.readingMs}) ${res.texts.map((t) => t.ja).join(" / ")}`);
+      rows.push(l.wallMs);
+    }
+    log(`平均 wall ${Math.round(rows.reduce((a, b) => a + b, 0) / rows.length)}ms → results/${run}/`);
+    window.__status = "done";
+  } catch (e) {
+    log(`ERROR: ${e?.stack ?? e}`);
+    window.__status = "error";
+  }
+</script>

@@ -1,0 +1,355 @@
+{
+  "id": "p02-ruby",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-node",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 0.5,
+  "thr": 0.4,
+  "imageSize": [
+    440,
+    640
+  ],
+  "latency": {
+    "wallMs": 785,
+    "detectMs": 375,
+    "layoutMs": 9,
+    "ocrMs": 400,
+    "readingMs": 1,
+    "ocrCrops": 7,
+    "runs": [
+      785
+    ]
+  },
+  "loadMs": {
+    "detector": 706,
+    "ocr": 684,
+    "kuromoji": 267
+  },
+  "rssPeakMB": 993,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          752,
+          132,
+          72,
+          124
+        ],
+        "textBbox": [
+          752,
+          132,
+          72,
+          124
+        ],
+        "orientation": "vertical",
+        "ja": "瀬見坂高校4月22日",
+        "reading": "せみざかこうこう4つき22にち",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          220,
+          66,
+          240,
+          270
+        ],
+        "textBbox": [
+          288,
+          136,
+          112,
+          134
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊ですよろしく",
+        "reading": "てんこうせいのきりしまみなとですよろしく",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          690,
+          416,
+          140,
+          248
+        ],
+        "textBbox": [
+          706,
+          488,
+          108,
+          116
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか!?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          480,
+          490,
+          102,
+          138
+        ],
+        "textBbox": [
+          510,
+          532,
+          46,
+          56
+        ],
+        "orientation": "vertical",
+        "ja": "嘘...",
+        "reading": "うそ...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          68,
+          416,
+          244,
+          290
+        ],
+        "textBbox": [
+          116,
+          508,
+          154,
+          116
+        ],
+        "orientation": "horizontal",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのあいぼうだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          592,
+          912,
+          200,
+          256
+        ],
+        "textBbox": [
+          634,
+          976,
+          118,
+          142
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏蹄の約束、忘れるなよ",
+        "reading": "たそがれひずめのやくそく、わすれるなよ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          104,
+          946,
+          132,
+          208
+        ],
+        "textBbox": [
+          136,
+          1012,
+          70,
+          66
+        ],
+        "orientation": "horizontal",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.948,
+        "box": [
+          592,
+          912,
+          200,
+          256
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          68,
+          416,
+          244,
+          290
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          220,
+          66,
+          240,
+          270
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.931,
+        "box": [
+          104,
+          946,
+          132,
+          208
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.923,
+        "box": [
+          690,
+          416,
+          140,
+          248
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.843,
+        "box": [
+          480,
+          490,
+          102,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.81,
+        "box": [
+          288,
+          136,
+          112,
+          134
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.773,
+        "box": [
+          136,
+          1012,
+          70,
+          66
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.768,
+        "box": [
+          706,
+          488,
+          108,
+          116
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.757,
+        "box": [
+          116,
+          508,
+          154,
+          116
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.736,
+        "box": [
+          634,
+          976,
+          118,
+          142
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.727,
+        "box": [
+          510,
+          532,
+          46,
+          56
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.519,
+        "box": [
+          752,
+          132,
+          72,
+          124
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.421,
+        "box": [
+          304,
+          1064,
+          112,
+          108
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        344
+      ],
+      [
+        438,
+        394,
+        404,
+        468
+      ],
+      [
+        38,
+        394,
+        388,
+        468
+      ],
+      [
+        38,
+        874,
+        804,
+        368
+      ]
+    ]
+  }
+}

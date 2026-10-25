@@ -1,0 +1,356 @@
+{
+  "id": "p02-ruby",
+  "pipeline": "local-ocr",
+  "device": "cpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 2425,
+    "detectMs": 315,
+    "layoutMs": 86,
+    "ocrMs": 2038,
+    "readingMs": 1,
+    "ocrCrops": 7,
+    "runs": [
+      2353,
+      2425,
+      2425
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          751,
+          130,
+          72,
+          127
+        ],
+        "textBbox": [
+          751,
+          130,
+          72,
+          127
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう4つき12にち",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          219,
+          65,
+          241,
+          271
+        ],
+        "textBbox": [
+          286,
+          134,
+          115,
+          151
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊ですよろしく",
+        "reading": "てんこうせいのきりしまみなとですよろしく",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          689,
+          415,
+          141,
+          248
+        ],
+        "textBbox": [
+          706,
+          483,
+          109,
+          131
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか!?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          479,
+          490,
+          101,
+          138
+        ],
+        "textBbox": [
+          508,
+          531,
+          45,
+          58
+        ],
+        "orientation": "vertical",
+        "ja": "嘘...",
+        "reading": "うそ...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          68,
+          414,
+          243,
+          290
+        ],
+        "textBbox": [
+          114,
+          506,
+          153,
+          127
+        ],
+        "orientation": "horizontal",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのあいぼうだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          590,
+          911,
+          201,
+          257
+        ],
+        "textBbox": [
+          622,
+          966,
+          137,
+          163
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれじのやくそく、わすれるなよ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          103,
+          945,
+          133,
+          209
+        ],
+        "textBbox": [
+          132,
+          1004,
+          77,
+          103
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.959,
+        "box": [
+          590,
+          911,
+          201,
+          257
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.955,
+        "box": [
+          68,
+          414,
+          243,
+          290
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.952,
+        "box": [
+          219,
+          65,
+          241,
+          271
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.939,
+        "box": [
+          689,
+          415,
+          141,
+          248
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.93,
+        "box": [
+          103,
+          945,
+          133,
+          209
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.912,
+        "box": [
+          479,
+          490,
+          101,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.752,
+        "box": [
+          706,
+          483,
+          109,
+          131
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.734,
+        "box": [
+          622,
+          966,
+          137,
+          163
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.714,
+        "box": [
+          508,
+          531,
+          45,
+          58
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.71,
+        "box": [
+          114,
+          506,
+          153,
+          127
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.666,
+        "box": [
+          132,
+          1004,
+          77,
+          103
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.645,
+        "box": [
+          286,
+          134,
+          115,
+          151
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.632,
+        "box": [
+          751,
+          130,
+          72,
+          127
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.405,
+        "box": [
+          415,
+          1054,
+          111,
+          108
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        344
+      ],
+      [
+        438,
+        394,
+        404,
+        468
+      ],
+      [
+        38,
+        394,
+        388,
+        468
+      ],
+      [
+        38,
+        874,
+        804,
+        368
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 282,
+    "ocr": 831,
+    "kuromoji": 280
+  },
+  "rssPeakMB": 1207
+}

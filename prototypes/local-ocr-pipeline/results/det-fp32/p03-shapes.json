@@ -1,0 +1,374 @@
+{
+  "id": "p03-shapes",
+  "pipeline": "local-ocr",
+  "device": "cpu",
+  "det": "fp32",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 3308,
+    "detectMs": 967,
+    "layoutMs": 128,
+    "ocrMs": 2212,
+    "readingMs": 1,
+    "ocrCrops": 8,
+    "runs": [
+      3308
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          652,
+          33,
+          179,
+          272
+        ],
+        "textBbox": [
+          716,
+          70,
+          47,
+          194
+        ],
+        "orientation": "vertical",
+        "ja": "うるさーい!!",
+        "reading": "うるさーい!!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          44,
+          47,
+          212,
+          246
+        ],
+        "textBbox": [
+          101,
+          96,
+          101,
+          144
+        ],
+        "orientation": "vertical",
+        "ja": "明日のテストどうしよう・・・",
+        "reading": "あしたのてすとどうしよう・・・",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          671,
+          456,
+          137,
+          207
+        ],
+        "textBbox": [
+          695,
+          491,
+          88,
+          142
+        ],
+        "orientation": "vertical",
+        "ja": "ねえ...聞こえる?",
+        "reading": "ねえ...きこえる?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          340,
+          774,
+          120,
+          172
+        ],
+        "textBbox": [
+          364,
+          802,
+          71,
+          118
+        ],
+        "orientation": "vertical",
+        "ja": "待って!",
+        "reading": "まって!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          289,
+          447,
+          123,
+          226
+        ],
+        "textBbox": [
+          319,
+          495,
+          64,
+          140
+        ],
+        "orientation": "vertical",
+        "ja": "......誰だ",
+        "reading": "......だれだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          85,
+          853,
+          130,
+          212
+        ],
+        "textBbox": [
+          108,
+          891,
+          84,
+          139
+        ],
+        "orientation": "vertical",
+        "ja": "どこ行くの?",
+        "reading": "どこいくの?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          695,
+          823,
+          129,
+          152
+        ],
+        "textBbox": [
+          703,
+          846,
+          113,
+          101
+        ],
+        "orientation": "horizontal",
+        "ja": "その夜、町から音が消えた",
+        "reading": "そのよる、まちからおとがきえた",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.97,
+        "box": [
+          85,
+          853,
+          130,
+          212
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.964,
+        "box": [
+          671,
+          456,
+          137,
+          207
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.963,
+        "box": [
+          695,
+          823,
+          129,
+          152
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.963,
+        "box": [
+          340,
+          774,
+          120,
+          172
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.94,
+        "box": [
+          289,
+          447,
+          123,
+          226
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.933,
+        "box": [
+          652,
+          33,
+          179,
+          272
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.926,
+        "box": [
+          44,
+          47,
+          212,
+          246
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.921,
+        "box": [
+          703,
+          846,
+          113,
+          101
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.92,
+        "box": [
+          108,
+          891,
+          84,
+          139
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.917,
+        "box": [
+          695,
+          491,
+          88,
+          142
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.911,
+        "box": [
+          364,
+          802,
+          71,
+          118
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.86,
+        "box": [
+          716,
+          70,
+          47,
+          194
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.854,
+        "box": [
+          101,
+          96,
+          101,
+          144
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.838,
+        "box": [
+          319,
+          495,
+          64,
+          140
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.832,
+        "box": [
+          260,
+          258,
+          121,
+          122
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.616,
+        "box": [
+          282,
+          289,
+          74,
+          71
+        ]
+      }
+    ],
+    "panels": [
+      [
+        438,
+        35,
+        404,
+        367
+      ],
+      [
+        38,
+        38,
+        388,
+        364
+      ],
+      [
+        38,
+        414,
+        804,
+        828
+      ],
+      [
+        518,
+        814,
+        324,
+        428
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 1281,
+    "ocr": 737,
+    "kuromoji": 338
+  },
+  "rssPeakMB": 1326
+}

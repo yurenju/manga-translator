@@ -1,0 +1,530 @@
+{
+  "id": "p05-dense",
+  "pipeline": "local-ocr",
+  "device": "cpu",
+  "det": "int8",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 3139,
+    "detectMs": 880,
+    "layoutMs": 35,
+    "ocrMs": 2223,
+    "readingMs": 1,
+    "ocrCrops": 11,
+    "runs": [
+      3139
+    ]
+  },
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          723,
+          43,
+          112,
+          193
+        ],
+        "textBbox": [
+          742,
+          78,
+          76,
+          129
+        ],
+        "orientation": "vertical",
+        "ja": "今夜の当番誰だっけ?",
+        "reading": "こんやのとうばんだれだっけ?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          551,
+          48,
+          77,
+          123
+        ],
+        "textBbox": [
+          570,
+          73,
+          41,
+          75
+        ],
+        "orientation": "vertical",
+        "ja": "...俺?",
+        "reading": "...おれ?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          74,
+          48,
+          132,
+          202
+        ],
+        "textBbox": [
+          103,
+          97,
+          76,
+          122
+        ],
+        "orientation": "vertical",
+        "ja": "そうだよ兄ちゃん",
+        "reading": "そうだよにいちゃん",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          692,
+          377,
+          133,
+          186
+        ],
+        "textBbox": [
+          717,
+          429,
+          84,
+          79
+        ],
+        "orientation": "horizontal",
+        "ja": "えー面倒くさい",
+        "reading": "えーめんどうくさい",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          619,
+          553,
+          122,
+          173
+        ],
+        "textBbox": [
+          641,
+          588,
+          78,
+          109
+        ],
+        "orientation": "vertical",
+        "ja": "昨日も作ったぞ",
+        "reading": "きのうもつくったぞ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          182,
+          356,
+          235,
+          213
+        ],
+        "textBbox": [
+          252,
+          406,
+          96,
+          121
+        ],
+        "orientation": "vertical",
+        "ja": "嘘つけ!カップ麺だったじゃん",
+        "reading": "うそつけ!かっぷめんだったじゃん",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          224,
+          570,
+          150,
+          160
+        ],
+        "textBbox": [
+          247,
+          595,
+          106,
+          112
+        ],
+        "orientation": "vertical",
+        "ja": "お湯を入れたのは俺だ",
+        "reading": "おゆをいれたのはおれだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 8,
+        "kind": "balloon",
+        "bbox": [
+          59,
+          708,
+          121,
+          162
+        ],
+        "textBbox": [
+          78,
+          739,
+          83,
+          105
+        ],
+        "orientation": "vertical",
+        "ja": "それは料理じゃない",
+        "reading": "それはりょうりじゃない",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 9,
+        "kind": "balloon",
+        "bbox": [
+          771,
+          927,
+          58,
+          124
+        ],
+        "textBbox": [
+          782,
+          949,
+          38,
+          79
+        ],
+        "orientation": "vertical",
+        "ja": "結局...",
+        "reading": "けっきょく...",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 10,
+        "kind": "balloon",
+        "bbox": [
+          617,
+          923,
+          124,
+          153
+        ],
+        "textBbox": [
+          646,
+          953,
+          69,
+          97
+        ],
+        "orientation": "vertical",
+        "ja": "カレーでいい?",
+        "reading": "かれーでいい?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 11,
+        "kind": "balloon",
+        "bbox": [
+          198,
+          928,
+          123,
+          162
+        ],
+        "textBbox": [
+          224,
+          967,
+          74,
+          93
+        ],
+        "orientation": "vertical",
+        "ja": "辛口でね!",
+        "reading": "からくちでね!",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.964,
+        "box": [
+          198,
+          928,
+          123,
+          162
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.962,
+        "box": [
+          692,
+          377,
+          133,
+          186
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.962,
+        "box": [
+          723,
+          43,
+          112,
+          193
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.962,
+        "box": [
+          74,
+          48,
+          132,
+          202
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.96,
+        "box": [
+          59,
+          708,
+          121,
+          162
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.96,
+        "box": [
+          619,
+          553,
+          122,
+          173
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.958,
+        "box": [
+          617,
+          923,
+          124,
+          153
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.955,
+        "box": [
+          224,
+          570,
+          150,
+          160
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.946,
+        "box": [
+          551,
+          48,
+          77,
+          123
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.924,
+        "box": [
+          182,
+          356,
+          235,
+          213
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.921,
+        "box": [
+          247,
+          595,
+          106,
+          112
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.907,
+        "box": [
+          252,
+          406,
+          96,
+          121
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.905,
+        "box": [
+          742,
+          78,
+          76,
+          129
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.901,
+        "box": [
+          78,
+          739,
+          83,
+          105
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.883,
+        "box": [
+          641,
+          588,
+          78,
+          109
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.877,
+        "box": [
+          570,
+          73,
+          41,
+          75
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.859,
+        "box": [
+          646,
+          953,
+          69,
+          97
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.855,
+        "box": [
+          224,
+          967,
+          74,
+          93
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.85,
+        "box": [
+          782,
+          949,
+          38,
+          79
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.821,
+        "box": [
+          103,
+          97,
+          76,
+          122
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.82,
+        "box": [
+          771,
+          927,
+          58,
+          124
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.807,
+        "box": [
+          717,
+          429,
+          84,
+          79
+        ]
+      }
+    ],
+    "panels": [
+      [
+        478,
+        38,
+        364,
+        304
+      ],
+      [
+        38,
+        38,
+        468,
+        304
+      ],
+      [
+        598,
+        354,
+        244,
+        548
+      ],
+      [
+        38,
+        354,
+        548,
+        548
+      ],
+      [
+        378,
+        914,
+        464,
+        328
+      ],
+      [
+        38,
+        914,
+        368,
+        328
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 991,
+    "ocr": 787,
+    "kuromoji": 314
+  },
+  "rssPeakMB": 1278
+}

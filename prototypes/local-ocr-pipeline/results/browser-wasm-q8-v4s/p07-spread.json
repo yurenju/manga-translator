@@ -1,0 +1,415 @@
+{
+  "id": "p07-spread",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-web (Chrome/152.0.7977.167)",
+  "device": "wasm",
+  "det": "v4s",
+  "ocrDtype": "q8",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "latency": {
+    "wallMs": 2966,
+    "detectMs": 297,
+    "layoutMs": 192,
+    "ocrMs": 2475,
+    "readingMs": 2,
+    "ocrCrops": 11,
+    "runs": [
+      2966
+    ]
+  },
+  "loadMs": {
+    "detector": 469,
+    "ocr": 487,
+    "kuromoji": 991
+  },
+  "jsHeapMB": 225,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          1620,
+          64,
+          80,
+          191
+        ],
+        "textBbox": [
+          1635,
+          100,
+          52,
+          123
+        ],
+        "orientation": "vertical",
+        "ja": "千年の森",
+        "reading": "せんねんのもり",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          1387,
+          250,
+          147,
+          220
+        ],
+        "textBbox": [
+          1416,
+          295,
+          88,
+          138
+        ],
+        "orientation": "vertical",
+        "ja": "ここが...伝説の",
+        "reading": "ここが...でんせつの",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "outside",
+        "bbox": [
+          665,
+          91,
+          420,
+          117
+        ],
+        "textBbox": [
+          665,
+          91,
+          420,
+          117
+        ],
+        "orientation": "horizontal",
+        "ja": "ザアアアアア",
+        "reading": "ザアアアアア",
+        "zh": "",
+        "src": "text_free"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          1537,
+          699,
+          166,
+          241
+        ],
+        "textBbox": [
+          1560,
+          756,
+          121,
+          138
+        ],
+        "orientation": "vertical",
+        "ja": "地図だとこの先に村がある",
+        "reading": "ちずだとこのさきにむらがある",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          937,
+          699,
+          127,
+          201
+        ],
+        "textBbox": [
+          960,
+          750,
+          79,
+          110
+        ],
+        "orientation": "vertical",
+        "ja": "行ってみよう",
+        "reading": "いってみよう",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          637,
+          694,
+          165,
+          209
+        ],
+        "textBbox": [
+          669,
+          729,
+          102,
+          141
+        ],
+        "orientation": "vertical",
+        "ja": "足元に気をつけて",
+        "reading": "あしもとにきをつけて",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          63,
+          721,
+          215,
+          256
+        ],
+        "textBbox": [
+          132,
+          790,
+          74,
+          119
+        ],
+        "orientation": "vertical",
+        "ja": "もう帰りたい...",
+        "reading": "もうかえりたい...",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.96,
+        "box": [
+          1537,
+          699,
+          166,
+          241
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.957,
+        "box": [
+          637,
+          694,
+          165,
+          209
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.952,
+        "box": [
+          1387,
+          250,
+          147,
+          220
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.937,
+        "box": [
+          937,
+          699,
+          127,
+          201
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.925,
+        "box": [
+          238,
+          1059,
+          125,
+          122
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.883,
+        "box": [
+          1487,
+          1068,
+          127,
+          124
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.883,
+        "box": [
+          63,
+          721,
+          215,
+          256
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.862,
+        "box": [
+          577,
+          950,
+          126,
+          120
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.846,
+        "box": [
+          1560,
+          756,
+          121,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.819,
+        "box": [
+          669,
+          729,
+          102,
+          141
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.817,
+        "box": [
+          1416,
+          295,
+          88,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.773,
+        "box": [
+          960,
+          750,
+          79,
+          110
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.747,
+        "box": [
+          665,
+          91,
+          420,
+          117
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.698,
+        "box": [
+          132,
+          790,
+          74,
+          119
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.642,
+        "box": [
+          1620,
+          64,
+          80,
+          191
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.605,
+        "box": [
+          1635,
+          100,
+          52,
+          123
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.554,
+        "box": [
+          47,
+          511,
+          1674,
+          134
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.472,
+        "box": [
+          606,
+          986,
+          70,
+          56
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.444,
+        "box": [
+          266,
+          1097,
+          68,
+          57
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.408,
+        "box": [
+          1515,
+          1099,
+          73,
+          71
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        1684,
+        604
+      ],
+      [
+        918,
+        654,
+        804,
+        588
+      ],
+      [
+        438,
+        654,
+        404,
+        588
+      ],
+      [
+        38,
+        654,
+        388,
+        588
+      ]
+    ]
+  }
+}

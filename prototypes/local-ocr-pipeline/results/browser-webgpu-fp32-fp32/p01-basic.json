@@ -1,0 +1,363 @@
+{
+  "id": "p01-basic",
+  "pipeline": "local-ocr",
+  "runtime": "onnxruntime-web (Chrome/152.0.7977.167)",
+  "device": "webgpu",
+  "det": "fp32",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "wallMs": 424,
+    "detectMs": 74,
+    "layoutMs": 89,
+    "ocrMs": 243,
+    "readingMs": 2,
+    "ocrCrops": 7,
+    "runs": [
+      457,
+      424,
+      424
+    ]
+  },
+  "loadMs": {
+    "detector": 1633,
+    "ocr": 1456,
+    "kuromoji": 1043
+  },
+  "jsHeapMB": 182,
+  "usage": null,
+  "costUsd": 0,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          692,
+          52,
+          133,
+          215
+        ],
+        "textBbox": [
+          717,
+          78,
+          85,
+          164
+        ],
+        "orientation": "vertical",
+        "ja": "おはよう!今日は早いね",
+        "reading": "おはよう!きょうははやいね",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          44,
+          58,
+          174,
+          225
+        ],
+        "textBbox": [
+          64,
+          98,
+          130,
+          149
+        ],
+        "orientation": "vertical",
+        "ja": "うん、パンを買いに行くんだ",
+        "reading": "うん、ぱんをかいにいくんだ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          620,
+          487,
+          157,
+          186
+        ],
+        "textBbox": [
+          646,
+          517,
+          106,
+          130
+        ],
+        "orientation": "vertical",
+        "ja": "一緒に行ってもいい?",
+        "reading": "いっしょにいってもいい?",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          147,
+          502,
+          106,
+          195
+        ],
+        "textBbox": [
+          170,
+          529,
+          59,
+          144
+        ],
+        "orientation": "vertical",
+        "ja": "もちろん!",
+        "reading": "もちろん!",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          503,
+          893,
+          174,
+          195
+        ],
+        "textBbox": [
+          523,
+          925,
+          131,
+          133
+        ],
+        "orientation": "vertical",
+        "ja": "あ、お店がもう開いてる",
+        "reading": "あ、おみせがもうひらいてる",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          395,
+          883,
+          60,
+          131
+        ],
+        "textBbox": [
+          406,
+          904,
+          38,
+          90
+        ],
+        "orientation": "vertical",
+        "ja": "朝七時",
+        "reading": "あさななじ",
+        "zh": "",
+        "src": "bubble"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          69,
+          879,
+          122,
+          101
+        ],
+        "textBbox": [
+          87,
+          899,
+          82,
+          60
+        ],
+        "orientation": "horizontal",
+        "ja": "「いいにおい!",
+        "reading": "「いいにおい!",
+        "zh": "",
+        "src": "bubble"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.961,
+        "box": [
+          503,
+          893,
+          174,
+          195
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.953,
+        "box": [
+          692,
+          52,
+          133,
+          215
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.952,
+        "box": [
+          44,
+          58,
+          174,
+          225
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.951,
+        "box": [
+          147,
+          502,
+          106,
+          195
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.942,
+        "box": [
+          620,
+          487,
+          157,
+          186
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.94,
+        "box": [
+          69,
+          879,
+          122,
+          101
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.931,
+        "box": [
+          523,
+          925,
+          131,
+          133
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.93,
+        "box": [
+          646,
+          517,
+          106,
+          130
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.927,
+        "box": [
+          64,
+          98,
+          130,
+          149
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.925,
+        "box": [
+          717,
+          78,
+          85,
+          164
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.918,
+        "box": [
+          87,
+          899,
+          82,
+          60
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.913,
+        "box": [
+          170,
+          529,
+          59,
+          144
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.912,
+        "box": [
+          395,
+          883,
+          60,
+          131
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.891,
+        "box": [
+          406,
+          904,
+          38,
+          90
+        ]
+      }
+    ],
+    "panels": [
+      [
+        458,
+        38,
+        384,
+        404
+      ],
+      [
+        38,
+        38,
+        408,
+        404
+      ],
+      [
+        38,
+        454,
+        804,
+        404
+      ],
+      [
+        478,
+        870,
+        364,
+        372
+      ],
+      [
+        38,
+        870,
+        428,
+        372
+      ]
+    ]
+  }
+}
