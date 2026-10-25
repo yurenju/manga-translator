@@ -1,0 +1,31 @@
+import { openDb, STORES } from '../shared/db.ts';
+import type { TabState, TabStateStore } from './activation.ts';
+
+/**
+ * 存在 IndexedDB，SW 閒置被收掉再叫醒時狀態還在。
+ * 不用 chrome.storage.session：那需要 `storage` 權限，spec #27 第 6 節沒有列。
+ * IndexedDB 跨瀏覽器重開還在，但 tab id 不會，所以瀏覽器啟動時要 clear()。
+ */
+export function indexedDbTabStore(): TabStateStore & { clear(): Promise<void> } {
+  let db: Promise<IDBDatabase> | undefined;
+
+  function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+    db ??= openDb();
+    return db.then(
+      (db) =>
+        new Promise<T>((resolve, reject) => {
+          const tx = db.transaction(STORES.activeTabs, mode);
+          const request = op(tx.objectStore(STORES.activeTabs));
+          tx.oncomplete = () => resolve(request.result);
+          tx.onerror = () => reject(tx.error);
+        }),
+    );
+  }
+
+  return {
+    get: (tabId) => run('readonly', (s) => s.get(tabId) as IDBRequest<TabState | undefined>),
+    set: (tabId, state) => run('readwrite', (s) => s.put(state, tabId)).then(() => {}),
+    delete: (tabId) => run('readwrite', (s) => s.delete(tabId)),
+    clear: () => run('readwrite', (s) => s.clear()),
+  };
+}
