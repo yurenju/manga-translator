@@ -1,0 +1,97 @@
+{
+  "id": "p08-action",
+  "description": "戰鬥跨頁：右頁整格招式名大字（無 Balloon、片假名ルビ義訓）；左頁手寫風（抖動筆畫）狀聲詞、同一個狀聲詞重複出現（ガタ／ゴト）、深色網點上的大狀聲詞、小 Balloon 與有ルビ的對話",
+  "width": 1760,
+  "height": 1280,
+  "pages": [
+    { "index": 0, "bbox": [880, 0, 880, 1280] },
+    { "index": 1, "bbox": [0, 0, 880, 1280] }
+  ],
+  "panels": [
+    { "id": "R", "order": 1, "page": 0, "points": [[920, 40], [1720, 40], [1720, 1240], [920, 1240]],
+      "art": [
+        { "type": "speedlines", "x": 1500, "y": 260, "r0": 110, "r1": 1300, "n": 110, "seed": 11 },
+        { "type": "circle", "x": 1500, "y": 260, "r": 70, "fill": "#fff" },
+        { "type": "face", "x": 1500, "y": 250, "r": 34, "hair": true, "mouth": "open" },
+        { "type": "line", "x1": 960, "y1": 1200, "x2": 1260, "y2": 640, "sw": 22 },
+        { "type": "line", "x1": 1030, "y1": 1220, "x2": 1300, "y2": 720, "sw": 14 },
+        { "type": "line", "x1": 1580, "y1": 1180, "x2": 1700, "y2": 820, "sw": 18 },
+        { "type": "face", "x": 1330, "y": 900, "r": 90, "eyes": "closed", "mouth": "open" }
+      ] },
+    { "id": "A", "order": 2, "page": 1, "points": [[40, 40], [840, 40], [840, 330], [40, 330]],
+      "art": [
+        { "type": "tone", "x": 40, "y": 40, "w": 330, "h": 290, "dark": true },
+        { "type": "face", "x": 470, "y": 180, "r": 38, "hair": true, "mouth": "open" },
+        { "type": "line", "x1": 520, "y1": 300, "x2": 840, "y2": 270 },
+        { "type": "rect", "x": 600, "y": 90, "w": 200, "h": 110 }
+      ] },
+    { "id": "B", "order": 3, "page": 1, "points": [[40, 346], [840, 346], [840, 620], [40, 620]],
+      "art": [
+        { "type": "tone", "x": 40, "y": 346, "w": 800, "h": 120 },
+        { "type": "face", "x": 520, "y": 470, "r": 62, "hair": true, "mouth": "flat" }
+      ] },
+    { "id": "C", "order": 4, "page": 1, "points": [[40, 636], [840, 636], [840, 840], [40, 840]],
+      "art": [
+        { "type": "circle", "x": 150, "y": 700, "r": 120 },
+        { "type": "circle", "x": 150, "y": 700, "r": 20 },
+        { "type": "circle", "x": 640, "y": 700, "r": 120 },
+        { "type": "circle", "x": 640, "y": 700, "r": 20 },
+        { "type": "hlines", "x": 40, "y": 790, "w": 800, "h": 50, "gap": 10 }
+      ] },
+    { "id": "D", "order": 5, "page": 1, "points": [[40, 856], [840, 856], [840, 1240], [40, 1240]],
+      "art": [
+        { "type": "rect", "x": 300, "y": 930, "w": 200, "h": 170, "fill": "#fff" },
+        { "type": "circle", "x": 330, "y": 1120, "r": 34 },
+        { "type": "circle", "x": 470, "y": 1120, "r": 34 },
+        { "type": "face", "x": 360, "y": 990, "r": 22 },
+        { "type": "face", "x": 440, "y": 990, "r": 22, "hair": true }
+      ] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "outside", "panel": "R", "page": 0,
+      "cx": 1030, "cy": 330, "fontSize": 92, "weight": 900, "font": "mincho", "lineHeight": 1.15,
+      "ja": "{雷槍|ライトニングランス}[!!]", "reading": "ライトニングランス!!", "zh": "雷槍!!" },
+    { "id": "t2", "order": 2, "kind": "sfx", "panel": "R", "page": 0,
+      "cx": 1640, "cy": 600, "fontSize": 64, "rotate": 14, "weight": 900, "rough": true,
+      "ja": "バチィッ", "reading": "バチィッ", "zh": "（電光）啪嘰" },
+    { "id": "t3", "order": 3, "kind": "sfx", "panel": "A", "page": 1, "color": "black",
+      "cx": 760, "cy": 230, "fontSize": 50, "rotate": -6, "skewY": -10, "weight": 900, "rough": true,
+      "ja": "ドサッ", "reading": "ドサッ", "zh": "（倒下）咚" },
+    { "id": "t4", "order": 4, "kind": "balloon", "shape": "ellipse", "panel": "A", "page": 1,
+      "cx": 560, "cy": 110, "w": 64, "h": 120, "tail": [500, 160], "fontSize": 18,
+      "ja": "え[!?]", "reading": "え!?", "zh": "咦!?" },
+    { "id": "t5", "order": 5, "kind": "sfx", "panel": "A", "page": 1, "color": "black",
+      "cx": 430, "cy": 290, "fontSize": 44, "rotate": 8, "skewY": 8, "weight": 900, "rough": true,
+      "ja": "ドサッ", "reading": "ドサッ", "zh": "（倒下）咚" },
+    { "id": "t6", "order": 6, "kind": "sfx", "panel": "A", "page": 1,
+      "cx": 190, "cy": 190, "fontSize": 96, "rotate": -18, "weight": 900, "rough": true,
+      "ja": "ズバッ", "reading": "ズバッ", "zh": "（斬擊）唰" },
+    { "id": "t7", "order": 7, "kind": "balloon", "shape": "ellipse", "panel": "B", "page": 1,
+      "cx": 220, "cy": 490, "w": 120, "h": 200, "tail": [430, 490],
+      "ja": "{怪我|けが}は\nないか？", "reading": "けがはないか？", "zh": "沒受傷吧？" },
+    { "id": "t8", "order": 8, "kind": "sfx", "panel": "C", "page": 1, "color": "black", "orientation": "horizontal",
+      "cx": 520, "cy": 700, "fontSize": 46, "rotate": 10, "skewY": 6, "weight": 900, "rough": true,
+      "ja": "ガタ", "reading": "ガタ", "zh": "（車輪）喀噠" },
+    { "id": "t9", "order": 9, "kind": "sfx", "panel": "C", "page": 1, "color": "black", "orientation": "horizontal",
+      "cx": 760, "cy": 790, "fontSize": 44, "rotate": 18, "skewY": -6, "weight": 900, "rough": true,
+      "ja": "ゴト", "reading": "ゴト", "zh": "（車輪）喀咚" },
+    { "id": "t10", "order": 10, "kind": "sfx", "panel": "C", "page": 1, "color": "black", "orientation": "horizontal",
+      "cx": 110, "cy": 720, "fontSize": 46, "rotate": 12, "skewY": 6, "weight": 900, "rough": true,
+      "ja": "ガタ", "reading": "ガタ", "zh": "（車輪）喀噠" },
+    { "id": "t11", "order": 11, "kind": "sfx", "panel": "C", "page": 1, "color": "black", "orientation": "horizontal",
+      "cx": 300, "cy": 790, "fontSize": 44, "rotate": 20, "skewY": -6, "weight": 900, "rough": true,
+      "ja": "ゴト", "reading": "ゴト", "zh": "（車輪）喀咚" },
+    { "id": "t12", "order": 12, "kind": "balloon", "shape": "ellipse", "panel": "D", "page": 1,
+      "cx": 680, "cy": 1020, "w": 170, "h": 260, "tail": [480, 1000],
+      "ja": "{本当|ほんとう}に\n{助|たす}かり\nました[!!]", "reading": "ほんとうにたすかりました!!", "zh": "真的得救了!!" },
+    { "id": "t13", "order": 13, "kind": "sfx", "panel": "D", "page": 1, "color": "black",
+      "cx": 560, "cy": 1180, "fontSize": 34, "rotate": -10, "weight": 900, "rough": true,
+      "ja": "ガタ", "reading": "ガタ", "zh": "（車輪）喀噠" },
+    { "id": "t14", "order": 14, "kind": "balloon", "shape": "ellipse", "panel": "D", "page": 1,
+      "cx": 140, "cy": 1010, "w": 160, "h": 250, "tail": [320, 990],
+      "ja": "{気|き}にするな\n{街|まち}まで\n{送|おく}るよ", "reading": "きにするなまちまでおくるよ", "zh": "別在意，我送你們到鎮上" },
+    { "id": "t15", "order": 15, "kind": "sfx", "panel": "D", "page": 1, "color": "black",
+      "cx": 250, "cy": 1180, "fontSize": 34, "rotate": 12, "weight": 900, "rough": true,
+      "ja": "ゴト", "reading": "ゴト", "zh": "（車輪）喀咚" }
+  ]
+}
