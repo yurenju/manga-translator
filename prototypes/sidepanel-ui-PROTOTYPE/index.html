@@ -278,7 +278,10 @@ function renderPage() {
 // 直書用：半形標點換全形（直書字形會轉向）、… 統一、短數字縱中橫
 function verticalize(s) {
   s = s.replace(/\.{2,}/g, '……').replace(/!/g, '！').replace(/\?/g, '？').replace(/~/g, '～').replace(/,/g, '，');
-  return esc(s).replace(/[0-9A-Za-z]{1,3}|！？|！！/g, (m) => `<span style="text-combine-upright:all">${m}</span>`);
+  // ～ 在不少中文字型（如微軟正黑體）沒有直書字形，不依賴字型、直接轉 90 度
+  return esc(s)
+    .replace(/[0-9A-Za-z]{1,3}|！？|！！/g, (m) => `<span style="text-combine-upright:all">${m}</span>`)
+    .replace(/[～〜]/g, '<span style="display:inline-block;transform:rotate(90deg)">～</span>');
 }
 function setHover(id, from) {
   state.hover = id;
