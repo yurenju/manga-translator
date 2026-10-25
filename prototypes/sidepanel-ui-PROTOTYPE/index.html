@@ -22,7 +22,7 @@
   .page-wrap { position: relative; height: calc(100% - 24px); }
   .page-wrap img { height: 100%; display: block; user-select: none; }
   .ov { position: absolute; cursor: pointer; }
-  .ov.cover { background: #fff; border-radius: 40%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 4%; font-weight: 600; color: #111; }
+  .ov.cover { background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 4%; font-weight: 600; color: #111; }
   .ov.cover.off { background: transparent; color: transparent; }
   .ov.unread { outline: 2px dashed #d33; outline-offset: 2px; border-radius: 30%; }
   .ov.loose { }
@@ -196,6 +196,7 @@ function cropHTML(t, maxW, maxH) {
 }
 
 // ---------- 左邊：漫畫頁＋原地覆蓋 ----------
+const INSET = 0.1;
 function renderPage() {
   const p = page();
   document.getElementById('url').textContent = `https://manga.example.jp/episode/1234#${p.id}`;
@@ -209,11 +210,13 @@ function renderPage() {
     const [x, y, w, h] = t.bbox;
     const d = document.createElement('div');
     d.className = 'ov ' + (t.isBalloon ? (t.unreadable ? 'unread' : 'cover' + (state.overlay ? '' : ' off')) : 'loose');
-    Object.assign(d.style, { left: (x / p.width) * 100 + '%', top: (y / p.height) * 100 + '%', width: (w / p.width) * 100 + '%', height: (h / p.height) * 100 + '%' });
+    // 覆蓋只蓋 Balloon 內側（往內縮 INSET），保留原本的框線；detector 的 bbox 是 Balloon 外框
+    const ins = t.isBalloon && !t.unreadable ? INSET : 0;
+    Object.assign(d.style, { left: ((x + w * ins) / p.width) * 100 + '%', top: ((y + h * ins) / p.height) * 100 + '%', width: ((w * (1 - 2 * ins)) / p.width) * 100 + '%', height: ((h * (1 - 2 * ins)) / p.height) * 100 + '%' });
     d.dataset.id = t.id;
     if (t.isBalloon && !t.unreadable) {
       const imgH = img.clientHeight || 800, scale = imgH / p.height;
-      const fs = Math.max(9, Math.min(22, Math.sqrt((w * h * 0.55) / Math.max(4, t.zh.length)) * scale));
+      const fs = Math.max(9, Math.min(22, Math.sqrt((w * h * 0.45) / Math.max(4, t.zh.length)) * scale));
       d.style.fontSize = fs + 'px';
       d.textContent = t.zh;
     }
