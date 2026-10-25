@@ -20,6 +20,10 @@ _Avoid_: frame, cell
 A speech or thought bubble within a Panel that contains dialogue. Text outside Balloons (sound effects, narration, signs) is not a Balloon.
 _Avoid_: bubble, text box
 
+**Loose Text** (框外文字)
+Text on a Page that belongs to no Balloon: sound effects, narration, signs.
+_Avoid_: SFX (only one kind of Loose Text), stray text
+
 **Series Notes** (作品筆記)
 Context the reader attaches to a Series — character names, preferred translations of terms, plot background — used to make translations consistent. Belongs to the Series, shared across every site the Series is read on.
 _Avoid_: context, glossary (ambiguous with this file), dictionary
