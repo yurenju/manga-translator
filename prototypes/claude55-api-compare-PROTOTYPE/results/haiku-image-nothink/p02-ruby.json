@@ -1,0 +1,138 @@
+{
+  "id": "p02-ruby",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "sign",
+        "bbox": [
+          746,
+          60,
+          78,
+          262
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう しがつじゅうににち",
+        "zh": "潮見坂高中 4月12日"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          224,
+          68,
+          232,
+          262
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊です よろしく",
+        "reading": "てんこうせいの きりしまみなとです よろしく",
+        "zh": "我是轉學生霧島湊，請多指教"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          75,
+          418,
+          230,
+          282
+        ],
+        "orientation": "vertical",
+        "ja": "今日から君が僕のパートナー相棒だ",
+        "reading": "きょうからきみが ぼくの ぱーとなー あいぼうだ",
+        "zh": "從今天起，你就是我的搭檔夥伴了"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          484,
+          494,
+          92,
+          132
+        ],
+        "orientation": "vertical",
+        "ja": "嘘…",
+        "reading": "うそ…",
+        "zh": "騙人…"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          694,
+          418,
+          130,
+          242
+        ],
+        "orientation": "vertical",
+        "ja": "マジで言ってるのか!?",
+        "reading": "まじで いってるのか!?",
+        "zh": "你是認真的嗎！？"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          109,
+          948,
+          122,
+          202
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "啊，一定。"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          594,
+          914,
+          192,
+          252
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれどきの やくそく わすれるなよ",
+        "zh": "黃昏時的約定，可別忘了啊"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 3937,
+    "wallMs": 3937
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "disabled",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2765,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 651,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.000602,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

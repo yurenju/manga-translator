@@ -1,0 +1,180 @@
+{
+  "id": "p04-outside",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          699,
+          59,
+          122,
+          222
+        ],
+        "orientation": "vertical",
+        "ja": "遅刻だー!!",
+        "reading": "ちこくだー!!",
+        "zh": "遲到了啦——!!"
+      },
+      {
+        "order": 2,
+        "kind": "sfx",
+        "bbox": [
+          434,
+          18,
+          78,
+          268
+        ],
+        "orientation": "vertical",
+        "ja": "ドドドド",
+        "reading": "どどどど",
+        "zh": "咚咚咚咚"
+      },
+      {
+        "order": 3,
+        "kind": "sfx",
+        "bbox": [
+          148,
+          343,
+          206,
+          80
+        ],
+        "orientation": "horizontal",
+        "ja": "ガシャン",
+        "reading": "がしゃん",
+        "zh": "喀嚓"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          464,
+          555,
+          113,
+          191
+        ],
+        "orientation": "vertical",
+        "ja": "間に合った…",
+        "reading": "まにあった…",
+        "zh": "趕上了……"
+      },
+      {
+        "order": 5,
+        "kind": "outside",
+        "bbox": [
+          759,
+          613,
+          45,
+          57
+        ],
+        "orientation": "vertical",
+        "ja": "ハァ…ハァ…",
+        "reading": "はあ…はあ…",
+        "zh": "哈啊……哈啊……"
+      },
+      {
+        "order": 6,
+        "kind": "sign",
+        "bbox": [
+          99,
+          589,
+          262,
+          62
+        ],
+        "orientation": "horizontal",
+        "ja": "ひだまりベーカリー",
+        "reading": "ひだまりベーカリー",
+        "zh": "向陽麵包坊"
+      },
+      {
+        "order": 7,
+        "kind": "sfx",
+        "bbox": [
+          328,
+          811,
+          26,
+          58
+        ],
+        "orientation": "vertical",
+        "ja": "チリン",
+        "reading": "ちりん",
+        "zh": "叮鈴"
+      },
+      {
+        "order": 8,
+        "kind": "narration",
+        "bbox": [
+          736,
+          938,
+          72,
+          84
+        ],
+        "orientation": "vertical",
+        "ja": "誰もいない店の中",
+        "reading": "だれもいないみせのなか",
+        "zh": "空無一人的店內"
+      },
+      {
+        "order": 9,
+        "kind": "narration",
+        "bbox": [
+          79,
+          934,
+          62,
+          28
+        ],
+        "orientation": "horizontal",
+        "ja": "※閉店後",
+        "reading": "へいてんご",
+        "zh": "※打烊後"
+      },
+      {
+        "order": 10,
+        "kind": "balloon",
+        "bbox": [
+          466,
+          966,
+          109,
+          190
+        ],
+        "orientation": "vertical",
+        "ja": "静かだな…",
+        "reading": "しずかだな…",
+        "zh": "好安靜啊……"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 5369,
+    "wallMs": 5369
+  },
+  "model": "claude-sonnet-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2766,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 747,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.013002,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

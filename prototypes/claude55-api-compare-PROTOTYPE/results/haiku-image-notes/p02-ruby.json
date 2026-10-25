@@ -1,0 +1,138 @@
+{
+  "id": "p02-ruby",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "narration",
+        "bbox": [
+          745,
+          58,
+          78,
+          262
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう4がつ12にち",
+        "zh": "潮見坂高中 4月12日"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          224,
+          68,
+          232,
+          262
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊です よろしく",
+        "reading": "てんこうせいのきりしまみなとです よろしく",
+        "zh": "我是轉學生霧島湊，請多指教。"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          694,
+          418,
+          132,
+          244
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか!?",
+        "zh": "你是認真的嗎！？"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          484,
+          494,
+          92,
+          132
+        ],
+        "orientation": "vertical",
+        "ja": "嘘…",
+        "reading": "うそ…",
+        "zh": "騙人…"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          74,
+          418,
+          232,
+          284
+        ],
+        "orientation": "vertical",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのぱーとなーだ",
+        "zh": "從今天起，你就是我的拍檔。"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          594,
+          913,
+          192,
+          252
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれどきのやくそく、わすれるなよ",
+        "zh": "別忘了黃昏時的約定喔。"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          108,
+          948,
+          122,
+          202
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "嗯，一定。"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 8268,
+    "wallMs": 8268
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": "series-notes.md",
+  "cache": false,
+  "usage": {
+    "input_tokens": 3039,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 1696,
+    "output_tokens_details": {
+      "thinking_tokens": 1057
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.0011519000000000002,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 1
+}

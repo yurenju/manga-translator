@@ -1,0 +1,138 @@
+{
+  "id": "p06-horizontal",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "sign",
+        "bbox": [
+          250,
+          70,
+          380,
+          58
+        ],
+        "orientation": "horizontal",
+        "ja": "ミオ",
+        "reading": "みお",
+        "zh": "美緒"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          290,
+          160,
+          230,
+          60
+        ],
+        "orientation": "horizontal",
+        "ja": "駅前に7時ね",
+        "reading": "えきまえにしちじね",
+        "zh": "車站前7點見哦"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          440,
+          250,
+          150,
+          56
+        ],
+        "orientation": "horizontal",
+        "ja": "OK！",
+        "reading": "オーケー！",
+        "zh": "OK！"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          290,
+          340,
+          250,
+          90
+        ],
+        "orientation": "horizontal",
+        "ja": "遅れたらアイス奢りね",
+        "reading": "おくれたらアイスおごりね",
+        "zh": "遲到的話要請我吃冰哦"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          455,
+          662,
+          370,
+          190
+        ],
+        "orientation": "horizontal",
+        "ja": "え、もう6:50!?",
+        "reading": "え、もう6じ50ぷん!?",
+        "zh": "咦，已經6:50了！？"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          70,
+          668,
+          162,
+          264
+        ],
+        "orientation": "vertical",
+        "ja": "あと10分で着く訳ない！",
+        "reading": "あとじゅうぷんでつくわけない！",
+        "zh": "再過10分鐘不可能到得了！"
+      },
+      {
+        "order": 7,
+        "kind": "sign",
+        "bbox": [
+          250,
+          758,
+          160,
+          62
+        ],
+        "orientation": "horizontal",
+        "ja": "BUS STOP",
+        "reading": "バス ストップ",
+        "zh": "公車站"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 12106,
+    "wallMs": 12106
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2766,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 2004,
+    "output_tokens_details": {
+      "thinking_tokens": 1437
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.0012786,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 1
+}

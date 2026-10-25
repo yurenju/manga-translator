@@ -1,0 +1,378 @@
+{
+  "id": "p02-ruby",
+  "pipeline": "local-ocr",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "localMs": 533,
+    "turnMs": 3249,
+    "wallMs": 3782
+  },
+  "usage": {
+    "input_tokens": 1108,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 313,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.005346,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          751,
+          129,
+          72,
+          128
+        ],
+        "textBbox": [
+          751,
+          129,
+          72,
+          128
+        ],
+        "orientation": "vertical",
+        "ja": "潮見坂高校4月12日",
+        "reading": "しおみざかこうこう しがつじゅうににち",
+        "zh": "潮見坂高中 4月12日",
+        "src": "text_free",
+        "readingKuromoji": "しおみざかこうこう4つき12にち"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          219,
+          65,
+          241,
+          270
+        ],
+        "textBbox": [
+          285,
+          133,
+          116,
+          153
+        ],
+        "orientation": "vertical",
+        "ja": "転校生の霧島湊ですよろしく",
+        "reading": "てんこうせいのきりしまみなとですよろしく",
+        "zh": "我是轉學生霧島湊，請多指教。",
+        "src": "bubble",
+        "readingKuromoji": "てんこうせいのきりしまみなとですよろしく"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          689,
+          415,
+          141,
+          248
+        ],
+        "textBbox": [
+          706,
+          483,
+          109,
+          131
+        ],
+        "orientation": "vertical",
+        "ja": "本気で言ってるのか!?",
+        "reading": "ほんきでいってるのか",
+        "zh": "你是認真的嗎！？",
+        "src": "bubble",
+        "readingKuromoji": "ほんきでいってるのか!?"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          479,
+          490,
+          101,
+          138
+        ],
+        "textBbox": [
+          508,
+          531,
+          46,
+          58
+        ],
+        "orientation": "vertical",
+        "ja": "嘘...",
+        "reading": "うそ",
+        "zh": "騙人……",
+        "src": "bubble",
+        "readingKuromoji": "うそ..."
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          68,
+          414,
+          244,
+          291
+        ],
+        "textBbox": [
+          114,
+          507,
+          154,
+          123
+        ],
+        "orientation": "horizontal",
+        "ja": "今日から君が僕の相棒だ",
+        "reading": "きょうからきみがぼくのあいぼうだ",
+        "zh": "從今天起，你就是我的拍檔了。",
+        "src": "bubble",
+        "readingKuromoji": "きょうからきみがぼくのあいぼうだ"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          590,
+          911,
+          201,
+          257
+        ],
+        "textBbox": [
+          621,
+          964,
+          138,
+          166
+        ],
+        "orientation": "vertical",
+        "ja": "黄昏時の約束、忘れるなよ",
+        "reading": "たそがれどきのやくそく、わすれるなよ",
+        "zh": "黃昏時的約定，可別忘了啊。",
+        "src": "bubble",
+        "readingKuromoji": "たそがれじのやくそく、わすれるなよ"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          103,
+          945,
+          133,
+          208
+        ],
+        "textBbox": [
+          132,
+          1002,
+          76,
+          109
+        ],
+        "orientation": "vertical",
+        "ja": "ああ。必ず",
+        "reading": "ああ。かならず",
+        "zh": "嗯。一定。",
+        "src": "bubble",
+        "readingKuromoji": "ああ。かならず"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.958,
+        "box": [
+          590,
+          911,
+          201,
+          257
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.956,
+        "box": [
+          68,
+          414,
+          244,
+          291
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.949,
+        "box": [
+          219,
+          65,
+          241,
+          270
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.938,
+        "box": [
+          689,
+          415,
+          141,
+          248
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.931,
+        "box": [
+          103,
+          945,
+          133,
+          208
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.916,
+        "box": [
+          479,
+          490,
+          101,
+          138
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.753,
+        "box": [
+          706,
+          483,
+          109,
+          131
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.731,
+        "box": [
+          621,
+          964,
+          138,
+          166
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.709,
+        "box": [
+          508,
+          531,
+          46,
+          58
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.692,
+        "box": [
+          114,
+          507,
+          154,
+          123
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.673,
+        "box": [
+          132,
+          1002,
+          76,
+          109
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.654,
+        "box": [
+          285,
+          133,
+          116,
+          153
+        ]
+      },
+      {
+        "label": "text_free",
+        "score": 0.595,
+        "box": [
+          751,
+          129,
+          72,
+          128
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.41,
+        "box": [
+          415,
+          1054,
+          111,
+          108
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        344
+      ],
+      [
+        438,
+        394,
+        404,
+        468
+      ],
+      [
+        38,
+        394,
+        388,
+        468
+      ],
+      [
+        38,
+        874,
+        804,
+        368
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 688,
+    "ocr": 751,
+    "kuromoji": 336
+  },
+  "rssPeakMB": 1089,
+  "model": "claude-sonnet-5-5",
+  "input": "text",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": "series-notes.md",
+  "cache": false,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

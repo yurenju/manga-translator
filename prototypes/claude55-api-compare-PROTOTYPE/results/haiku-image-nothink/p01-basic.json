@@ -1,0 +1,138 @@
+{
+  "id": "p01-basic",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          49,
+          64,
+          162,
+          212
+        ],
+        "orientation": "vertical",
+        "ja": "うん、パンを買いに行くんだ",
+        "reading": "うん、ぱんをかいにいくんだ",
+        "zh": "嗯，我要去買麵包。"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          699,
+          59,
+          122,
+          203
+        ],
+        "orientation": "vertical",
+        "ja": "おはよう！今日は早いね",
+        "reading": "おはよう！きょうははやいね",
+        "zh": "早安！今天起得真早呢。"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          154,
+          509,
+          92,
+          182
+        ],
+        "orientation": "vertical",
+        "ja": "もちろん！",
+        "reading": "もちろん！",
+        "zh": "當然好啊！"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          629,
+          494,
+          142,
+          172
+        ],
+        "orientation": "vertical",
+        "ja": "一緒に行ってもいい？",
+        "reading": "いっしょにいってもいい？",
+        "zh": "我可以一起去嗎？"
+      },
+      {
+        "order": 5,
+        "kind": "sign",
+        "bbox": [
+          399,
+          889,
+          52,
+          122
+        ],
+        "orientation": "vertical",
+        "ja": "朝七時",
+        "reading": "あさしちじ",
+        "zh": "早上七點"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          74,
+          883,
+          112,
+          93
+        ],
+        "orientation": "horizontal",
+        "ja": "いいにおい！",
+        "reading": "いいにおい！",
+        "zh": "好香啊！"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          509,
+          898,
+          162,
+          183
+        ],
+        "orientation": "vertical",
+        "ja": "あ、お店がもう開いてる",
+        "reading": "あ、おみせがもうあいてる",
+        "zh": "啊，店已經開了呢。"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 4159,
+    "wallMs": 4159
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "disabled",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2765,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 579,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.000566,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

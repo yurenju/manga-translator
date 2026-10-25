@@ -1,0 +1,208 @@
+{
+  "id": "p05-dense",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          730,
+          48,
+          110,
+          182
+        ],
+        "orientation": "vertical",
+        "ja": "今夜の当番誰だっけ？",
+        "reading": "こんやのとうばんだれだっけ？",
+        "zh": "今晚值班的是誰啊？"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          557,
+          54,
+          66,
+          112
+        ],
+        "orientation": "vertical",
+        "ja": "…俺？",
+        "reading": "…おれ？",
+        "zh": "……我？"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          80,
+          54,
+          121,
+          192
+        ],
+        "orientation": "vertical",
+        "ja": "そうだよ兄ちゃん",
+        "reading": "そうだよにいちゃん",
+        "zh": "對啊，哥哥。"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          700,
+          384,
+          121,
+          172
+        ],
+        "orientation": "vertical",
+        "ja": "えー面倒くさい",
+        "reading": "えーめんどうくさい",
+        "zh": "欸～好麻煩喔。"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          625,
+          558,
+          112,
+          162
+        ],
+        "orientation": "vertical",
+        "ja": "昨日も作ったぞ",
+        "reading": "きのうもつくったぞ",
+        "zh": "昨天也是我做的啊。"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          188,
+          355,
+          228,
+          230
+        ],
+        "orientation": "vertical",
+        "ja": "嘘つけ！カップ麺だったじゃん",
+        "reading": "うそつけ！かっぷめんだったじゃん",
+        "zh": "少騙了！明明是泡麵嘛。"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          230,
+          575,
+          140,
+          150
+        ],
+        "orientation": "vertical",
+        "ja": "お湯を入れたのは俺だ",
+        "reading": "おゆをいれたのはおれだ",
+        "zh": "倒熱水的是我啊。"
+      },
+      {
+        "order": 8,
+        "kind": "balloon",
+        "bbox": [
+          65,
+          714,
+          111,
+          152
+        ],
+        "orientation": "vertical",
+        "ja": "それは料理じゃない",
+        "reading": "それはりょうりじゃない",
+        "zh": "那可不是料理。"
+      },
+      {
+        "order": 9,
+        "kind": "narration",
+        "bbox": [
+          778,
+          934,
+          45,
+          111
+        ],
+        "orientation": "vertical",
+        "ja": "結局…",
+        "reading": "けっきょく…",
+        "zh": "結果…"
+      },
+      {
+        "order": 10,
+        "kind": "balloon",
+        "bbox": [
+          625,
+          930,
+          110,
+          140
+        ],
+        "orientation": "vertical",
+        "ja": "カレーでいい？",
+        "reading": "かれーでいい？",
+        "zh": "咖哩就好嗎？"
+      },
+      {
+        "order": 11,
+        "kind": "balloon",
+        "bbox": [
+          205,
+          934,
+          111,
+          151
+        ],
+        "orientation": "vertical",
+        "ja": "辛口でね！",
+        "reading": "からくちでね！",
+        "zh": "要辣的喔！"
+      },
+      {
+        "order": 12,
+        "kind": "outside",
+        "bbox": [
+          88,
+          1010,
+          22,
+          76
+        ],
+        "orientation": "vertical",
+        "ja": "（甘口派）",
+        "reading": "（かんくちは）",
+        "zh": "（甜味派）"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 11510,
+    "wallMs": 11510
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2766,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 2451,
+    "output_tokens_details": {
+      "thinking_tokens": 1462
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.0015021,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 1
+}

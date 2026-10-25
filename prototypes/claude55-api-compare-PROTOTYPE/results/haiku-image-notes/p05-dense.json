@@ -1,0 +1,208 @@
+{
+  "id": "p05-dense",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          728,
+          48,
+          104,
+          182
+        ],
+        "orientation": "vertical",
+        "ja": "今夜の当番誰だっけ?",
+        "reading": "こんやのとうばんだれだっけ?",
+        "zh": "今晚輪到誰來著?"
+      },
+      {
+        "order": 2,
+        "kind": "thought",
+        "bbox": [
+          556,
+          53,
+          66,
+          112
+        ],
+        "orientation": "vertical",
+        "ja": "…俺?",
+        "reading": "…おれ?",
+        "zh": "……我?"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          79,
+          53,
+          122,
+          193
+        ],
+        "orientation": "vertical",
+        "ja": "そうだよ兄ちゃん",
+        "reading": "そうだよにいちゃん",
+        "zh": "對啊，老哥。"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          698,
+          384,
+          124,
+          172
+        ],
+        "orientation": "vertical",
+        "ja": "えー面倒くさい",
+        "reading": "えーめんどうくさい",
+        "zh": "欸──好麻煩喔。"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          624,
+          558,
+          113,
+          164
+        ],
+        "orientation": "vertical",
+        "ja": "昨日も作ったぞ",
+        "reading": "きのうもつくったぞ",
+        "zh": "昨天也是我煮的啊。"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          180,
+          355,
+          236,
+          232
+        ],
+        "orientation": "vertical",
+        "ja": "嘘つけ!カップ麺だったじゃん",
+        "reading": "うそつけ!かっぷめんだったじゃん",
+        "zh": "少騙人！明明就是杯麵嘛。"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          229,
+          575,
+          142,
+          152
+        ],
+        "orientation": "vertical",
+        "ja": "お湯を入れたのは俺だ",
+        "reading": "おゆをいれたのはおれだ",
+        "zh": "倒熱水的是我啦。"
+      },
+      {
+        "order": 8,
+        "kind": "balloon",
+        "bbox": [
+          64,
+          713,
+          112,
+          153
+        ],
+        "orientation": "vertical",
+        "ja": "それは料理じゃない",
+        "reading": "それはりょうりじゃない",
+        "zh": "那不叫料理。"
+      },
+      {
+        "order": 9,
+        "kind": "balloon",
+        "bbox": [
+          204,
+          933,
+          113,
+          153
+        ],
+        "orientation": "vertical",
+        "ja": "辛口でね!",
+        "reading": "からくちでね!",
+        "zh": "要辣口的喔！"
+      },
+      {
+        "order": 10,
+        "kind": "outside",
+        "bbox": [
+          84,
+          1022,
+          28,
+          64
+        ],
+        "orientation": "vertical",
+        "ja": "(甘口派)",
+        "reading": "(あまくちは)",
+        "zh": "（甘口派）"
+      },
+      {
+        "order": 11,
+        "kind": "narration",
+        "bbox": [
+          777,
+          934,
+          46,
+          112
+        ],
+        "orientation": "vertical",
+        "ja": "結局…",
+        "reading": "けっきょく…",
+        "zh": "結果……"
+      },
+      {
+        "order": 12,
+        "kind": "balloon",
+        "bbox": [
+          624,
+          928,
+          113,
+          144
+        ],
+        "orientation": "vertical",
+        "ja": "カレーでいい?",
+        "reading": "かれーでいい?",
+        "zh": "咖哩可以嗎？"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 10287,
+    "wallMs": 10287
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": "series-notes.md",
+  "cache": false,
+  "usage": {
+    "input_tokens": 3039,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 2267,
+    "output_tokens_details": {
+      "thinking_tokens": 1280
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.0014374000000000001,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 1
+}

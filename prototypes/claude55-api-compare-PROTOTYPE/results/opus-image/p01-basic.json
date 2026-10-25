@@ -1,0 +1,138 @@
+{
+  "id": "p01-basic",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          700,
+          62,
+          120,
+          198
+        ],
+        "orientation": "vertical",
+        "ja": "おはよう！今日は早いね",
+        "reading": "おはよう！きょうははやいね",
+        "zh": "早安！你今天好早喔"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          50,
+          66,
+          162,
+          210
+        ],
+        "orientation": "vertical",
+        "ja": "うん、パンを買いに行くんだ",
+        "reading": "うん、パンをかいにいくんだ",
+        "zh": "嗯，我要去買麵包"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          630,
+          496,
+          140,
+          170
+        ],
+        "orientation": "vertical",
+        "ja": "一緒に行ってもいい？",
+        "reading": "いっしょにいってもいい？",
+        "zh": "我可以一起去嗎？"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          154,
+          510,
+          92,
+          180
+        ],
+        "orientation": "vertical",
+        "ja": "もちろん！",
+        "reading": "もちろん！",
+        "zh": "當然好啊！"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          510,
+          900,
+          160,
+          180
+        ],
+        "orientation": "vertical",
+        "ja": "あ、お店がもう開いてる",
+        "reading": "あ、おみせがもうあいてる",
+        "zh": "啊，店已經開了"
+      },
+      {
+        "order": 6,
+        "kind": "sign",
+        "bbox": [
+          400,
+          890,
+          50,
+          120
+        ],
+        "orientation": "vertical",
+        "ja": "朝七時",
+        "reading": "あさしちじ",
+        "zh": "早上七點"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          74,
+          884,
+          112,
+          92
+        ],
+        "orientation": "horizontal",
+        "ja": "いいにおい！",
+        "reading": "いいにおい！",
+        "zh": "好香喔！"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 6351,
+    "wallMs": 6351
+  },
+  "model": "claude-opus-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2766,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 572,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.022504,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

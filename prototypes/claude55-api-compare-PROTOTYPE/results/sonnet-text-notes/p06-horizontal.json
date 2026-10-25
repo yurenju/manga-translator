@@ -1,0 +1,330 @@
+{
+  "id": "p06-horizontal",
+  "pipeline": "local-ocr",
+  "device": "webgpu",
+  "det": "v4s",
+  "ocrDtype": "fp32",
+  "orderMode": "panels",
+  "scale": 1,
+  "thr": 0.4,
+  "imageSize": [
+    880,
+    1280
+  ],
+  "latency": {
+    "localMs": 475,
+    "turnMs": 6100,
+    "wallMs": 6575
+  },
+  "usage": {
+    "input_tokens": 1060,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 240,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.00452,
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          434,
+          244,
+          162,
+          66
+        ],
+        "textBbox": [
+          481,
+          261,
+          62,
+          30
+        ],
+        "orientation": "horizontal",
+        "ja": "OK!",
+        "reading": "オーケー",
+        "zh": "OK！",
+        "src": "bubble",
+        "readingKuromoji": "OK!"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          284,
+          154,
+          241,
+          68
+        ],
+        "textBbox": [
+          342,
+          168,
+          125,
+          40
+        ],
+        "orientation": "horizontal",
+        "ja": "駅前に7時ね",
+        "reading": "えきまえにしちじね",
+        "zh": "七點在車站前集合喔。",
+        "src": "bubble",
+        "readingKuromoji": "えきまえに7じね"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          283,
+          334,
+          265,
+          100
+        ],
+        "textBbox": [
+          348,
+          349,
+          135,
+          70
+        ],
+        "orientation": "horizontal",
+        "ja": "遅れたらアイス奢りね",
+        "reading": "おくれたらアイスおごりね",
+        "zh": "遲到的話就要請吃冰喔。",
+        "src": "bubble",
+        "readingKuromoji": "おくれたらあいすおごりね"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          461,
+          663,
+          358,
+          189
+        ],
+        "textBbox": [
+          529,
+          737,
+          225,
+          44
+        ],
+        "orientation": "horizontal",
+        "ja": "え、もう650!?",
+        "reading": "え、もうろくじごじゅっぷん",
+        "zh": "咦，已經6點50分了！？",
+        "src": "bubble",
+        "readingKuromoji": "え、もう650!?"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          244,
+          753,
+          171,
+          71
+        ],
+        "textBbox": [
+          264,
+          772,
+          132,
+          33
+        ],
+        "orientation": "horizontal",
+        "ja": "BUSSTOP",
+        "reading": "バスストップ",
+        "zh": "BUS STOP",
+        "src": "bubble",
+        "readingKuromoji": "BUSSTOP"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          62,
+          663,
+          175,
+          274
+        ],
+        "textBbox": [
+          94,
+          738,
+          115,
+          122
+        ],
+        "orientation": "vertical",
+        "ja": "あと10分で着く訳ない!",
+        "reading": "あとじゅっぷんでつくわけない",
+        "zh": "再10分鐘根本不可能到啦！",
+        "src": "bubble",
+        "readingKuromoji": "あと10ふんでつくわけない!"
+      }
+    ]
+  },
+  "debug": {
+    "dets": [
+      {
+        "label": "bubble",
+        "score": 0.954,
+        "box": [
+          62,
+          663,
+          175,
+          274
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.941,
+        "box": [
+          283,
+          334,
+          265,
+          100
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.939,
+        "box": [
+          434,
+          244,
+          162,
+          66
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.938,
+        "box": [
+          284,
+          154,
+          241,
+          68
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.896,
+        "box": [
+          342,
+          168,
+          125,
+          40
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.895,
+        "box": [
+          461,
+          663,
+          358,
+          189
+        ]
+      },
+      {
+        "label": "bubble",
+        "score": 0.889,
+        "box": [
+          244,
+          753,
+          171,
+          71
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.875,
+        "box": [
+          348,
+          349,
+          135,
+          70
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.87,
+        "box": [
+          264,
+          772,
+          132,
+          33
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.822,
+        "box": [
+          481,
+          261,
+          62,
+          30
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.818,
+        "box": [
+          529,
+          737,
+          225,
+          44
+        ]
+      },
+      {
+        "label": "text_bubble",
+        "score": 0.803,
+        "box": [
+          94,
+          738,
+          115,
+          122
+        ]
+      }
+    ],
+    "panels": [
+      [
+        38,
+        38,
+        804,
+        564
+      ],
+      [
+        438,
+        614,
+        404,
+        628
+      ],
+      [
+        38,
+        614,
+        388,
+        628
+      ]
+    ]
+  },
+  "loadMs": {
+    "detector": 688,
+    "ocr": 751,
+    "kuromoji": 336
+  },
+  "rssPeakMB": 1119,
+  "model": "claude-sonnet-5-5",
+  "input": "text",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": "series-notes.md",
+  "cache": false,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

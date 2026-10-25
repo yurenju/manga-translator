@@ -1,0 +1,138 @@
+{
+  "id": "p07-spread",
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "sfx",
+        "bbox": [
+          690,
+          100,
+          380,
+          100
+        ],
+        "orientation": "horizontal",
+        "ja": "ザアアアア",
+        "reading": "ざあああああ",
+        "zh": "嘩啦啦啦"
+      },
+      {
+        "order": 2,
+        "kind": "sign",
+        "bbox": [
+          1628,
+          68,
+          62,
+          182
+        ],
+        "orientation": "vertical",
+        "ja": "千年の森",
+        "reading": "せんねんのもり",
+        "zh": "千年之森"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          1394,
+          254,
+          132,
+          212
+        ],
+        "orientation": "vertical",
+        "ja": "ここが…伝説の",
+        "reading": "ここが…でんせつの",
+        "zh": "這裡就是……傳說中的……"
+      },
+      {
+        "order": 4,
+        "kind": "thought",
+        "bbox": [
+          66,
+          726,
+          210,
+          248
+        ],
+        "orientation": "vertical",
+        "ja": "もう帰りたい…",
+        "reading": "もうかえりたい…",
+        "zh": "好想回家……"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          644,
+          698,
+          152,
+          202
+        ],
+        "orientation": "vertical",
+        "ja": "足元に気をつけて",
+        "reading": "あしもとにきをつけて",
+        "zh": "小心腳下"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          944,
+          704,
+          112,
+          192
+        ],
+        "orientation": "vertical",
+        "ja": "行ってみよう",
+        "reading": "いってみよう",
+        "zh": "去看看吧"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          1544,
+          704,
+          152,
+          232
+        ],
+        "orientation": "vertical",
+        "ja": "地図だと この先に村がある",
+        "reading": "ちずだと このさきにむらがある",
+        "zh": "地圖上看，前面有個村子"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 4786,
+    "wallMs": 4786
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "disabled",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 4192,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 549,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.0006937,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

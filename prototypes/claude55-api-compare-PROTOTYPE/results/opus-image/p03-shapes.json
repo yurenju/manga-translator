@@ -1,0 +1,138 @@
+{
+  "id": "p03-shapes",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "balloon",
+        "bbox": [
+          650,
+          40,
+          180,
+          250
+        ],
+        "orientation": "vertical",
+        "ja": "うるさーい!!",
+        "reading": "うるさーい",
+        "zh": "吵死了——!!"
+      },
+      {
+        "order": 2,
+        "kind": "thought",
+        "bbox": [
+          50,
+          50,
+          200,
+          240
+        ],
+        "orientation": "vertical",
+        "ja": "明日のテストどうしよう…",
+        "reading": "あしたのてすとどうしよう",
+        "zh": "明天的考試該怎麼辦…"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          675,
+          460,
+          130,
+          200
+        ],
+        "orientation": "vertical",
+        "ja": "ねえ…聞こえる?",
+        "reading": "ねえ…きこえる",
+        "zh": "欸…你聽得到嗎?"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          293,
+          453,
+          113,
+          213
+        ],
+        "orientation": "vertical",
+        "ja": "……誰だ",
+        "reading": "……だれだ",
+        "zh": "……是誰"
+      },
+      {
+        "order": 5,
+        "kind": "narration",
+        "bbox": [
+          700,
+          830,
+          120,
+          140
+        ],
+        "orientation": "vertical",
+        "ja": "その夜、町から音が消えた",
+        "reading": "そのよる、まちからおとがきえた",
+        "zh": "那一夜，聲音從城鎮中消失了"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          345,
+          780,
+          110,
+          160
+        ],
+        "orientation": "vertical",
+        "ja": "待って!",
+        "reading": "まって",
+        "zh": "等等!"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          90,
+          860,
+          120,
+          200
+        ],
+        "orientation": "vertical",
+        "ja": "どこ行くの?",
+        "reading": "どこいくの",
+        "zh": "你要去哪?"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 7245,
+    "wallMs": 7245
+  },
+  "model": "claude-opus-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2766,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 555,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.022164,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

@@ -1,0 +1,138 @@
+{
+  "id": "p03-shapes",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "thought",
+        "bbox": [
+          48,
+          52,
+          206,
+          236
+        ],
+        "orientation": "vertical",
+        "ja": "明日のテストどうしよう…",
+        "reading": "あしたのてすとどうしよう…",
+        "zh": "明天的考試該怎麼辦…"
+      },
+      {
+        "order": 2,
+        "kind": "balloon",
+        "bbox": [
+          652,
+          38,
+          182,
+          252
+        ],
+        "orientation": "vertical",
+        "ja": "うるさーい!!",
+        "reading": "うるさーい!!",
+        "zh": "吵死了!!"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          674,
+          460,
+          132,
+          200
+        ],
+        "orientation": "vertical",
+        "ja": "ねえ…聞こえる?",
+        "reading": "ねえ…きこえる?",
+        "zh": "呐…你聽得到嗎?"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          294,
+          454,
+          112,
+          212
+        ],
+        "orientation": "vertical",
+        "ja": "……誰だ",
+        "reading": "……だれだ",
+        "zh": "……是誰"
+      },
+      {
+        "order": 5,
+        "kind": "balloon",
+        "bbox": [
+          344,
+          780,
+          112,
+          160
+        ],
+        "orientation": "vertical",
+        "ja": "待って!",
+        "reading": "まって!",
+        "zh": "等一下!"
+      },
+      {
+        "order": 6,
+        "kind": "balloon",
+        "bbox": [
+          90,
+          860,
+          122,
+          200
+        ],
+        "orientation": "vertical",
+        "ja": "どこ行くの?",
+        "reading": "どこいくの?",
+        "zh": "你要去哪裡?"
+      },
+      {
+        "order": 7,
+        "kind": "narration",
+        "bbox": [
+          699,
+          829,
+          122,
+          142
+        ],
+        "orientation": "vertical",
+        "ja": "その夜、町から音が消えた",
+        "reading": "そのよる、まちからおとがきえた",
+        "zh": "那一夜,小鎮的聲音消失了"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 4481,
+    "wallMs": 4481
+  },
+  "model": "claude-sonnet-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "adaptive",
+  "notes": "series-notes.md",
+  "cache": true,
+  "usage": {
+    "input_tokens": 1501,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 1538,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 562,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.008929600000000001,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

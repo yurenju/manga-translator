@@ -1,0 +1,124 @@
+{
+  "id": "p06-horizontal",
+  "imageSize": [
+    880,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "outside",
+        "bbox": [
+          290,
+          150,
+          240,
+          50
+        ],
+        "orientation": "horizontal",
+        "ja": "駅前に7時ね",
+        "reading": "えきまえにしちじね",
+        "zh": "七點在車站前喔"
+      },
+      {
+        "order": 2,
+        "kind": "outside",
+        "bbox": [
+          440,
+          250,
+          150,
+          55
+        ],
+        "orientation": "horizontal",
+        "ja": "OK！",
+        "reading": "オーケー",
+        "zh": "OK！"
+      },
+      {
+        "order": 3,
+        "kind": "outside",
+        "bbox": [
+          290,
+          340,
+          250,
+          90
+        ],
+        "orientation": "horizontal",
+        "ja": "遅れたらアイス奢りね",
+        "reading": "おくれたらアイスおごりね",
+        "zh": "遲到的話要請我吃冰喔"
+      },
+      {
+        "order": 4,
+        "kind": "balloon",
+        "bbox": [
+          70,
+          668,
+          160,
+          262
+        ],
+        "orientation": "vertical",
+        "ja": "あと10分で着く訳ない！",
+        "reading": "あと10ぷんでつくわけない！",
+        "zh": "還有10分鐘，不可能趕得到啦！"
+      },
+      {
+        "order": 5,
+        "kind": "sign",
+        "bbox": [
+          250,
+          760,
+          160,
+          60
+        ],
+        "orientation": "horizontal",
+        "ja": "BUS STOP",
+        "reading": "バスストップ",
+        "zh": "公車站"
+      },
+      {
+        "order": 6,
+        "kind": "thought",
+        "bbox": [
+          456,
+          662,
+          366,
+          186
+        ],
+        "orientation": "horizontal",
+        "ja": "え、もう6:50!?",
+        "reading": "え、もう6じ50ぷん！？",
+        "zh": "咦，已經6:50了！？"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 3248,
+    "wallMs": 3248
+  },
+  "model": "claude-haiku-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "disabled",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 2765,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 498,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.0005255,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

@@ -1,0 +1,250 @@
+{
+  "id": "p08-action",
+  "imageSize": [
+    1760,
+    1280
+  ],
+  "output": {
+    "texts": [
+      {
+        "order": 1,
+        "kind": "sfx",
+        "bbox": [
+          1580,
+          480,
+          130,
+          240
+        ],
+        "orientation": "vertical",
+        "ja": "バチイッ",
+        "reading": "ばちいっ",
+        "zh": "啪嚓！"
+      },
+      {
+        "order": 2,
+        "kind": "sfx",
+        "bbox": [
+          960,
+          130,
+          100,
+          470
+        ],
+        "orientation": "vertical",
+        "ja": "雷槍ライトニングランス!!",
+        "reading": "らいとにんぐらんす",
+        "zh": "雷槍！！"
+      },
+      {
+        "order": 3,
+        "kind": "balloon",
+        "bbox": [
+          526,
+          48,
+          66,
+          124
+        ],
+        "orientation": "vertical",
+        "ja": "え!?",
+        "reading": "え",
+        "zh": "咦！？"
+      },
+      {
+        "order": 4,
+        "kind": "sfx",
+        "bbox": [
+          730,
+          155,
+          70,
+          145
+        ],
+        "orientation": "vertical",
+        "ja": "ドサッ",
+        "reading": "どさっ",
+        "zh": "咚沙！"
+      },
+      {
+        "order": 5,
+        "kind": "sfx",
+        "bbox": [
+          405,
+          225,
+          60,
+          125
+        ],
+        "orientation": "vertical",
+        "ja": "ドサッ",
+        "reading": "どさっ",
+        "zh": "咚沙！"
+      },
+      {
+        "order": 6,
+        "kind": "sfx",
+        "bbox": [
+          120,
+          50,
+          150,
+          270
+        ],
+        "orientation": "vertical",
+        "ja": "ズバッ",
+        "reading": "ずばっ",
+        "zh": "唰啪！"
+      },
+      {
+        "order": 7,
+        "kind": "balloon",
+        "bbox": [
+          160,
+          390,
+          120,
+          200
+        ],
+        "orientation": "vertical",
+        "ja": "怪我はないか?",
+        "reading": "けがはないか",
+        "zh": "你沒受傷吧？"
+      },
+      {
+        "order": 8,
+        "kind": "sfx",
+        "bbox": [
+          480,
+          670,
+          85,
+          55
+        ],
+        "orientation": "horizontal",
+        "ja": "ガタ",
+        "reading": "がた",
+        "zh": "喀噠"
+      },
+      {
+        "order": 9,
+        "kind": "sfx",
+        "bbox": [
+          720,
+          765,
+          80,
+          45
+        ],
+        "orientation": "horizontal",
+        "ja": "ゴト",
+        "reading": "ごと",
+        "zh": "咕咚"
+      },
+      {
+        "order": 10,
+        "kind": "sfx",
+        "bbox": [
+          68,
+          690,
+          85,
+          55
+        ],
+        "orientation": "horizontal",
+        "ja": "ガタ",
+        "reading": "がた",
+        "zh": "喀噠"
+      },
+      {
+        "order": 11,
+        "kind": "sfx",
+        "bbox": [
+          262,
+          765,
+          75,
+          45
+        ],
+        "orientation": "horizontal",
+        "ja": "ゴト",
+        "reading": "ごと",
+        "zh": "咕咚"
+      },
+      {
+        "order": 12,
+        "kind": "balloon",
+        "bbox": [
+          594,
+          888,
+          172,
+          262
+        ],
+        "orientation": "vertical",
+        "ja": "本当に助かりました!!",
+        "reading": "ほんとうにたすかりました",
+        "zh": "真的幫了大忙！！"
+      },
+      {
+        "order": 13,
+        "kind": "balloon",
+        "bbox": [
+          60,
+          884,
+          160,
+          252
+        ],
+        "orientation": "vertical",
+        "ja": "気にするな街まで送るよ",
+        "reading": "きにするなまちまでおくるよ",
+        "zh": "別放在心上，我送你們到城鎮吧。"
+      },
+      {
+        "order": 14,
+        "kind": "sfx",
+        "bbox": [
+          545,
+          1145,
+          40,
+          70
+        ],
+        "orientation": "vertical",
+        "ja": "ガタ",
+        "reading": "がた",
+        "zh": "喀噠"
+      },
+      {
+        "order": 15,
+        "kind": "sfx",
+        "bbox": [
+          235,
+          1150,
+          40,
+          65
+        ],
+        "orientation": "vertical",
+        "ja": "ゴト",
+        "reading": "ごと",
+        "zh": "咕咚"
+      }
+    ]
+  },
+  "latency": {
+    "turnMs": 7999,
+    "wallMs": 7999
+  },
+  "model": "claude-sonnet-5-5",
+  "input": "image",
+  "effort": "low",
+  "thinking": "between_tools",
+  "notes": null,
+  "cache": false,
+  "usage": {
+    "input_tokens": 4192,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 0,
+    "cache_creation": {
+      "ephemeral_5m_input_tokens": 0,
+      "ephemeral_1h_input_tokens": 0
+    },
+    "output_tokens": 1079,
+    "output_tokens_details": {
+      "thinking_tokens": 0
+    },
+    "service_tier": "standard",
+    "inference_geo": "global",
+    "speed": "standard"
+  },
+  "costUsd": 0.019174,
+  "stopReason": "end_turn",
+  "thinkingBlocks": 0
+}

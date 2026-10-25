@@ -1,0 +1,1065 @@
+{
+  "summary": {
+    "run": "opus-text",
+    "model": "claude-opus-5-5",
+    "scale": 1,
+    "notes": null,
+    "pages": 7,
+    "detectAllF1": 0.9339735894357742,
+    "detectAllRecall": 0.9035714285714286,
+    "detectOverlayRecall": 1,
+    "meanIoU": 0.7625917724148066,
+    "centerInside": 1,
+    "orderPairwise": 0.979591836734694,
+    "orderExactPages": 4,
+    "ja": 0.9795043731778427,
+    "reading": 0.9831132452981193,
+    "zhChrF": 76.23499389429448,
+    "wallMsMean": 4479.857142857143,
+    "turnMsMean": 3901.285714285714,
+    "inputTokensMean": 835.7142857142857,
+    "outputTokensMean": 288.2857142857143,
+    "costUsdMean": 0.009108571428571428
+  },
+  "pages": [
+    {
+      "id": "p01-basic",
+      "detectAll": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.8399840186340874,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.8399840186340874,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 1,
+        "exact": true
+      },
+      "ja": 0.9761904761904762,
+      "reading": 1,
+      "zhChrF": 78.74548731398211,
+      "orientation": 0.7142857142857143,
+      "missed": [],
+      "extra": [],
+      "latency": {
+        "localMs": 587,
+        "turnMs": 3266,
+        "wallMs": 3853
+      },
+      "tokens": {
+        "input": 823,
+        "output": 262
+      },
+      "costUsd": 0.008532,
+      "perText": [
+        {
+          "gtId": "t5",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.871,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": false,
+          "predJa": "あ、お店がもう開いてる",
+          "gtJa": "あ、お店がもう開いてる",
+          "predZh": "啊，店已經開了",
+          "gtZh": "啊，店已經開了"
+        },
+        {
+          "gtId": "t2",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.87,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": false,
+          "predJa": "うん、パンを買いに行くんだ",
+          "gtJa": "うん、パンを買いに行くんだ",
+          "predZh": "嗯，我要去買麵包",
+          "gtZh": "嗯，我要去買麵包"
+        },
+        {
+          "gtId": "t1",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.866,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 81.80644231621886,
+          "orientationOk": true,
+          "predJa": "おはよう!今日は早いね",
+          "gtJa": "おはよう！今日は早いね",
+          "predZh": "早安！你今天好早喔",
+          "gtZh": "早安！今天好早喔"
+        },
+        {
+          "gtId": "t3",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.864,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 79.61605051430898,
+          "orientationOk": true,
+          "predJa": "一緒に行ってもいい?",
+          "gtJa": "一緒に行ってもいい？",
+          "predZh": "我可以跟你一起去嗎？",
+          "gtZh": "我可以一起去嗎？"
+        },
+        {
+          "gtId": "t7",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.835,
+          "ja": 0.8333333333333334,
+          "reading": 1,
+          "zhChrF": 46.42857142857142,
+          "orientationOk": true,
+          "predJa": "「いいにおい!",
+          "gtJa": "いいにおい！",
+          "predZh": "好香喔！",
+          "gtZh": "好香！"
+        },
+        {
+          "gtId": "t4",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.812,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 43.367346938775505,
+          "orientationOk": true,
+          "predJa": "もちろん!",
+          "gtJa": "もちろん！",
+          "predZh": "當然好啊！",
+          "gtZh": "當然！"
+        },
+        {
+          "gtId": "t6",
+          "kind": "narration",
+          "predKind": "balloon",
+          "iou": 0.762,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "朝七時",
+          "gtJa": "朝七時",
+          "predZh": "早上七點",
+          "gtZh": "早上七點"
+        }
+      ]
+    },
+    {
+      "id": "p02-ruby",
+      "detectAll": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.862743197396432,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.862743197396432,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 1,
+        "exact": true
+      },
+      "ja": 1,
+      "reading": 0.9103641456582634,
+      "zhChrF": 83.75298405412477,
+      "orientation": 0.8571428571428571,
+      "missed": [],
+      "extra": [],
+      "latency": {
+        "localMs": 533,
+        "turnMs": 4608,
+        "wallMs": 5141
+      },
+      "tokens": {
+        "input": 835,
+        "output": 313
+      },
+      "costUsd": 0.0096,
+      "perText": [
+        {
+          "gtId": "t6",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.92,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 77.64554233201098,
+          "orientationOk": true,
+          "predJa": "黄昏時の約束、忘れるなよ",
+          "gtJa": "黄昏時の約束、忘れるなよ",
+          "predZh": "黃昏時的約定，可別忘了啊",
+          "gtZh": "黃昏時的約定，別忘了喔"
+        },
+        {
+          "gtId": "t2",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.919,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "転校生の霧島湊ですよろしく",
+          "gtJa": "転校生の霧島湊ですよろしく",
+          "predZh": "我是轉學生霧島湊，請多指教",
+          "gtZh": "我是轉學生霧島湊，請多指教"
+        },
+        {
+          "gtId": "t5",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.907,
+          "ja": 1,
+          "reading": 0.7058823529411764,
+          "zhChrF": 85.83540281896295,
+          "orientationOk": false,
+          "predJa": "今日から君が僕の相棒だ",
+          "gtJa": "今日から君が僕の相棒だ",
+          "predZh": "從今天起，你就是我的搭檔了",
+          "gtZh": "從今天起你就是我的搭檔"
+        },
+        {
+          "gtId": "t3",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.892,
+          "ja": 1,
+          "reading": 0.6666666666666667,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "本気で言ってるのか!?",
+          "gtJa": "本気で言ってるのか!?",
+          "predZh": "你是認真的嗎!?",
+          "gtZh": "你是認真的嗎!?"
+        },
+        {
+          "gtId": "t7",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.868,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 36.11111111111111,
+          "orientationOk": true,
+          "predJa": "ああ。必ず",
+          "gtJa": "ああ。必ず",
+          "predZh": "嗯。一定",
+          "gtZh": "嗯，一定"
+        },
+        {
+          "gtId": "t4",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.839,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 86.67883211678833,
+          "orientationOk": true,
+          "predJa": "嘘...",
+          "gtJa": "嘘…",
+          "predZh": "騙人……",
+          "gtZh": "騙人…"
+        },
+        {
+          "gtId": "t1",
+          "kind": "narration",
+          "predKind": "outside",
+          "iou": 0.694,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "潮見坂高校4月12日",
+          "gtJa": "潮見坂高校4月12日",
+          "predZh": "潮見坂高中 4月12日",
+          "gtZh": "潮見坂高中　4月12日"
+        }
+      ]
+    },
+    {
+      "id": "p03-shapes",
+      "detectAll": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.8517749989903193,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.8517749989903193,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 0.8571428571428571,
+        "exact": false
+      },
+      "ja": 0.9693877551020408,
+      "reading": 1,
+      "zhChrF": 82.1088183053092,
+      "orientation": 0.8571428571428571,
+      "missed": [],
+      "extra": [],
+      "latency": {
+        "localMs": 739,
+        "turnMs": 3066,
+        "wallMs": 3805
+      },
+      "tokens": {
+        "input": 816,
+        "output": 260
+      },
+      "costUsd": 0.008464,
+      "perText": [
+        {
+          "gtId": "t3",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.935,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 92.97360248447205,
+          "orientationOk": true,
+          "predJa": "ねえ...聞こえる?",
+          "gtJa": "ねえ…聞こえる？",
+          "predZh": "喂……聽得到嗎？",
+          "gtZh": "喂…聽得到嗎？"
+        },
+        {
+          "gtId": "t6",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.886,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "待って!",
+          "gtJa": "待って！",
+          "predZh": "等一下！",
+          "gtZh": "等一下！"
+        },
+        {
+          "gtId": "t7",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.877,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 76.71957671957672,
+          "orientationOk": true,
+          "predJa": "どこ行くの?",
+          "gtJa": "どこ行くの？",
+          "predZh": "你要去哪裡？",
+          "gtZh": "你要去哪？"
+        },
+        {
+          "gtId": "t1",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.868,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 63.44201784066443,
+          "orientationOk": true,
+          "predJa": "うるさーい!!",
+          "gtJa": "うるさーい!!",
+          "predZh": "吵死了——!!",
+          "gtZh": "吵死了!!"
+        },
+        {
+          "gtId": "t5",
+          "kind": "narration",
+          "predKind": "balloon",
+          "iou": 0.866,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 61.76767676767677,
+          "orientationOk": false,
+          "predJa": "その夜、町から音が消えた",
+          "gtJa": "その夜、町から音が消えた",
+          "predZh": "那一晚，聲音從鎮上消失了",
+          "gtZh": "那一晚，鎮上的聲音消失了"
+        },
+        {
+          "gtId": "t4",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.835,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 97.18952324896998,
+          "orientationOk": true,
+          "predJa": "......誰だ",
+          "gtJa": "……誰だ",
+          "predZh": "……是誰？",
+          "gtZh": "……是誰"
+        },
+        {
+          "gtId": "t2",
+          "kind": "thought",
+          "predKind": "balloon",
+          "iou": 0.697,
+          "ja": 0.7857142857142857,
+          "reading": 1,
+          "zhChrF": 82.66933107580441,
+          "orientationOk": true,
+          "predJa": "明日のテストどうしよう・・・",
+          "gtJa": "明日のテストどうしよう…",
+          "predZh": "明天的考試該怎麼辦……",
+          "gtZh": "明天的考試怎麼辦…"
+        }
+      ]
+    },
+    {
+      "id": "p04-outside",
+      "detectAll": {
+        "gt": 10,
+        "hit": 7,
+        "precision": 1,
+        "recall": 0.7,
+        "f1": 0.8235294117647058,
+        "meanIoU": 0.6623723887222935,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 4,
+        "hit": 4,
+        "precision": 0.8,
+        "recall": 1,
+        "f1": 0.888888888888889,
+        "meanIoU": 0.8354476613473988,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 1,
+        "exact": false
+      },
+      "ja": 0.9642857142857143,
+      "reading": 1,
+      "zhChrF": 67.9733704920419,
+      "orientation": 1,
+      "missed": [
+        "t2(sfx) ドドドド",
+        "t3(sfx) ガシャン",
+        "t7(sfx) チリン"
+      ],
+      "extra": [],
+      "latency": {
+        "localMs": 424,
+        "turnMs": 3835,
+        "wallMs": 4259
+      },
+      "tokens": {
+        "input": 807,
+        "output": 235
+      },
+      "costUsd": 0.007928,
+      "perText": [
+        {
+          "gtId": "t9",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.916,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 90.80547112462007,
+          "orientationOk": true,
+          "predJa": "静かだな...",
+          "gtJa": "静かだな…",
+          "predZh": "好安靜啊……",
+          "gtZh": "好安靜啊…"
+        },
+        {
+          "gtId": "t1",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.873,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 71.12030610428901,
+          "orientationOk": true,
+          "predJa": "遅刻だー!!",
+          "gtJa": "遅刻だー!!",
+          "predZh": "要遲到了──!!",
+          "gtZh": "要遲到了!!"
+        },
+        {
+          "gtId": "t5",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.854,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 89.12300683371298,
+          "orientationOk": true,
+          "predJa": "間に合った...",
+          "gtJa": "間に合った…",
+          "predZh": "趕上了……",
+          "gtZh": "趕上了…"
+        },
+        {
+          "gtId": "t8",
+          "kind": "narration",
+          "predKind": "outside",
+          "iou": 0.699,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "誰もいない店の中",
+          "gtJa": "誰もいない店の中",
+          "predZh": "空無一人的店裡",
+          "gtZh": "空無一人的店裡"
+        },
+        {
+          "gtId": "t4",
+          "kind": "outside",
+          "predKind": "outside",
+          "iou": 0.539,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 34.23586726590267,
+          "orientationOk": true,
+          "predJa": "ハァ...ハァ...",
+          "gtJa": "ハァ…ハァ…",
+          "predZh": "呼……呼……",
+          "gtZh": "（喘氣）哈…哈…"
+        },
+        {
+          "gtId": "t10",
+          "kind": "outside",
+          "predKind": "outside",
+          "iou": 0.414,
+          "ja": 0.75,
+          "reading": 1,
+          "zhChrF": 68.86227544910179,
+          "orientationOk": true,
+          "predJa": "x閉店後",
+          "gtJa": "※閉店後",
+          "predZh": "打烊後",
+          "gtZh": "※打烊後"
+        },
+        {
+          "gtId": "t6",
+          "kind": "sign",
+          "predKind": "balloon",
+          "iou": 0.342,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 21.666666666666668,
+          "orientationOk": true,
+          "predJa": "ひだまりベーカリー",
+          "gtJa": "ひだまりベーカリー",
+          "predZh": "向陽麵包店",
+          "gtZh": "向陽烘焙坊"
+        }
+      ]
+    },
+    {
+      "id": "p05-dense",
+      "detectAll": {
+        "gt": 12,
+        "hit": 12,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.8319005972582878,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 11,
+        "hit": 11,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.8562245574983234,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 1,
+        "exact": true
+      },
+      "ja": 0.9666666666666667,
+      "reading": 1,
+      "zhChrF": 78.4308732296441,
+      "orientation": 0.9166666666666666,
+      "missed": [],
+      "extra": [],
+      "latency": {
+        "localMs": 685,
+        "turnMs": 5583,
+        "wallMs": 6268
+      },
+      "tokens": {
+        "input": 973,
+        "output": 454
+      },
+      "costUsd": 0.012972,
+      "perText": [
+        {
+          "gtId": "t6",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.941,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 71.89581090896363,
+          "orientationOk": true,
+          "predJa": "嘘つけ!カップ麺だったじゃん",
+          "gtJa": "嘘つけ！カップ麺だったじゃん",
+          "predZh": "少騙了！那是泡麵吧！",
+          "gtZh": "少騙人！那是泡麵吧"
+        },
+        {
+          "gtId": "t7",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.91,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 71.12030610428901,
+          "orientationOk": true,
+          "predJa": "お湯を入れたのは俺だ",
+          "gtJa": "お湯を入れたのは俺だ",
+          "predZh": "熱水可是我倒的。",
+          "gtZh": "熱水是我倒的"
+        },
+        {
+          "gtId": "t5",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.886,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 80.30610284177081,
+          "orientationOk": true,
+          "predJa": "昨日も作ったぞ",
+          "gtJa": "昨日も作ったぞ",
+          "predZh": "我昨天也煮了耶。",
+          "gtZh": "我昨天也煮了啊"
+        },
+        {
+          "gtId": "t1",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.87,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "今夜の当番誰だっけ?",
+          "gtJa": "今夜の当番誰だっけ？",
+          "predZh": "今晚輪到誰煮飯來著？",
+          "gtZh": "今晚輪到誰煮飯來著？"
+        },
+        {
+          "gtId": "t3",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.864,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 93.39887640449439,
+          "orientationOk": true,
+          "predJa": "そうだよ兄ちゃん",
+          "gtJa": "そうだよ兄ちゃん",
+          "predZh": "對啊，哥。",
+          "gtZh": "對啊，哥"
+        },
+        {
+          "gtId": "t11",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.863,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "辛口でね!",
+          "gtJa": "辛口でね！",
+          "predZh": "要辣味的喔！",
+          "gtZh": "要辣味的喔！"
+        },
+        {
+          "gtId": "t4",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.859,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 90.6713164777681,
+          "orientationOk": false,
+          "predJa": "えー面倒くさい",
+          "gtJa": "えー面倒くさい",
+          "predZh": "欸～好麻煩喔。",
+          "gtZh": "欸～好麻煩"
+        },
+        {
+          "gtId": "t8",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.858,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 26.099238516335053,
+          "orientationOk": true,
+          "predJa": "それは料理じゃない",
+          "gtJa": "それは料理じゃない",
+          "predZh": "那才不叫煮飯。",
+          "gtZh": "那不叫做菜"
+        },
+        {
+          "gtId": "t10",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.854,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "カレーでいい?",
+          "gtJa": "カレーでいい？",
+          "predZh": "咖哩可以嗎？",
+          "gtZh": "咖哩可以嗎？"
+        },
+        {
+          "gtId": "t2",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.795,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 86.67883211678833,
+          "orientationOk": true,
+          "predJa": "...俺?",
+          "gtJa": "…俺？",
+          "predZh": "……我？",
+          "gtZh": "…我？"
+        },
+        {
+          "gtId": "t9",
+          "kind": "narration",
+          "predKind": "balloon",
+          "iou": 0.72,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 86.67883211678833,
+          "orientationOk": true,
+          "predJa": "結局...",
+          "gtJa": "結局…",
+          "predZh": "結果……",
+          "gtZh": "結果…"
+        },
+        {
+          "gtId": "t12",
+          "kind": "outside",
+          "predKind": "outside",
+          "iou": 0.564,
+          "ja": 0.6,
+          "reading": 1,
+          "zhChrF": 34.32116326853169,
+          "orientationOk": true,
+          "predJa": "〈甘口派〉",
+          "gtJa": "（甘口派）",
+          "predZh": "〈甜味派〉",
+          "gtZh": "（我是甜味派）"
+        }
+      ]
+    },
+    {
+      "id": "p06-horizontal",
+      "detectAll": {
+        "gt": 8,
+        "hit": 5,
+        "precision": 0.8333333333333334,
+        "recall": 0.625,
+        "f1": 0.7142857142857143,
+        "meanIoU": 0.5036375039839047,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 2,
+        "hit": 2,
+        "precision": 0.3333333333333333,
+        "recall": 1,
+        "f1": 0.5,
+        "meanIoU": 0.8483458030006168,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 1,
+        "exact": false
+      },
+      "ja": 0.9800000000000001,
+      "reading": 1,
+      "zhChrF": 64.34453431480851,
+      "orientation": 1,
+      "missed": [
+        "t1(sign) ミオ",
+        "t3(sign) OK！",
+        "t5(sign) 18:42"
+      ],
+      "extra": [
+        "balloon OK! [434,244,162,66]"
+      ],
+      "latency": {
+        "localMs": 475,
+        "turnMs": 3688,
+        "wallMs": 4163
+      },
+      "tokens": {
+        "input": 787,
+        "output": 244
+      },
+      "costUsd": 0.008028,
+      "perText": [
+        {
+          "gtId": "t8",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.868,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 61.496277073757426,
+          "orientationOk": true,
+          "predJa": "あと10分で着く訳ない!",
+          "gtJa": "あと10分で着く訳ない！",
+          "predZh": "剩10分鐘怎麼可能趕得到啦！",
+          "gtZh": "怎麼可能10分鐘就到！"
+        },
+        {
+          "gtId": "t6",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.829,
+          "ja": 0.9,
+          "reading": 1,
+          "zhChrF": 79.19191919191918,
+          "orientationOk": true,
+          "predJa": "え、もう650!?",
+          "gtJa": "え、もう6:50!?",
+          "predZh": "咦，已經6點50了！？",
+          "gtZh": "咦，已經6:50了!?"
+        },
+        {
+          "gtId": "t4",
+          "kind": "sign",
+          "predKind": "balloon",
+          "iou": 0.305,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 39.44717372106445,
+          "orientationOk": true,
+          "predJa": "遅れたらアイス奢りね",
+          "gtJa": "遅れたらアイス奢りね",
+          "predZh": "遲到的人要請吃冰喔",
+          "gtZh": "遲到的話要請冰淇淋喔"
+        },
+        {
+          "gtId": "t7",
+          "kind": "sign",
+          "predKind": "balloon",
+          "iou": 0.272,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "BUSSTOP",
+          "gtJa": "BUS STOP",
+          "predZh": "公車站",
+          "gtZh": "公車站"
+        },
+        {
+          "gtId": "t2",
+          "kind": "sign",
+          "predKind": "balloon",
+          "iou": 0.244,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 41.58730158730159,
+          "orientationOk": true,
+          "predJa": "駅前に7時ね",
+          "gtJa": "駅前に7時ね",
+          "predZh": "七點車站前見喔",
+          "gtZh": "7點在車站前喔"
+        }
+      ]
+    },
+    {
+      "id": "p07-spread",
+      "detectAll": {
+        "gt": 7,
+        "hit": 7,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.7857297019183216,
+        "centerInside": 1
+      },
+      "detectOverlay": {
+        "gt": 6,
+        "hit": 6,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1,
+        "meanIoU": 0.7768244264866632,
+        "centerInside": 1
+      },
+      "order": {
+        "pairwise": 1,
+        "exact": true
+      },
+      "ja": 1,
+      "reading": 0.9714285714285714,
+      "zhChrF": 78.28888955015074,
+      "orientation": 1,
+      "missed": [],
+      "extra": [],
+      "latency": {
+        "localMs": 607,
+        "turnMs": 3263,
+        "wallMs": 3870
+      },
+      "tokens": {
+        "input": 809,
+        "output": 250
+      },
+      "costUsd": 0.008236,
+      "perText": [
+        {
+          "gtId": "t6",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.846,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "足元に気をつけて",
+          "gtJa": "足元に気をつけて",
+          "predZh": "小心腳下",
+          "gtZh": "小心腳下"
+        },
+        {
+          "gtId": "t3",
+          "kind": "sfx",
+          "predKind": "outside",
+          "iou": 0.839,
+          "ja": 1,
+          "reading": 0.8,
+          "zhChrF": 0,
+          "orientationOk": true,
+          "predJa": "ザアアアア",
+          "gtJa": "ザアアアア",
+          "predZh": "嘩啦啦啦",
+          "gtZh": "（風吹樹林）沙沙沙沙"
+        },
+        {
+          "gtId": "t4",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.835,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "地図だとこの先に村がある",
+          "gtJa": "地図だとこの先に村がある",
+          "predZh": "照地圖來看，前面有個村子",
+          "gtZh": "照地圖來看，前面有個村子"
+        },
+        {
+          "gtId": "t2",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.814,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 94.31205035971223,
+          "orientationOk": true,
+          "predJa": "ここが...伝説の",
+          "gtJa": "ここが…伝説の",
+          "predZh": "這裡就是……傳說中的",
+          "gtZh": "這裡就是…傳說中的"
+        },
+        {
+          "gtId": "t5",
+          "kind": "balloon",
+          "predKind": "balloon",
+          "iou": 0.802,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "行ってみよう",
+          "gtJa": "行ってみよう",
+          "predZh": "去看看吧",
+          "gtZh": "去看看吧"
+        },
+        {
+          "gtId": "t1",
+          "kind": "narration",
+          "predKind": "balloon",
+          "iou": 0.698,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 100,
+          "orientationOk": true,
+          "predJa": "千年の森",
+          "gtJa": "千年の森",
+          "predZh": "千年之森",
+          "gtZh": "千年之森"
+        },
+        {
+          "gtId": "t7",
+          "kind": "thought",
+          "predKind": "balloon",
+          "iou": 0.665,
+          "ja": 1,
+          "reading": 1,
+          "zhChrF": 53.71017649134297,
+          "orientationOk": true,
+          "predJa": "もう帰りたい...",
+          "gtJa": "もう帰りたい…",
+          "predZh": "我已經想回家了……",
+          "gtZh": "好想回家…"
+        }
+      ]
+    }
+  ]
+}
