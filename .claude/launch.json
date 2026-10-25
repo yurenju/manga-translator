@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "sidepanel-prototype", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8721"], "port": 8721 }
+  ]
+}

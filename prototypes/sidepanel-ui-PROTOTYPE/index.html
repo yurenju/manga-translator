@@ -1,0 +1,465 @@
+<!doctype html>
+<!--
+  PROTOTYPE — throwaway（#21）。
+  問題：Side panel 長什麼樣子？學習模式怎麼逐層打開 原文／讀音／譯文？
+  三個結構完全不同的變體，用 ?variant=A|B|C 切換（底部浮動列或 ← → 鍵）。
+  左邊模擬漫畫網站的分頁（含原地覆蓋），右邊 380px 模擬 Chrome Side Panel。
+  資料：Haiku 5.5 文字模式在合成頁上的實際輸出（見 build-data.mjs）。直接雙擊開啟即可。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Side panel prototype</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, "Noto Sans TC", "Microsoft JhengHei", sans-serif; background: #dfe1e5; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: #202124; }
+  .chrome-bar { height: 40px; background: #f1f3f4; border-bottom: 1px solid #ccc; display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 13px; }
+  .chrome-bar .url { flex: 1; background: #fff; border-radius: 16px; padding: 5px 14px; color: #555; }
+  .chrome-bar select, .chrome-bar button { font: inherit; }
+  .dev { color: #a50; font-size: 12px; }
+  .main { flex: 1; display: flex; min-height: 0; }
+  .site { flex: 1; background: #333; display: flex; align-items: center; justify-content: center; min-width: 0; position: relative; }
+  .page-wrap { position: relative; height: calc(100% - 24px); }
+  .page-wrap img { height: 100%; display: block; user-select: none; }
+  .ov { position: absolute; cursor: pointer; }
+  .ov.cover { background: #fff; border-radius: 40%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 4%; font-weight: 600; color: #111; }
+  .ov.cover.off { background: transparent; color: transparent; }
+  .ov.unread { outline: 2px dashed #d33; outline-offset: 2px; border-radius: 30%; }
+  .ov.loose { }
+  .ov.hl { box-shadow: 0 0 0 3px #1a73e8, 0 0 18px #1a73e8; }
+  .ov.loose.hl { outline: 2px dotted #f9ab00; box-shadow: 0 0 0 3px #f9ab00; }
+  .ov .num { position: absolute; top: -8px; right: -8px; background: #1a73e8; color: #fff; font-size: 11px; border-radius: 9px; min-width: 18px; height: 18px; display: none; align-items: center; justify-content: center; font-weight: 700; }
+  body.show-nums .ov .num { display: flex; }
+  .ov.loose .num { background: #f9ab00; }
+  .tooltip { position: absolute; z-index: 20; background: #202124; color: #fff; border-radius: 8px; padding: 10px 12px; font-size: 14px; max-width: 280px; pointer-events: none; box-shadow: 0 4px 16px #0006; }
+  .tooltip .ja { font-size: 17px; margin-bottom: 4px; }
+  .tooltip rt { color: #bbb; }
+
+  .panel { width: 380px; background: #fff; border-left: 1px solid #ccc; display: flex; flex-direction: column; min-height: 0; }
+  .panel-head-chrome { height: 34px; display: flex; align-items: center; padding: 0 12px; font-size: 13px; color: #555; border-bottom: 1px solid #eee; gap: 6px; }
+  .panel-body { flex: 1; overflow-y: auto; min-height: 0; position: relative; }
+
+  ruby rt { font-size: 0.55em; }
+  .guess { color: #8a6d00; }
+  .badge { display: inline-block; font-size: 11px; border-radius: 4px; padding: 0 5px; line-height: 17px; vertical-align: middle; }
+  .badge.guess { background: #fef7e0; border: 1px solid #f9d36b; color: #8a6d00; }
+  .badge.loose { background: #fff3e0; color: #b06000; }
+  .badge.unread { background: #fce8e6; color: #c5221f; }
+  .btn { font: inherit; font-size: 13px; border: 1px solid #dadce0; background: #fff; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  .btn.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .muted { color: #80868b; font-size: 12px; }
+  .crop { background-repeat: no-repeat; border-radius: 4px; border: 1px solid #eee; flex-shrink: 0; }
+
+  /* switcher */
+  .switcher { position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; border-radius: 999px; padding: 6px 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; z-index: 100; box-shadow: 0 4px 14px #0008; border: 2px solid #ff0; }
+  .switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 28px; height: 28px; cursor: pointer; font-size: 15px; }
+
+  /* ---------- A：卡片清單 ---------- */
+  .A-head { padding: 10px 12px; border-bottom: 1px solid #eee; display: flex; flex-direction: column; gap: 8px; }
+  .A-row { display: flex; gap: 8px; align-items: center; }
+  .A-row select { flex: 1; font: inherit; padding: 4px; }
+  .A-card { margin: 8px 10px; border: 1px solid #e3e3e3; border-radius: 10px; padding: 10px; display: flex; gap: 10px; cursor: pointer; transition: box-shadow .15s; }
+  .A-card.hl { box-shadow: 0 0 0 2px #1a73e8; }
+  .A-card .n { font-weight: 700; color: #1a73e8; width: 18px; flex-shrink: 0; }
+  .A-card .zh { font-size: 16px; }
+  .A-layer { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e3e3e3; }
+  .A-layer .ja { font-size: 17px; }
+  .A-layer .rd { font-size: 14px; }
+  .A-tog { display: flex; gap: 4px; margin-top: 6px; }
+  .A-tog .btn { padding: 2px 8px; font-size: 12px; }
+  .A-tog .btn.on { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
+  .A-sec { margin: 14px 12px 4px; font-size: 12px; font-weight: 700; color: #5f6368; display: flex; justify-content: space-between; cursor: pointer; }
+  .A-card.unread { background: #fafafa; }
+
+  /* ---------- B：逐字稿＋全域層級 ---------- */
+  .B-levels { display: flex; padding: 8px 10px; gap: 0; border-bottom: 1px solid #eee; position: sticky; top: 0; background: #fff; z-index: 2; }
+  .B-levels button { flex: 1; font: inherit; font-size: 12px; padding: 6px 2px; border: 1px solid #dadce0; background: #fff; cursor: pointer; }
+  .B-levels button:first-child { border-radius: 6px 0 0 6px; }
+  .B-levels button:last-child { border-radius: 0 6px 6px 0; }
+  .B-levels button.on { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  .B-legend { font-size: 11px; color: #8a6d00; padding: 4px 12px 0; }
+  .B-line { padding: 8px 14px; display: grid; grid-template-columns: 22px 1fr; gap: 0 6px; border-left: 3px solid transparent; }
+  .B-line.hl { background: #e8f0fe; border-left-color: #1a73e8; }
+  .B-line .n { color: #9aa0a6; font-size: 12px; padding-top: 4px; }
+  .B-line .ja { font-size: 18px; line-height: 2; }
+  .B-line .ja rt { color: #a07c00; }
+  .B-line .zh { font-size: 15px; }
+  .B-line.loose .ja, .B-line.loose .zh { font-style: italic; color: #b06000; }
+  .B-line.unread .ja { color: #999; text-decoration: line-through dotted; }
+  .B-panelgap { height: 1px; background: #eee; margin: 4px 14px; }
+  .B-foot { border-top: 1px solid #ddd; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: #f8f9fa; }
+  .B-foot .row { display: flex; gap: 6px; align-items: center; font-size: 13px; }
+  .B-foot select { flex: 1; font: inherit; }
+
+  /* ---------- C：一次一個 Balloon（閃卡） ---------- */
+  .C-tools { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid #eee; }
+  .C-chip { background: #f1f3f4; border-radius: 14px; padding: 4px 10px; font-size: 12px; cursor: pointer; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .C-icon { width: 30px; height: 30px; border-radius: 15px; border: 0; background: #f1f3f4; cursor: pointer; font-size: 15px; }
+  .C-sheet { margin: 0 10px 8px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+  .C-tabs { display: flex; padding: 0 10px; gap: 14px; border-bottom: 1px solid #eee; font-size: 13px; }
+  .C-tabs div { padding: 8px 0; cursor: pointer; color: #5f6368; }
+  .C-tabs div.on { color: #1a73e8; border-bottom: 2px solid #1a73e8; font-weight: 600; }
+  .C-strip { display: flex; gap: 4px; padding: 8px 10px; flex-wrap: wrap; }
+  .C-strip span { width: 26px; height: 26px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 12px; background: #f1f3f4; cursor: pointer; }
+  .C-strip span.on { background: #1a73e8; color: #fff; }
+  .C-strip span.seen { background: #d2e3fc; }
+  .C-strip span.unread { background: #fce8e6; color: #c5221f; }
+  .C-card { margin: 4px 14px; border-radius: 14px; border: 1px solid #e0e0e0; padding: 16px; box-shadow: 0 2px 8px #0001; }
+  .C-crop { display: flex; justify-content: center; margin-bottom: 12px; }
+  .C-ja { font-size: 26px; text-align: center; line-height: 2.1; }
+  .C-ja rt { color: #a07c00; font-size: .5em; }
+  .C-layer { margin-top: 12px; border-radius: 8px; padding: 10px; background: #f8f9fa; min-height: 46px; display: flex; align-items: center; justify-content: center; text-align: center; cursor: pointer; }
+  .C-layer.hidden { background: repeating-linear-gradient(45deg, #f1f3f4, #f1f3f4 8px, #e8eaed 8px, #e8eaed 16px); color: #5f6368; font-size: 13px; }
+  .C-layer .zh { font-size: 19px; }
+  .C-layer .rd { font-size: 16px; }
+  .C-nav { display: flex; justify-content: space-between; align-items: center; margin: 12px 14px; }
+</style>
+</head>
+<body>
+<div class="chrome-bar">
+  <span>◀ ▶ ⟳</span>
+  <span class="url" id="url"></span>
+  <label>Page <select id="pageSel"></select></label>
+  <span class="dev">模擬：<select id="simSel">
+    <option value="">（照實際狀態）</option>
+    <option value="notes">Series Notes 剛更新</option>
+    <option value="none">未選 Series</option>
+  </select></span>
+</div>
+<div class="main">
+  <div class="site" id="site"><div class="page-wrap" id="pageWrap"><img id="pageImg"></div></div>
+  <div class="panel">
+    <div class="panel-head-chrome">🈂️ 漫畫翻譯 <span style="flex:1"></span>✕</div>
+    <div id="panel" style="flex:1; display:flex; flex-direction:column; min-height:0"></div>
+  </div>
+</div>
+<div class="switcher" id="switcher"></div>
+
+<script src="data.js"></script>
+<script>
+// ---------- 共用狀態 ----------
+const VARIANTS = { A: '卡片清單', B: '逐字稿＋全域層級', C: '一次一個 Balloon' };
+const params = new URLSearchParams(location.search);
+let variant = VARIANTS[params.get('variant')] ? params.get('variant') : 'A';
+let pageIdx = Math.max(0, PAGES.findIndex((p) => p.id === params.get('page')));
+const SERIES = ['潮見坂の約束（合成）', 'ひだまりベーカリー（合成）'];
+const state = {
+  series: SERIES[0],
+  // 每頁翻譯狀態：p01 先當成「未翻譯」，其他是「已快取」
+  tr: Object.fromEntries(PAGES.map((p, i) => [p.id, i === 0 ? 'none' : 'cached'])),
+  notesUpdated: false,
+  overlay: true,
+  hover: null, // 目前 hover 的 text id
+};
+const page = () => PAGES[pageIdx];
+const trState = () => {
+  const sim = document.getElementById('simSel').value;
+  if (sim === 'none') return 'noseries';
+  return state.tr[page().id];
+};
+
+// ---------- 讀音 → 振り仮名 對齊（從整句假名推回每個漢字段的 rt；對不上就退回整句） ----------
+const isKanji = (c) => /[一-鿿々〆ヶ]/.test(c);
+const kata2hira = (s) => s.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+function alignRuby(ja, reading) {
+  if (!reading) return null;
+  const segs = [];
+  for (const c of ja) {
+    const k = isKanji(c);
+    if (segs.length && segs[segs.length - 1].k === k) segs[segs.length - 1].t += c;
+    else segs.push({ k, t: c });
+  }
+  if (!segs.some((s) => s.k)) return segs.map((s) => ({ t: s.t }));
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const norm = (s) => kata2hira(s).replace(/[\s　]/g, '');
+  const re = new RegExp('^' + segs.map((s) => (s.k ? '(.+?)' : esc(norm(s.t)))).join('') + '$');
+  const m = norm(reading).match(re);
+  if (!m) return null;
+  let g = 1;
+  return segs.map((s) => (s.k ? { t: s.t, rt: m[g++] } : { t: s.t }));
+}
+function rubyHTML(t, showRt = true) {
+  const a = alignRuby(t.ja, t.reading);
+  if (!a) return esc(t.ja) + (showRt && t.reading ? `<div class="guess" style="font-size:.6em">${esc(t.reading)}</div>` : '');
+  return a.map((s) => (s.rt && showRt ? `<ruby>${esc(s.t)}<rt>${esc(s.rt)}</rt></ruby>` : esc(s.t))).join('');
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+const GUESS_TIP = '讀音由 LLM 從文字推測，不是頁面上印的ルビ；義訓（例：本気→マジ、相棒→パートナー）可能讀錯';
+
+// 從 Page 圖片裁一塊當縮圖
+function cropHTML(t, maxW, maxH) {
+  const p = page();
+  const [x, y, w, h] = t.bbox;
+  const s = Math.min(maxW / w, maxH / h, 1.6);
+  return `<div class="crop" style="width:${w * s}px;height:${h * s}px;background-image:url(${p.image});background-size:${p.width * s}px ${p.height * s}px;background-position:${-x * s}px ${-y * s}px"></div>`;
+}
+
+// ---------- 左邊：漫畫頁＋原地覆蓋 ----------
+function renderPage() {
+  const p = page();
+  document.getElementById('url').textContent = `https://manga.example.jp/episode/1234#${p.id}`;
+  const wrap = document.getElementById('pageWrap');
+  wrap.querySelectorAll('.ov, .tooltip').forEach((e) => e.remove());
+  const img = document.getElementById('pageImg');
+  img.src = p.image;
+  const showTexts = ['cached', 'notes'].includes(state.tr[p.id]);
+  if (!showTexts) return;
+  for (const t of p.texts) {
+    const [x, y, w, h] = t.bbox;
+    const d = document.createElement('div');
+    d.className = 'ov ' + (t.isBalloon ? (t.unreadable ? 'unread' : 'cover' + (state.overlay ? '' : ' off')) : 'loose');
+    Object.assign(d.style, { left: (x / p.width) * 100 + '%', top: (y / p.height) * 100 + '%', width: (w / p.width) * 100 + '%', height: (h / p.height) * 100 + '%' });
+    d.dataset.id = t.id;
+    if (t.isBalloon && !t.unreadable) {
+      const imgH = img.clientHeight || 800, scale = imgH / p.height;
+      const fs = Math.max(9, Math.min(22, Math.sqrt((w * h * 0.55) / Math.max(4, t.zh.length)) * scale));
+      d.style.fontSize = fs + 'px';
+      d.textContent = t.zh;
+    }
+    d.insertAdjacentHTML('beforeend', `<span class="num">${t.order}</span>`);
+    d.onmouseenter = () => setHover(t.id, 'page');
+    d.onmouseleave = () => setHover(null, 'page');
+    d.onclick = () => V[variant].onPageClick?.(t);
+    wrap.appendChild(d);
+  }
+}
+function setHover(id, from) {
+  state.hover = id;
+  document.querySelectorAll('.ov').forEach((e) => e.classList.toggle('hl', e.dataset.id === id));
+  V[variant].onHover?.(id, from);
+}
+
+// ---------- 共用：翻譯入口狀態 ----------
+function translate() {
+  const id = page().id;
+  state.tr[id] = 'translating';
+  document.getElementById('simSel').value = '';
+  render();
+  setTimeout(() => { state.tr[id] = 'cached'; render(); }, 1800);
+}
+function statusText() {
+  const s = trState();
+  if (s === 'noseries') return '尚未選擇 Series：可以直接翻譯，但不會套用 Series Notes';
+  if (s === 'none') return '這一頁還沒翻譯';
+  if (s === 'translating') return '翻譯中…（本機 OCR → LLM，約 3 秒）';
+  if (s === 'notes') return 'Series Notes 已更新，這頁是用舊筆記翻的';
+  return '已翻譯 · 快取 · Haiku 5.5 · 2.3 s · $0.0003';
+}
+function translateBtn(cls = 'btn primary') {
+  const s = trState();
+  const label = s === 'none' || s === 'noseries' && state.tr[page().id] !== 'cached' ? '翻譯此頁' : s === 'translating' ? '翻譯中…' : '重新翻譯';
+  return `<button class="${cls}" onclick="translate()" ${s === 'translating' ? 'disabled' : ''}>${label}</button>`;
+}
+function seriesSelect() {
+  const none = trState() === 'noseries';
+  return `<select onchange="state.series=this.value; document.getElementById('simSel').value=''; render()">
+    <option ${none ? 'selected' : ''} value="">（未選 Series）</option>
+    ${SERIES.map((s) => `<option ${!none && state.series === s ? 'selected' : ''}>${s}</option>`).join('')}
+    <option>＋ 新增 Series…</option></select>`;
+}
+const emptyBody = () => {
+  const s = state.tr[page().id];
+  return s === 'translating' ? `<div style="padding:40px;text-align:center" class="muted">⏳ 翻譯中…</div>`
+    : s === 'none' || trState() === 'noseries' && s !== 'cached' ? `<div style="padding:40px;text-align:center" class="muted">這一頁還沒翻譯。<br><br>${translateBtn()}</div>` : null;
+};
+const balloons = () => page().texts.filter((t) => t.isBalloon);
+const loose = () => page().texts.filter((t) => !t.isBalloon);
+
+// =====================================================================
+// 變體 A：卡片清單（每張卡片自己逐層打開；頁面 hover ↔ 卡片同步捲動）
+// =====================================================================
+const A = {
+  open: {}, // id -> 0 譯文, 1 +原文, 2 +讀音
+  looseOpen: true,
+  render(el) {
+    el.innerHTML = `
+      <div class="A-head">
+        <div class="A-row">📚 ${seriesSelect()}</div>
+        <div class="muted">網址模式：manga.example.jp/episode/* → 已記住</div>
+        <div class="A-row"><span class="muted" style="flex:1">${statusText()}</span>${translateBtn()}</div>
+        <div class="A-row" style="font-size:12px">
+          <label><input type="checkbox" ${state.overlay ? 'checked' : ''} onchange="state.overlay=this.checked;render()"> 頁面上覆蓋中文</label>
+          <span style="flex:1"></span>
+          全部展開到：<button class="btn" style="padding:1px 6px" onclick="A.all(0)">譯</button><button class="btn" style="padding:1px 6px" onclick="A.all(1)">原</button><button class="btn" style="padding:1px 6px" onclick="A.all(2)">讀</button>
+        </div>
+      </div>
+      <div class="panel-body" id="A-body"></div>`;
+    const body = el.querySelector('#A-body');
+    const e = emptyBody();
+    if (e) { body.innerHTML = e; return; }
+    body.innerHTML = balloons().map((t) => A.card(t)).join('') +
+      `<div class="A-sec" onclick="A.looseOpen=!A.looseOpen;render()"><span>框外文字（Loose Text）· ${loose().length} · 不覆蓋</span><span>${A.looseOpen ? '▾' : '▸'}</span></div>` +
+      (A.looseOpen ? loose().map((t) => A.card(t)).join('') || '<div class="muted" style="padding:0 14px">（這頁沒有偵測到）</div>' : '') +
+      `<div style="height:70px"></div>`;
+  },
+  all(lv) { page().texts.forEach((t) => (A.open[t.id] = lv)); render(); },
+  card(t) {
+    const lv = A.open[t.id] ?? 0;
+    if (t.unreadable) {
+      return `<div class="A-card unread" data-id="${t.id}" onmouseenter="setHover('${t.id}','panel')" onmouseleave="setHover(null,'panel')">
+        <span class="n">${t.order}</span>${cropHTML(t, 70, 90)}
+        <div><span class="badge unread">無法辨識</span><div class="muted" style="margin-top:4px">LLM 判斷 OCR 文字不成句，所以這個 Balloon 沒有覆蓋。OCR 讀到：</div><div style="color:#999">${esc(t.ja)}</div></div></div>`;
+    }
+    return `<div class="A-card" data-id="${t.id}" onmouseenter="setHover('${t.id}','panel')" onmouseleave="setHover(null,'panel')">
+      <span class="n">${t.order}</span>
+      ${cropHTML(t, 60, 80)}
+      <div style="flex:1;min-width:0">
+        ${!t.isBalloon ? '<span class="badge loose">框外文字</span> ' : ''}<span class="zh">${esc(t.zh)}</span>
+        ${lv >= 1 ? `<div class="A-layer"><div class="ja">${esc(t.ja)}</div></div>` : ''}
+        ${lv >= 2 ? `<div class="A-layer"><div class="ja">${rubyHTML(t)}</div><div class="rd guess">${esc(t.reading)} <span class="badge guess" title="${GUESS_TIP}">推測</span></div></div>` : ''}
+        <div class="A-tog">
+          <button class="btn ${lv >= 1 ? 'on' : ''}" onclick="event.stopPropagation();A.open['${t.id}']=${lv >= 1 ? 0 : 1};render()">原文</button>
+          <button class="btn ${lv >= 2 ? 'on' : ''}" onclick="event.stopPropagation();A.open['${t.id}']=${lv >= 2 ? 1 : 2};render()">讀音</button>
+        </div>
+      </div></div>`;
+  },
+  onHover(id, from) {
+    document.querySelectorAll('.A-card').forEach((c) => c.classList.toggle('hl', c.dataset.id === id));
+    if (id && from === 'page') document.querySelector(`.A-card[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  },
+  onPageClick(t) { A.open[t.id] = ((A.open[t.id] ?? 0) + 1) % 3; render(); setHover(t.id, 'page'); },
+};
+
+// =====================================================================
+// 變體 B：逐字稿（像劇本，一行一句含框外文字）＋上方「全域層級」切換；頁面 hover 出 tooltip
+// =====================================================================
+const B = {
+  level: 2, // 0 只譯文 1 原文+譯文 2 原文+振り仮名+譯文 3 只日文(練習)
+  render(el) {
+    const L = ['只看譯文', '原文＋譯文', '加振り仮名', '只看日文'];
+    el.innerHTML = `
+      <div class="panel-body" id="B-body">
+        <div class="B-levels">${L.map((l, i) => `<button class="${B.level === i ? 'on' : ''}" onclick="B.level=${i};render()">${l}</button>`).join('')}</div>
+        ${B.level === 2 ? `<div class="B-legend">ルビ為 LLM 推測，<b>義訓可能讀錯</b>（例：本気 マジ）。滑過頁面上的 Balloon 看提示。</div>` : ''}
+        <div id="B-lines"></div>
+      </div>
+      <div class="B-foot">
+        <div class="row">📚 ${seriesSelect()}</div>
+        <div class="row"><span class="muted" style="flex:1">${statusText()}</span>${translateBtn()}</div>
+        <div class="row" style="font-size:12px"><label><input type="checkbox" ${state.overlay ? 'checked' : ''} onchange="state.overlay=this.checked;render()"> 覆蓋中文</label><span style="flex:1"></span><span class="muted">顯示 Balloon 編號</span><input type="checkbox" ${document.body.classList.contains('show-nums') ? 'checked' : ''} onchange="document.body.classList.toggle('show-nums',this.checked)"></div>
+      </div>`;
+    const lines = el.querySelector('#B-lines');
+    const e = emptyBody();
+    if (e) { lines.innerHTML = e; return; }
+    let lastPanel = null;
+    lines.innerHTML = page().texts.map((t) => {
+      const ja = B.level === 0 ? '' : `<div class="ja">${B.level >= 2 && !t.unreadable ? rubyHTML(t) : esc(t.ja)}</div>`;
+      const zh = B.level === 3 ? '' : `<div class="zh">${t.unreadable ? '<span class="badge unread">無法辨識 · 未覆蓋</span>' : esc(t.zh)}</div>`;
+      return `<div class="B-line ${t.isBalloon ? '' : 'loose'} ${t.unreadable ? 'unread' : ''}" data-id="${t.id}" onmouseenter="setHover('${t.id}','panel')" onmouseleave="setHover(null,'panel')" onclick="B.reveal=this.dataset.id">
+        <span class="n">${t.order}${t.isBalloon ? '' : '<br>🔊'}</span><div>${ja}${zh}</div></div>`;
+    }).join('') + '<div style="height:20px"></div>';
+  },
+  onHover(id, from) {
+    document.querySelectorAll('.B-line').forEach((c) => c.classList.toggle('hl', c.dataset.id === id));
+    document.querySelectorAll('.tooltip').forEach((e) => e.remove());
+    if (!id) return;
+    if (from === 'page') {
+      document.querySelector(`.B-line[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      const t = page().texts.find((x) => x.id === id), ov = document.querySelector(`.ov[data-id="${id}"]`);
+      const tip = document.createElement('div');
+      tip.className = 'tooltip';
+      tip.innerHTML = t.unreadable ? `<div>無法辨識</div><div style="color:#aaa">${esc(t.ja)}</div>`
+        : `<div class="ja">${rubyHTML(t)}</div><div>${esc(t.zh)}</div><div style="color:#f9d36b;font-size:11px;margin-top:4px">讀音為推測</div>`;
+      const wrap = document.getElementById('pageWrap');
+      tip.style.left = Math.min(ov.offsetLeft + ov.offsetWidth + 8, wrap.clientWidth - 200) + 'px';
+      tip.style.top = ov.offsetTop + 'px';
+      wrap.appendChild(tip);
+    }
+  },
+};
+
+// =====================================================================
+// 變體 C：一次一個 Balloon（閃卡學習：先看日文自己猜，再一層層翻開讀音、譯文）
+// =====================================================================
+const C = {
+  idx: 0, tab: 'balloon', sheet: false, revealed: {}, seen: {},
+  list() { return C.tab === 'balloon' ? balloons() : loose(); },
+  render(el) {
+    const list = C.list();
+    C.idx = Math.min(C.idx, Math.max(0, list.length - 1));
+    const t = list[C.idx];
+    el.innerHTML = `
+      <div class="C-tools">
+        <span class="C-chip" onclick="C.sheet=!C.sheet;render()">📚 ${trState() === 'noseries' ? '未選 Series' : state.series} ▾</span>
+        <button class="C-icon" title="${statusText()}" onclick="translate()">${trState() === 'translating' ? '⏳' : '⟳'}</button>
+        <button class="C-icon" title="頁面上覆蓋中文" onclick="state.overlay=!state.overlay;render()" style="${state.overlay ? 'background:#e8f0fe' : ''}">🀄</button>
+      </div>
+      ${C.sheet ? `<div class="C-sheet"><div>Series：${seriesSelect()}</div><div class="muted">網址模式：manga.example.jp/episode/*</div><div class="muted">${statusText()}</div><div>${translateBtn()} <button class="btn">編輯 Series Notes</button></div></div>` : ''}
+      ${trState() === 'notes' ? `<div class="C-sheet" style="background:#fef7e0;border-color:#f9d36b">Series Notes 已更新 · ${translateBtn('btn')}</div>` : ''}
+      <div class="C-tabs">
+        <div class="${C.tab === 'balloon' ? 'on' : ''}" onclick="C.tab='balloon';C.idx=0;render()">對話 ${balloons().length}</div>
+        <div class="${C.tab === 'loose' ? 'on' : ''}" onclick="C.tab='loose';C.idx=0;render()">框外文字 ${loose().length}</div>
+        <span style="flex:1"></span>
+        <div onclick="C.revealAll=!C.revealAll;render()">${C.revealAll ? '☑' : '☐'} 全部直接顯示</div>
+      </div>
+      <div class="panel-body" id="C-body"></div>`;
+    const body = el.querySelector('#C-body');
+    const e = emptyBody();
+    if (e) { body.innerHTML = e; return; }
+    if (!t) { body.innerHTML = '<div class="muted" style="padding:30px;text-align:center">這頁沒有偵測到框外文字</div>'; return; }
+    C.seen[t.id] = true;
+    const r = C.revealAll ? 2 : (C.revealed[t.id] ?? 0);
+    body.innerHTML = `
+      <div class="C-strip">${list.map((x, i) => `<span class="${i === C.idx ? 'on' : x.unreadable ? 'unread' : C.seen[x.id] ? 'seen' : ''}" onclick="C.go(${i})">${x.order}</span>`).join('')}</div>
+      <div class="C-card">
+        <div class="C-crop">${cropHTML(t, 300, 170)}</div>
+        ${t.unreadable ? `<div style="text-align:center"><span class="badge unread">無法辨識</span><p class="muted">OCR 讀到「${esc(t.ja)}」，LLM 判斷不成句，所以頁面上沒有覆蓋。可以看上面的原圖。</p></div>` : `
+        <div class="C-ja">${rubyHTML(t, r >= 1)}</div>
+        <div class="C-layer ${r >= 1 ? '' : 'hidden'}" onclick="C.revealed['${t.id}']=Math.max(1,${r});render()">
+          ${r >= 1 ? `<div class="rd guess">${esc(t.reading)} <span class="badge guess" title="${GUESS_TIP}">推測</span></div>` : '點一下顯示讀音（空白鍵）'}</div>
+        <div class="C-layer ${r >= 2 ? '' : 'hidden'}" onclick="C.revealed['${t.id}']=2;render()">
+          ${r >= 2 ? `<div class="zh">${esc(t.zh)}</div>` : '點一下顯示譯文'}</div>`}
+      </div>
+      <div class="C-nav"><button class="btn" onclick="C.go(C.idx-1)">‹ 上一個 (K)</button><span class="muted">${C.idx + 1} / ${list.length}</span><button class="btn" onclick="C.go(C.idx+1)">下一個 (J) ›</button></div>
+      <div class="muted" style="padding:0 14px 80px">${GUESS_TIP}</div>`;
+    setTimeout(() => setHoverStatic(t.id), 0);
+  },
+  go(i) { const n = C.list().length; C.idx = (i + n) % n; render(); },
+  onPageClick(t) { C.tab = t.isBalloon ? 'balloon' : 'loose'; C.idx = C.list().indexOf(t); render(); },
+  key(e) {
+    if (e.key === 'j') C.go(C.idx + 1);
+    if (e.key === 'k') C.go(C.idx - 1);
+    if (e.key === ' ') { e.preventDefault(); const t = C.list()[C.idx]; if (t) { C.revealed[t.id] = Math.min(2, (C.revealed[t.id] ?? 0) + 1); render(); } }
+  },
+};
+function setHoverStatic(id) { document.querySelectorAll('.ov').forEach((e) => e.classList.toggle('hl', e.dataset.id === id)); }
+
+const V = { A, B, C };
+
+// ---------- 整體 render + 切換列 ----------
+function render() {
+  if (variant !== 'B') document.body.classList.add('show-nums');
+  renderPage();
+  V[variant].render(document.getElementById('panel'));
+  const keys = Object.keys(VARIANTS);
+  document.getElementById('switcher').innerHTML = `<button onclick="cycle(-1)">←</button><b>${variant}</b> ${VARIANTS[variant]} <button onclick="cycle(1)">→</button>`;
+}
+function cycle(d) {
+  const keys = Object.keys(VARIANTS);
+  variant = keys[(keys.indexOf(variant) + d + keys.length) % keys.length];
+  syncURL();
+  render();
+}
+function syncURL() {
+  const u = new URL(location.href);
+  u.searchParams.set('variant', variant);
+  u.searchParams.set('page', page().id);
+  history.replaceState(null, '', u);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft') cycle(-1);
+  else if (e.key === 'ArrowRight') cycle(1);
+  else V[variant].key?.(e);
+});
+const pageSel = document.getElementById('pageSel');
+pageSel.innerHTML = PAGES.map((p, i) => `<option value="${i}" ${i === pageIdx ? 'selected' : ''}>${p.id}</option>`).join('');
+pageSel.onchange = () => { pageIdx = +pageSel.value; C.idx = 0; syncURL(); render(); };
+document.getElementById('simSel').onchange = (e) => { state.tr[page().id] = e.target.value === 'notes' ? 'notes' : state.tr[page().id] === 'notes' ? 'cached' : state.tr[page().id]; render(); };
+document.getElementById('pageImg').onload = () => renderPage();
+window.onresize = () => renderPage();
+render();
+</script>
+</body>
+</html>
