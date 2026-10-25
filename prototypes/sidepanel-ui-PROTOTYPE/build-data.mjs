@@ -26,6 +26,7 @@ const pages = PAGES.map((id) => {
       isBalloon: t.src === 'bubble',
       kind: t.kind,
       bbox: t.bbox,
+      textBbox: t.textBbox,
       orientation: t.orientation,
       ja: t.ja,
       reading: unreadable ? null : t.reading,

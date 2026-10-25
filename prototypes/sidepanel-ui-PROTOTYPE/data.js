@@ -18,6 +18,12 @@ window.PAGES = [
      132,
      210
     ],
+    "textBbox": [
+     719,
+     79,
+     84,
+     163
+    ],
     "orientation": "vertical",
     "ja": "おはよう!今日は早いね",
     "reading": "おはよう!きょうははやいね",
@@ -34,6 +40,12 @@ window.PAGES = [
      59,
      174,
      222
+    ],
+    "textBbox": [
+     66,
+     111,
+     128,
+     124
     ],
     "orientation": "horizontal",
     "ja": "うん、パンを買いに行くんだ",
@@ -52,6 +64,12 @@ window.PAGES = [
      153,
      180
     ],
+    "textBbox": [
+     648,
+     521,
+     106,
+     124
+    ],
     "orientation": "vertical",
     "ja": "一緒に行ってもいい?",
     "reading": "いっしょにいってもいい?",
@@ -68,6 +86,12 @@ window.PAGES = [
      504,
      105,
      190
+    ],
+    "textBbox": [
+     171,
+     531,
+     58,
+     142
     ],
     "orientation": "vertical",
     "ja": "もちろん!",
@@ -86,6 +110,12 @@ window.PAGES = [
      174,
      190
     ],
+    "textBbox": [
+     524,
+     930,
+     130,
+     126
+    ],
     "orientation": "horizontal",
     "ja": "あ、お店がもう開いてる",
     "reading": "あ、おみせがもうあいてる",
@@ -103,6 +133,12 @@ window.PAGES = [
      62,
      127
     ],
+    "textBbox": [
+     406,
+     908,
+     39,
+     86
+    ],
     "orientation": "vertical",
     "ja": "朝七時",
     "reading": "あさしちじ",
@@ -119,6 +155,12 @@ window.PAGES = [
      880,
      121,
      98
+    ],
+    "textBbox": [
+     86,
+     902,
+     85,
+     56
     ],
     "orientation": "horizontal",
     "ja": "「いいにおい!",
@@ -146,6 +188,12 @@ window.PAGES = [
      72,
      128
     ],
+    "textBbox": [
+     751,
+     129,
+     72,
+     128
+    ],
     "orientation": "vertical",
     "ja": "潮見坂高校4月12日",
     "reading": "しおみざかこうこう4がつ12にち",
@@ -162,6 +210,12 @@ window.PAGES = [
      65,
      241,
      270
+    ],
+    "textBbox": [
+     285,
+     133,
+     116,
+     153
     ],
     "orientation": "vertical",
     "ja": "転校生の霧島湊ですよろしく",
@@ -180,6 +234,12 @@ window.PAGES = [
      141,
      248
     ],
+    "textBbox": [
+     706,
+     483,
+     109,
+     131
+    ],
     "orientation": "vertical",
     "ja": "本気で言ってるのか!?",
     "reading": "ほんきでいってるのか!?",
@@ -196,6 +256,12 @@ window.PAGES = [
      490,
      101,
      138
+    ],
+    "textBbox": [
+     508,
+     531,
+     46,
+     58
     ],
     "orientation": "vertical",
     "ja": "嘘...",
@@ -214,6 +280,12 @@ window.PAGES = [
      244,
      291
     ],
+    "textBbox": [
+     114,
+     507,
+     154,
+     123
+    ],
     "orientation": "horizontal",
     "ja": "今日から君が僕の相棒だ",
     "reading": "きょうからきみがぼくのあいぼうだ",
@@ -231,6 +303,12 @@ window.PAGES = [
      201,
      257
     ],
+    "textBbox": [
+     621,
+     964,
+     138,
+     166
+    ],
     "orientation": "vertical",
     "ja": "黄昏時の約束、忘れるなよ",
     "reading": "たそがれどきのやくそく、わすれるなよ",
@@ -247,6 +325,12 @@ window.PAGES = [
      945,
      133,
      208
+    ],
+    "textBbox": [
+     132,
+     1002,
+     76,
+     109
     ],
     "orientation": "vertical",
     "ja": "ああ。必ず",
@@ -274,6 +358,12 @@ window.PAGES = [
      182,
      269
     ],
+    "textBbox": [
+     717,
+     73,
+     49,
+     190
+    ],
     "orientation": "vertical",
     "ja": "うるさーい!!",
     "reading": "うるさーい!!",
@@ -290,6 +380,12 @@ window.PAGES = [
      47,
      210,
      244
+    ],
+    "textBbox": [
+     100,
+     102,
+     101,
+     136
     ],
     "orientation": "vertical",
     "ja": "明日のテストどうしよう・・・",
@@ -308,6 +404,12 @@ window.PAGES = [
      135,
      206
     ],
+    "textBbox": [
+     707,
+     503,
+     65,
+     114
+    ],
     "orientation": "vertical",
     "ja": "ねえ...聞こえる?",
     "reading": "ねえ...きこえる?",
@@ -324,6 +426,12 @@ window.PAGES = [
      777,
      119,
      167
+    ],
+    "textBbox": [
+     372,
+     810,
+     53,
+     102
     ],
     "orientation": "vertical",
     "ja": "待って!",
@@ -342,6 +450,12 @@ window.PAGES = [
      123,
      225
     ],
+    "textBbox": [
+     326,
+     511,
+     51,
+     100
+    ],
     "orientation": "vertical",
     "ja": "......誰だ",
     "reading": null,
@@ -359,6 +473,12 @@ window.PAGES = [
      131,
      209
     ],
+    "textBbox": [
+     113,
+     908,
+     71,
+     103
+    ],
     "orientation": "vertical",
     "ja": "どこ行くの?",
     "reading": "どこいくの?",
@@ -375,6 +495,12 @@ window.PAGES = [
      827,
      132,
      147
+    ],
+    "textBbox": [
+     702,
+     855,
+     115,
+     85
     ],
     "orientation": "horizontal",
     "ja": "その夜、町から音が消えた",
@@ -402,6 +528,12 @@ window.PAGES = [
      132,
      229
     ],
+    "textBbox": [
+     724,
+     97,
+     74,
+     161
+    ],
     "orientation": "vertical",
     "ja": "遅刻だー!!",
     "reading": "ちこくだー!!",
@@ -414,6 +546,12 @@ window.PAGES = [
     "isBalloon": false,
     "kind": "outside",
     "bbox": [
+     747,
+     605,
+     69,
+     74
+    ],
+    "textBbox": [
      747,
      605,
      69,
@@ -436,6 +574,12 @@ window.PAGES = [
      123,
      199
     ],
+    "textBbox": [
+     477,
+     589,
+     86,
+     128
+    ],
     "orientation": "vertical",
     "ja": "間に合った...",
     "reading": "まにあった...",
@@ -453,6 +597,12 @@ window.PAGES = [
      272,
      72
     ],
+    "textBbox": [
+     111,
+     596,
+     236,
+     42
+    ],
     "orientation": "horizontal",
     "ja": "ひだまりベーカリー",
     "reading": "ひだまりべーかりー",
@@ -465,6 +615,12 @@ window.PAGES = [
     "isBalloon": false,
     "kind": "outside",
     "bbox": [
+     725,
+     932,
+     93,
+     127
+    ],
+    "textBbox": [
      725,
      932,
      93,
@@ -487,6 +643,12 @@ window.PAGES = [
      117,
      195
     ],
+    "textBbox": [
+     477,
+     999,
+     85,
+     134
+    ],
     "orientation": "vertical",
     "ja": "静かだな...",
     "reading": "しずかだな...",
@@ -499,6 +661,12 @@ window.PAGES = [
     "isBalloon": false,
     "kind": "outside",
     "bbox": [
+     69,
+     926,
+     85,
+     46
+    ],
+    "textBbox": [
      69,
      926,
      85,
@@ -530,6 +698,12 @@ window.PAGES = [
      110,
      188
     ],
+    "textBbox": [
+     744,
+     84,
+     73,
+     120
+    ],
     "orientation": "vertical",
     "ja": "今夜の当番誰だっけ?",
     "reading": "こんやのとうばんだれだっけ?",
@@ -546,6 +720,12 @@ window.PAGES = [
      50,
      75,
      118
+    ],
+    "textBbox": [
+     571,
+     77,
+     38,
+     64
     ],
     "orientation": "vertical",
     "ja": "...俺?",
@@ -564,6 +744,12 @@ window.PAGES = [
      132,
      200
     ],
+    "textBbox": [
+     107,
+     104,
+     68,
+     98
+    ],
     "orientation": "vertical",
     "ja": "そうだよ兄ちゃん",
     "reading": "そうだよにいちゃん",
@@ -580,6 +766,12 @@ window.PAGES = [
      379,
      132,
      180
+    ],
+    "textBbox": [
+     719,
+     434,
+     81,
+     75
     ],
     "orientation": "horizontal",
     "ja": "えー面倒くさい",
@@ -598,6 +790,12 @@ window.PAGES = [
      119,
      167
     ],
+    "textBbox": [
+     642,
+     593,
+     78,
+     97
+    ],
     "orientation": "vertical",
     "ja": "昨日も作ったぞ",
     "reading": "きのうもつくったぞ",
@@ -614,6 +812,12 @@ window.PAGES = [
      360,
      215,
      212
+    ],
+    "textBbox": [
+     253,
+     409,
+     94,
+     119
     ],
     "orientation": "vertical",
     "ja": "嘘つけ!カップ麺だったじゃん",
@@ -632,6 +836,12 @@ window.PAGES = [
      148,
      156
     ],
+    "textBbox": [
+     247,
+     597,
+     107,
+     110
+    ],
     "orientation": "vertical",
     "ja": "お湯を入れたのは俺だ",
     "reading": "おゆをいれたのはおれだ",
@@ -648,6 +858,12 @@ window.PAGES = [
      709,
      121,
      159
+    ],
+    "textBbox": [
+     79,
+     743,
+     83,
+     98
     ],
     "orientation": "vertical",
     "ja": "それは料理じゃない",
@@ -666,6 +882,12 @@ window.PAGES = [
      57,
      118
     ],
+    "textBbox": [
+     781,
+     952,
+     39,
+     78
+    ],
     "orientation": "vertical",
     "ja": "結局...",
     "reading": "けっきょく...",
@@ -682,6 +904,12 @@ window.PAGES = [
      925,
      121,
      149
+    ],
+    "textBbox": [
+     646,
+     954,
+     70,
+     96
     ],
     "orientation": "vertical",
     "ja": "カレーでいい?",
@@ -700,6 +928,12 @@ window.PAGES = [
      121,
      158
     ],
+    "textBbox": [
+     228,
+     976,
+     68,
+     71
+    ],
     "orientation": "vertical",
     "ja": "辛口でね!",
     "reading": "からくちでね!",
@@ -712,6 +946,12 @@ window.PAGES = [
     "isBalloon": false,
     "kind": "outside",
     "bbox": [
+     77,
+     1029,
+     47,
+     64
+    ],
+    "textBbox": [
      77,
      1029,
      47,
@@ -743,6 +983,12 @@ window.PAGES = [
      162,
      66
     ],
+    "textBbox": [
+     481,
+     261,
+     62,
+     30
+    ],
     "orientation": "horizontal",
     "ja": "OK!",
     "reading": "おーけー",
@@ -759,6 +1005,12 @@ window.PAGES = [
      154,
      241,
      68
+    ],
+    "textBbox": [
+     342,
+     168,
+     125,
+     40
     ],
     "orientation": "horizontal",
     "ja": "駅前に7時ね",
@@ -777,6 +1029,12 @@ window.PAGES = [
      265,
      100
     ],
+    "textBbox": [
+     348,
+     349,
+     135,
+     70
+    ],
     "orientation": "horizontal",
     "ja": "遅れたらアイス奢りね",
     "reading": "おくれたらあいすおごりね",
@@ -793,6 +1051,12 @@ window.PAGES = [
      663,
      358,
      189
+    ],
+    "textBbox": [
+     529,
+     737,
+     225,
+     44
     ],
     "orientation": "horizontal",
     "ja": "え、もう650!?",
@@ -811,6 +1075,12 @@ window.PAGES = [
      171,
      71
     ],
+    "textBbox": [
+     264,
+     772,
+     132,
+     33
+    ],
     "orientation": "horizontal",
     "ja": "BUSSTOP",
     "reading": "ばすストップ",
@@ -827,6 +1097,12 @@ window.PAGES = [
      663,
      175,
      274
+    ],
+    "textBbox": [
+     94,
+     738,
+     115,
+     122
     ],
     "orientation": "vertical",
     "ja": "あと10分で着く訳ない!",
@@ -854,6 +1130,12 @@ window.PAGES = [
      81,
      191
     ],
+    "textBbox": [
+     1635,
+     102,
+     51,
+     120
+    ],
     "orientation": "vertical",
     "ja": "千年の森",
     "reading": "せんねんのもり",
@@ -871,6 +1153,12 @@ window.PAGES = [
      151,
      222
     ],
+    "textBbox": [
+     1416,
+     295,
+     88,
+     137
+    ],
     "orientation": "vertical",
     "ja": "ここが...伝説の",
     "reading": "ここが...でんせつのえいゆう...",
@@ -883,6 +1171,12 @@ window.PAGES = [
     "isBalloon": false,
     "kind": "outside",
     "bbox": [
+     663,
+     90,
+     424,
+     118
+    ],
+    "textBbox": [
      663,
      90,
      424,
@@ -905,6 +1199,12 @@ window.PAGES = [
      170,
      243
     ],
+    "textBbox": [
+     1560,
+     754,
+     121,
+     142
+    ],
     "orientation": "vertical",
     "ja": "地図だとこの先に村がある",
     "reading": "ちずだとこのさきにむらがある",
@@ -921,6 +1221,12 @@ window.PAGES = [
      699,
      129,
      202
+    ],
+    "textBbox": [
+     961,
+     751,
+     78,
+     108
     ],
     "orientation": "vertical",
     "ja": "行ってみよう",
@@ -939,6 +1245,12 @@ window.PAGES = [
      168,
      211
     ],
+    "textBbox": [
+     668,
+     730,
+     103,
+     141
+    ],
     "orientation": "vertical",
     "ja": "足元に気をつけて",
     "reading": "あしもとにきをつけて",
@@ -955,6 +1267,12 @@ window.PAGES = [
      720,
      218,
      258
+    ],
+    "textBbox": [
+     133,
+     792,
+     72,
+     116
     ],
     "orientation": "vertical",
     "ja": "もう帰りたい...",

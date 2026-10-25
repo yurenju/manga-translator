@@ -22,8 +22,9 @@
   .page-wrap { position: relative; height: calc(100% - 24px); }
   .page-wrap img { height: 100%; display: block; user-select: none; }
   .ov { position: absolute; cursor: pointer; }
-  .ov.cover { background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 4%; font-weight: 600; color: #111; }
-  .ov.cover.off { background: transparent; color: transparent; }
+  .erase { position: absolute; border-radius: 4px; pointer-events: none; }
+  .ov.cover { background: transparent; border-radius: 30%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 4%; font-weight: 600; color: #111; }
+  .ov.cover.off { color: transparent; }
   .ov.unread { outline: 2px dashed #d33; outline-offset: 2px; border-radius: 30%; }
   .ov.loose { }
   .ov.hl { box-shadow: 0 0 0 3px #1a73e8, 0 0 18px #1a73e8; }
@@ -196,29 +197,66 @@ function cropHTML(t, maxW, maxH) {
 }
 
 // ---------- 左邊：漫畫頁＋原地覆蓋 ----------
-const INSET = 0.1;
+// 從原圖取樣擦除區外圍一圈的顏色（白底 Balloon → 白，黑底白字 → 黑）
+let sampler = null;
+function sampleBg(r) {
+  const img = document.getElementById('pageImg');
+  if (!sampler || sampler.src !== img.src) {
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth; c.height = img.naturalHeight;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    sampler = { src: img.src, ctx };
+  }
+  const [x, y, w, h] = r.map(Math.round);
+  const lums = [];
+  const pts = [];
+  for (let i = 0; i <= 20; i++) { pts.push([x + (w * i) / 20, y], [x + (w * i) / 20, y + h], [x, y + (h * i) / 20], [x + w, y + (h * i) / 20]); }
+  for (const [px, py] of pts) { const d = sampler.ctx.getImageData(px, py, 1, 1).data; lums.push(d[0] * 0.3 + d[1] * 0.59 + d[2] * 0.11); }
+  lums.sort((a, b) => a - b);
+  const m = Math.round(lums[lums.length >> 1]);
+  return { css: `rgb(${m},${m},${m})`, dark: m < 128 };
+}
 function renderPage() {
   const p = page();
   document.getElementById('url').textContent = `https://manga.example.jp/episode/1234#${p.id}`;
   const wrap = document.getElementById('pageWrap');
-  wrap.querySelectorAll('.ov, .tooltip').forEach((e) => e.remove());
+  wrap.querySelectorAll('.ov, .erase, .tooltip').forEach((e) => e.remove());
   const img = document.getElementById('pageImg');
   img.src = p.image;
   const showTexts = ['cached', 'notes'].includes(state.tr[p.id]);
-  if (!showTexts) return;
+  // 圖片還沒載入完就取樣會讀到透明像素（被當成黑底 → 整頁反白），等 onload 再畫
+  if (!showTexts || !img.complete || !img.naturalWidth || !img.src.endsWith(p.image.replace('../../', ''))) return;
+  const pct = (r) => ({ left: (r[0] / p.width) * 100 + '%', top: (r[1] / p.height) * 100 + '%', width: (r[2] / p.width) * 100 + '%', height: (r[3] / p.height) * 100 + '%' });
   for (const t of p.texts) {
     const [x, y, w, h] = t.bbox;
     const d = document.createElement('div');
+    const cover = t.isBalloon && !t.unreadable;
     d.className = 'ov ' + (t.isBalloon ? (t.unreadable ? 'unread' : 'cover' + (state.overlay ? '' : ' off')) : 'loose');
-    // 覆蓋只蓋 Balloon 內側（往內縮 INSET），保留原本的框線；detector 的 bbox 是 Balloon 外框
-    const ins = t.isBalloon && !t.unreadable ? INSET : 0;
-    Object.assign(d.style, { left: ((x + w * ins) / p.width) * 100 + '%', top: ((y + h * ins) / p.height) * 100 + '%', width: ((w * (1 - 2 * ins)) / p.width) * 100 + '%', height: ((h * (1 - 2 * ins)) / p.height) * 100 + '%' });
     d.dataset.id = t.id;
-    if (t.isBalloon && !t.unreadable) {
+    if (cover) {
+      // 不猜 Balloon 形狀：只把「日文文字框」(textBbox) 擦掉（用周圍取樣的底色），其餘原圖（框線、尾巴）全部保留；
+      // 譯文放在 textBbox 往外擴、但不超出 Balloon bbox 的範圍，背景透明。
+      const [tx, ty, tw, th] = t.textBbox;
+      const pad = 3;
+      const er = [tx - pad, ty - pad, tw + pad * 2, th + pad * 2];
+      const bg = sampleBg(er);
+      if (state.overlay) {
+        const e = document.createElement('div');
+        e.className = 'erase';
+        Object.assign(e.style, pct(er), { background: bg.css });
+        wrap.appendChild(e);
+      }
+      const gx = w * 0.12, gy = h * 0.12;
+      const lx = Math.max(x + w * 0.08, tx - gx), ly = Math.max(y + h * 0.08, ty - gy);
+      const lr = [lx, ly, Math.min(x + w * 0.92, tx + tw + gx) - lx, Math.min(y + h * 0.92, ty + th + gy) - ly];
+      Object.assign(d.style, pct(lr), { color: bg.dark ? '#fff' : '#111' });
       const imgH = img.clientHeight || 800, scale = imgH / p.height;
-      const fs = Math.max(9, Math.min(22, Math.sqrt((w * h * 0.45) / Math.max(4, t.zh.length)) * scale));
+      const fs = Math.max(9, Math.min(22, Math.sqrt((lr[2] * lr[3] * 0.5) / Math.max(4, t.zh.length)) * scale));
       d.style.fontSize = fs + 'px';
       d.textContent = t.zh;
+    } else {
+      Object.assign(d.style, pct(t.bbox));
     }
     d.insertAdjacentHTML('beforeend', `<span class="num">${t.order}</span>`);
     d.onmouseenter = () => setHover(t.id, 'page');
