@@ -25,5 +25,5 @@ Text on a Page that belongs to no Balloon: sound effects, narration, signs.
 _Avoid_: SFX (only one kind of Loose Text), stray text
 
 **Series Notes** (作品筆記)
-Context the reader attaches to a Series — character names, preferred translations of terms, plot background — used to make translations consistent. Belongs to the Series, shared across every site the Series is read on.
+The fixed translations a Series has settled on — names and terms, plus how each character refers to themself, speaks, and addresses others — used to keep translations consistent. Mostly accumulated by the translator as it reads; the reader reviews it and occasionally corrects it. No plot progress. Belongs to the Series, shared across every site the Series is read on.
 _Avoid_: context, glossary (ambiguous with this file), dictionary
