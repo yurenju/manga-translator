@@ -50,10 +50,7 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
       },
     }),
     esbuild.build({ ...common, format: 'iife', entryPoints: { content: 'src/content/index.ts' } }),
-    ...STATIC_FILES.map(async ([from, to]) => {
-      await mkdir(join(outDir, to, '..'), { recursive: true });
-      await copyFile(join(root, from), join(outDir, to));
-    }),
+    ...STATIC_FILES.map(([from, to]) => copyFile(join(root, from), join(outDir, to))),
     writeFile(join(outDir, 'manifest.json'), JSON.stringify(buildManifest({ e2e }), null, 2)),
   ]);
 }

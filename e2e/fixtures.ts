@@ -72,6 +72,18 @@ export async function testActivate(fromExtensionPage: Page, tabId: number): Prom
   );
 }
 
+/** 打開仿 Jump+ 與它的 side panel，透過測試入口啟動，等 panel 顯示「已啟動」。 */
+export async function activateOnJumpPlus(
+  { context, sw, extensionId, mockSite }: { context: BrowserContext; sw: Worker; extensionId: string; mockSite: MockSite },
+): Promise<{ page: Page; panel: Page; tabId: number }> {
+  const page = await openJumpPlus(context, mockSite);
+  const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
+  const panel = await openSidePanel(context, extensionId, tabId);
+  await testActivate(panel, tabId);
+  await expect(panel.getByText('已啟動')).toBeVisible();
+  return { page, panel, tabId };
+}
+
 /** 在 content script 的 isolated world 裡看它在不在。 */
 export async function isContentScriptInjected(sw: Worker, tabId: number): Promise<boolean> {
   return sw.evaluate(async (tabId) => {

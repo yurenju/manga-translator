@@ -1,4 +1,5 @@
 import {
+  activateOnJumpPlus,
   expect,
   isContentScriptInjected,
   openJumpPlus,
@@ -45,10 +46,7 @@ test('透過測試入口啟動後 side panel 顯示「已啟動」，content scr
 });
 
 test('同 origin 重新整理後 content script 自動重新注入', async ({ context, sw, extensionId, mockSite }) => {
-  const page = await openJumpPlus(context, mockSite);
-  const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
-  const panel = await openSidePanel(context, extensionId, tabId);
-  await testActivate(panel, tabId);
+  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
   await page.reload();
 
@@ -57,11 +55,7 @@ test('同 origin 重新整理後 content script 自動重新注入', async ({ co
 });
 
 test('按「停止」後清掉 content script，重新整理也不再注入', async ({ context, sw, extensionId, mockSite }) => {
-  const page = await openJumpPlus(context, mockSite);
-  const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
-  const panel = await openSidePanel(context, extensionId, tabId);
-  await testActivate(panel, tabId);
-  await expect(panel.getByText('已啟動')).toBeVisible();
+  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
   await panel.getByRole('button', { name: '停止' }).click();
 
@@ -73,11 +67,7 @@ test('按「停止」後清掉 content script，重新整理也不再注入', as
 });
 
 test('換 origin 就停止', async ({ context, sw, extensionId, mockSite }) => {
-  const page = await openJumpPlus(context, mockSite);
-  const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
-  const panel = await openSidePanel(context, extensionId, tabId);
-  await testActivate(panel, tabId);
-  await expect(panel.getByText('已啟動')).toBeVisible();
+  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
   await page.goto(`${mockSite.imageOrigin}/p01-basic.png`);
 

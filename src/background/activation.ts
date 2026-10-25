@@ -31,12 +31,7 @@ export function createActivation(deps: ActivationDeps) {
     deps.openSidePanel(tabId).catch((e: unknown) => console.warn('sidePanel.open failed', e));
     const url = await deps.getTabUrl(tabId);
     if (url === undefined) return;
-    try {
-      await deps.injectContentScript(tabId);
-    } catch (e) {
-      console.warn('content script injection failed', e);
-      return;
-    }
+    if (!(await tryInject(tabId))) return;
     await deps.store.set(tabId, { origin: new URL(url).origin });
     deps.onStatusChanged(tabId, true);
   }
@@ -45,7 +40,18 @@ export function createActivation(deps: ActivationDeps) {
     return (await deps.store.get(tabId)) !== undefined;
   }
 
-  async function deactivate(tabId: number): Promise<void> {
+  async function tryInject(tabId: number): Promise<boolean> {
+    try {
+      await deps.injectContentScript(tabId);
+      return true;
+    } catch (e) {
+      console.warn('content script injection failed', e);
+      return false;
+    }
+  }
+
+  /** 只清掉啟動狀態；通知 content script 結束是 stop() 的事。 */
+  async function markInactive(tabId: number): Promise<void> {
     await deps.store.delete(tabId);
     deps.onStatusChanged(tabId, false);
   }
@@ -55,17 +61,11 @@ export function createActivation(deps: ActivationDeps) {
     const state = await deps.store.get(tabId);
     if (!state) return;
     if (change.url !== undefined && new URL(change.url).origin !== state.origin) {
-      await deactivate(tabId);
+      await markInactive(tabId);
       return;
     }
-    if (change.status === 'complete') {
-      try {
-        await deps.injectContentScript(tabId);
-      } catch (e) {
-        console.warn('content script re-injection failed', e);
-        await deactivate(tabId);
-      }
-    }
+    // 重新注入失敗通常是 activeTab 授權已失效，只能等使用者再點一次圖示。
+    if (change.status === 'complete' && !(await tryInject(tabId))) await markInactive(tabId);
   }
 
   async function handleTabRemoved(tabId: number): Promise<void> {
@@ -74,7 +74,7 @@ export function createActivation(deps: ActivationDeps) {
 
   /** side panel 的「停止」。 */
   async function stop(tabId: number): Promise<void> {
-    await deactivate(tabId);
+    await markInactive(tabId);
     // 頁面可能已經關掉或換頁，content script 不在也沒關係。
     await deps.stopContentScript(tabId).catch(() => {});
   }
