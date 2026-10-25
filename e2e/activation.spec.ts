@@ -16,7 +16,7 @@ test('mock site 的 canvas 是 tainted（getImageData 會丟錯）', async ({ co
   const page = await openJumpPlus(context, mockSite);
 
   const error = await page.evaluate(() => {
-    const canvas = document.querySelector('canvas')!;
+    const canvas = document.querySelector<HTMLCanvasElement>('.page canvas')!;
     try {
       canvas.getContext('2d')!.getImageData(0, 0, 1, 1);
       return null;

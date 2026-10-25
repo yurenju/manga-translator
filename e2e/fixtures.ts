@@ -10,15 +10,27 @@ import { startMockSite, type MockSite } from './mock-site/server.ts';
 const EXTENSION_DIR = fileURLToPath(new URL('../dist/e2e', import.meta.url));
 
 export const test = base.extend<{
+  /**
+   * 真的 DPR（--force-device-scale-factor）。Playwright 的 deviceScaleFactor 只模擬頁面上的
+   * devicePixelRatio，captureVisibleTab 的截圖仍是 1×，而且不能跟 viewport: null 一起用。
+   */
+  realDeviceScaleFactor: number | undefined;
   context: BrowserContext;
   sw: Worker;
   extensionId: string;
   mockSite: MockSite;
 }>({
-  context: async ({}, use) => {
+  realDeviceScaleFactor: [undefined, { option: true }],
+  context: async ({ realDeviceScaleFactor }, use) => {
     const context = await chromium.launchPersistentContext('', {
       channel: 'chromium',
-      args: [`--disable-extensions-except=${EXTENSION_DIR}`, `--load-extension=${EXTENSION_DIR}`],
+      args: [
+        `--disable-extensions-except=${EXTENSION_DIR}`,
+        `--load-extension=${EXTENSION_DIR}`,
+        // 真的視窗大小。用 test.use({ viewport: null }) 的測試靠它；其他測試的 viewport 是模擬的，不受影響。
+        '--window-size=1280,1500',
+        ...(realDeviceScaleFactor === undefined ? [] : [`--force-device-scale-factor=${realDeviceScaleFactor}`]),
+      ],
     });
     await use(context);
     await context.close();
@@ -72,13 +84,18 @@ export async function testActivate(fromExtensionPage: Page, tabId: number): Prom
   );
 }
 
-/** 打開仿 Jump+ 與它的 side panel，透過測試入口啟動，等 panel 顯示「已啟動」。 */
+/**
+ * 打開仿 Jump+ 與它的 side panel，透過測試入口啟動，等 panel 顯示「已啟動」。
+ * side panel 在這裡是另一個分頁，所以啟動前把仿 Jump+ 切回前景，跟真的點圖示時一樣是作用中 tab，
+ * captureVisibleTab 才截得到它。
+ */
 export async function activateOnJumpPlus(
   { context, sw, extensionId, mockSite }: { context: BrowserContext; sw: Worker; extensionId: string; mockSite: MockSite },
 ): Promise<{ page: Page; panel: Page; tabId: number }> {
   const page = await openJumpPlus(context, mockSite);
   const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
   const panel = await openSidePanel(context, extensionId, tabId);
+  await page.bringToFront();
   await testActivate(panel, tabId);
   await expect(panel.getByText('已啟動')).toBeVisible();
   return { page, panel, tabId };

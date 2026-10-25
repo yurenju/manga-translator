@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { Message, StatusResponse } from '../shared/messages.ts';
+import type { Message, PagesResponse, PageThumb, StatusResponse } from '../shared/messages.ts';
 
 /**
  * 點圖示啟動時，SW 用 sidepanel.html?tabId=N 打開這個 tab 專屬的 side panel。
@@ -16,14 +16,17 @@ const send = <R,>(message: Message) => chrome.runtime.sendMessage<Message, R>(me
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
   const [active, setActive] = useState<boolean | undefined>(tabId === undefined ? false : undefined);
+  const [pages, setPages] = useState<PageThumb[]>([]);
 
   useEffect(() => {
     if (tabId === undefined) return;
     const onMessage = (message: Message) => {
       if (message.type === 'status:changed' && message.tabId === tabId) setActive(message.active);
+      if (message.type === 'pages:updated' && message.tabId === tabId) setPages(message.pages);
     };
     chrome.runtime.onMessage.addListener(onMessage);
     void send<StatusResponse>({ type: 'panel:getStatus', tabId }).then((r) => setActive(r.active));
+    void send<PagesResponse>({ type: 'panel:getPages', tabId }).then((r) => setPages(r.pages));
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, [tabId]);
 
@@ -35,6 +38,17 @@ function App({ tabId }: { tabId: number | undefined }) {
       <button type="button" onClick={() => void send({ type: 'panel:stop', tabId })}>
         停止
       </button>
+      {/* 翻頁偵測（#34）之前，捲動或翻頁後要手動重新擷取。 */}
+      <button type="button" onClick={() => void send({ type: 'panel:scan', tabId })}>
+        重新擷取
+      </button>
+      <ul aria-label="Page">
+        {pages.map((page, i) => (
+          <li key={page.anchorId}>
+            <img src={page.thumbnail} alt={`Page ${i + 1}`} />
+          </li>
+        ))}
+      </ul>
     </main>
   );
 }
