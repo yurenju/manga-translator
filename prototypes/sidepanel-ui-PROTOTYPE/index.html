@@ -10,6 +10,8 @@
 <head>
 <meta charset="utf-8">
 <title>Side panel prototype</title>
+<!-- 覆蓋用 Noto Sans TC：有直書字形（～、……），微軟正黑體沒有。實作時打包進外掛 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700&display=swap">
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; font-family: system-ui, "Noto Sans TC", "Microsoft JhengHei", sans-serif; background: #dfe1e5; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: #202124; }
@@ -23,7 +25,7 @@
   .page-wrap img { height: 100%; display: block; user-select: none; }
   .ov { position: absolute; cursor: pointer; }
   .erase { position: absolute; border-radius: 4px; pointer-events: none; }
-  .ov.cover { background: transparent; border-radius: 30%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 2%; font-weight: 600; color: #111; }
+  .ov.cover { font-family: 'Noto Sans TC', sans-serif; background: transparent; border-radius: 30%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.15; padding: 2%; font-weight: 600; color: #111; }
   .ov.cover.off { color: transparent; }
   .ov.unread { outline: 2px dashed #d33; outline-offset: 2px; border-radius: 30%; }
   .ov.loose { }
@@ -278,10 +280,7 @@ function renderPage() {
 // 直書用：半形標點換全形（直書字形會轉向）、… 統一、短數字縱中橫
 function verticalize(s) {
   s = s.replace(/\.{2,}/g, '……').replace(/!/g, '！').replace(/\?/g, '？').replace(/~/g, '～').replace(/,/g, '，');
-  // ～ 在不少中文字型（如微軟正黑體）沒有直書字形，不依賴字型、直接轉 90 度
-  return esc(s)
-    .replace(/[0-9A-Za-z]{1,3}|！？|！！/g, (m) => `<span style="text-combine-upright:all">${m}</span>`)
-    .replace(/[～〜]/g, '<span style="display:inline-block;transform:rotate(90deg)">～</span>');
+  return esc(s).replace(/[0-9A-Za-z]{1,3}|！？|！！/g, (m) => `<span style="text-combine-upright:all">${m}</span>`);
 }
 function setHover(id, from) {
   state.hover = id;
@@ -518,6 +517,8 @@ pageSel.onchange = () => { pageIdx = +pageSel.value; C.idx = 0; syncURL(); rende
 document.getElementById('simSel').onchange = (e) => { state.tr[page().id] = e.target.value === 'notes' ? 'notes' : state.tr[page().id] === 'notes' ? 'cached' : state.tr[page().id]; render(); };
 document.getElementById('pageImg').onload = () => renderPage();
 window.onresize = () => renderPage();
+// 字型載好後重畫（量測縮字要用最終字型的尺寸）
+document.fonts.load('22px "Noto Sans TC"', '欸～好').then(() => renderPage());
 render();
 </script>
 </body>
