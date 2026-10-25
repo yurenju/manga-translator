@@ -56,6 +56,20 @@ npm run serve                  # 開 http://localhost:8787/browser.html?ep=webgp
 - WebGPU 上 q8 反而變慢（3.4 s），GPU 用 fp32、CPU 用 q8。fp16 的 decoder ONNX 本身型別錯誤載不起來。
 - 冷啟動（載入模型）：Node 約 1.4–2.5 s，Chrome 約 3–4 s（每次開外掛 / server 一次）。
 
+### macOS：MacBook Air M1 16 GB（代替 M2 量測，M2 應該只會更快）
+
+使用者在 M1 上跑 `npm run bench -- m1` 與 browser.html 的結果（原始輸出在 #7 的留言）：
+
+| 組合 | 偵測 F1 | recall 覆蓋 | 順序 | 原文 | 讀音 | 每頁 s | 備註 |
+|---|---|---|---|---|---|---|---|
+| **Node CPU q8** | 89% | 100% | 98% | 98% | 91% | **1.29** | RSS 1.0 GB；比 Windows CPU 還快 |
+| Node CPU fp32 | 89% | 100% | 98% | 98% | 91% | 3.25 | RSS 1.4 GB |
+| Node WebGPU fp32 | 89% | 100% | 98% | 97% | 90% | 1.57 | |
+| Node WebGPU（det fp32）| 88% | 100% | 98% | 98% | 89% | 1.46 | |
+| Node CoreML | — | — | — | — | — | — | 只有約一半 node 能分給 CoreML，執行時崩潰 |
+| **Chrome WebGPU（det fp32）** | — | — | — | 同上 | — | **1.71** | 8 threads；OCR 文字跟 Node 一致 |
+| Chrome wasm（CPU）q8 | — | — | — | 同上 | — | 6.64 | ARM 上 wasm 比原生 CPU 慢約 5 倍 |
+
 ### 加上 Claude 翻譯（OCR = Node WebGPU fp32）
 
 | 組合 | 原文 | 讀音 | 譯文 chrF | 每頁 s（本機＋turn）| turn s | in tok | out tok | $（list 價）|
