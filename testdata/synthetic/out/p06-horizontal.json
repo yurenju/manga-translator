@@ -1,0 +1,376 @@
+{
+  "id": "p06-horizontal",
+  "description": "橫書：手機畫面訊息、英數混排、時間、橫書 Balloon 與直書縦中横並存",
+  "image": "p06-horizontal.png",
+  "width": 880,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "A",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        40,
+        40,
+        800,
+        560
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          840,
+          40
+        ],
+        [
+          840,
+          600
+        ],
+        [
+          40,
+          600
+        ]
+      ]
+    },
+    {
+      "id": "B",
+      "page": 0,
+      "order": 2,
+      "bbox": [
+        440,
+        616,
+        400,
+        624
+      ],
+      "polygon": [
+        [
+          440,
+          616
+        ],
+        [
+          840,
+          616
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          440,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "C",
+      "page": 0,
+      "order": 3,
+      "bbox": [
+        40,
+        616,
+        384,
+        624
+      ],
+      "polygon": [
+        [
+          40,
+          616
+        ],
+        [
+          424,
+          616
+        ],
+        [
+          424,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 1,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        422,
+        88,
+        36,
+        23
+      ],
+      "textBbox": [
+        422,
+        88,
+        36,
+        23
+      ],
+      "ja": "ミオ",
+      "jaLines": [
+        "ミオ"
+      ],
+      "ruby": [],
+      "reading": "ミオ",
+      "zh": "美緒"
+    },
+    {
+      "id": "t2",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 2,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        349,
+        171,
+        111,
+        36
+      ],
+      "textBbox": [
+        349,
+        171,
+        111,
+        36
+      ],
+      "ja": "駅前に7時ね",
+      "jaLines": [
+        "駅前に7時ね"
+      ],
+      "ruby": [
+        {
+          "base": "駅前",
+          "rt": "えきまえ"
+        },
+        {
+          "base": "時",
+          "rt": "じ"
+        }
+      ],
+      "reading": "えきまえにしちじね",
+      "zh": "7點在車站前喔"
+    },
+    {
+      "id": "t3",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 3,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        488,
+        263,
+        53,
+        29
+      ],
+      "textBbox": [
+        488,
+        263,
+        53,
+        29
+      ],
+      "ja": "OK！",
+      "jaLines": [
+        "OK！"
+      ],
+      "ruby": [],
+      "reading": "オーケー！",
+      "zh": "OK！"
+    },
+    {
+      "id": "t4",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 4,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        355,
+        350,
+        119,
+        68
+      ],
+      "textBbox": [
+        355,
+        350,
+        119,
+        68
+      ],
+      "ja": "遅れたらアイス奢りね",
+      "jaLines": [
+        "遅れたら",
+        "アイス奢りね"
+      ],
+      "ruby": [
+        {
+          "base": "遅",
+          "rt": "おく"
+        },
+        {
+          "base": "奢",
+          "rt": "おご"
+        }
+      ],
+      "reading": "おくれたらアイスおごりね",
+      "zh": "遲到的話要請冰淇淋喔"
+    },
+    {
+      "id": "t5",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 5,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        572,
+        551,
+        35,
+        18
+      ],
+      "textBbox": [
+        572,
+        551,
+        35,
+        18
+      ],
+      "ja": "18:42",
+      "jaLines": [
+        "18:42"
+      ],
+      "ruby": [],
+      "reading": "じゅうはちじよんじゅうにふん",
+      "zh": "18:42"
+    },
+    {
+      "id": "t6",
+      "kind": "balloon",
+      "shape": "burst",
+      "panel": "B",
+      "page": 0,
+      "order": 6,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        475,
+        675,
+        330,
+        170
+      ],
+      "textBbox": [
+        536,
+        740,
+        209,
+        39
+      ],
+      "ja": "え、もう6:50!?",
+      "jaLines": [
+        "え、もう6:50!?"
+      ],
+      "ruby": [],
+      "reading": "え、もうろくじごじゅっぷん!?",
+      "zh": "咦，已經6:50了!?"
+    },
+    {
+      "id": "t7",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "C",
+      "page": 0,
+      "order": 7,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        273,
+        775,
+        114,
+        29
+      ],
+      "textBbox": [
+        273,
+        775,
+        114,
+        29
+      ],
+      "ja": "BUS STOP",
+      "jaLines": [
+        "BUS STOP"
+      ],
+      "ruby": [],
+      "reading": "バスストップ",
+      "zh": "公車站"
+    },
+    {
+      "id": "t8",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "C",
+      "page": 0,
+      "order": 8,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        70,
+        670,
+        160,
+        260
+      ],
+      "textBbox": [
+        100,
+        745,
+        103,
+        110
+      ],
+      "ja": "あと10分で着く訳ない！",
+      "jaLines": [
+        "あと10分で",
+        "着く訳",
+        "ない！"
+      ],
+      "ruby": [
+        {
+          "base": "分",
+          "rt": "ぷん"
+        },
+        {
+          "base": "着",
+          "rt": "つ"
+        },
+        {
+          "base": "訳",
+          "rt": "わけ"
+        }
+      ],
+      "reading": "あとじゅっぷんでつくわけない！",
+      "zh": "怎麼可能10分鐘就到！"
+    }
+  ]
+}

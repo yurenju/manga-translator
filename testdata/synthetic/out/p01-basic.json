@@ -1,0 +1,381 @@
+{
+  "id": "p01-basic",
+  "description": "基本款：5 格、直書橢圓 Balloon、右上到左下的標準閱讀順序、一個旁白框",
+  "image": "p01-basic.png",
+  "width": 880,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "A",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        460,
+        40,
+        380,
+        400
+      ],
+      "polygon": [
+        [
+          460,
+          40
+        ],
+        [
+          840,
+          40
+        ],
+        [
+          840,
+          440
+        ],
+        [
+          460,
+          440
+        ]
+      ]
+    },
+    {
+      "id": "B",
+      "page": 0,
+      "order": 2,
+      "bbox": [
+        40,
+        40,
+        404,
+        400
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          444,
+          40
+        ],
+        [
+          444,
+          440
+        ],
+        [
+          40,
+          440
+        ]
+      ]
+    },
+    {
+      "id": "C",
+      "page": 0,
+      "order": 3,
+      "bbox": [
+        40,
+        456,
+        800,
+        400
+      ],
+      "polygon": [
+        [
+          40,
+          456
+        ],
+        [
+          840,
+          456
+        ],
+        [
+          840,
+          856
+        ],
+        [
+          40,
+          856
+        ]
+      ]
+    },
+    {
+      "id": "D",
+      "page": 0,
+      "order": 4,
+      "bbox": [
+        480,
+        872,
+        360,
+        368
+      ],
+      "polygon": [
+        [
+          480,
+          872
+        ],
+        [
+          840,
+          872
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          480,
+          1240
+        ]
+      ]
+    },
+    {
+      "id": "E",
+      "page": 0,
+      "order": 5,
+      "bbox": [
+        40,
+        872,
+        424,
+        368
+      ],
+      "polygon": [
+        [
+          40,
+          872
+        ],
+        [
+          464,
+          872
+        ],
+        [
+          464,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "A",
+      "page": 0,
+      "order": 1,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        700,
+        60,
+        120,
+        200
+      ],
+      "textBbox": [
+        731,
+        94,
+        59,
+        132
+      ],
+      "ja": "おはよう！今日は早いね",
+      "jaLines": [
+        "おはよう！",
+        "今日は早いね"
+      ],
+      "ruby": [],
+      "reading": "おはよう！きょうははやいね",
+      "zh": "早安！今天好早喔"
+    },
+    {
+      "id": "t2",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "B",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        50,
+        65,
+        160,
+        210
+      ],
+      "textBbox": [
+        71,
+        126,
+        118,
+        88
+      ],
+      "ja": "うん、パンを買いに行くんだ",
+      "jaLines": [
+        "うん、",
+        "パンを",
+        "買いに",
+        "行くんだ"
+      ],
+      "ruby": [],
+      "reading": "うん、パンをかいにいくんだ",
+      "zh": "嗯，我要去買麵包"
+    },
+    {
+      "id": "t3",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "C",
+      "page": 0,
+      "order": 3,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        630,
+        495,
+        140,
+        170
+      ],
+      "textBbox": [
+        656,
+        536,
+        88,
+        88
+      ],
+      "ja": "一緒に行ってもいい？",
+      "jaLines": [
+        "一緒に",
+        "行っても",
+        "いい？"
+      ],
+      "ruby": [],
+      "reading": "いっしょにいってもいい？",
+      "zh": "我可以一起去嗎？"
+    },
+    {
+      "id": "t4",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "C",
+      "page": 0,
+      "order": 4,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        155,
+        510,
+        90,
+        180
+      ],
+      "textBbox": [
+        186,
+        545,
+        29,
+        110
+      ],
+      "ja": "もちろん！",
+      "jaLines": [
+        "もちろん！"
+      ],
+      "ruby": [],
+      "reading": "もちろん！",
+      "zh": "當然！"
+    },
+    {
+      "id": "t5",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "D",
+      "page": 0,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        510,
+        900,
+        160,
+        180
+      ],
+      "textBbox": [
+        531,
+        946,
+        118,
+        88
+      ],
+      "ja": "あ、お店がもう開いてる",
+      "jaLines": [
+        "あ、",
+        "お店が",
+        "もう",
+        "開いてる"
+      ],
+      "ruby": [],
+      "reading": "あ、おみせがもうあいてる",
+      "zh": "啊，店已經開了"
+    },
+    {
+      "id": "t6",
+      "kind": "narration",
+      "shape": "rect",
+      "panel": "E",
+      "page": 0,
+      "order": 6,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        400,
+        890,
+        50,
+        120
+      ],
+      "textBbox": [
+        411,
+        920,
+        29,
+        60
+      ],
+      "ja": "朝七時",
+      "jaLines": [
+        "朝七時"
+      ],
+      "ruby": [],
+      "reading": "あさしちじ",
+      "zh": "早上七點"
+    },
+    {
+      "id": "t7",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "E",
+      "page": 0,
+      "order": 7,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        75,
+        885,
+        110,
+        90
+      ],
+      "textBbox": [
+        90,
+        903,
+        80,
+        53
+      ],
+      "ja": "いいにおい！",
+      "jaLines": [
+        "いい",
+        "におい！"
+      ],
+      "ruby": [],
+      "reading": "いいにおい！",
+      "zh": "好香！"
+    }
+  ]
+}

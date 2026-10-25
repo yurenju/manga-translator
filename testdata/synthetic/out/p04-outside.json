@@ -1,0 +1,470 @@
+{
+  "id": "p04-outside",
+  "description": "Balloon 外的文字：大型狀聲詞（旋轉、描邊）、招牌、手寫風小字、暗網點上的白字",
+  "image": "p04-outside.png",
+  "width": 880,
+  "height": 1280,
+  "readingDirection": "rtl",
+  "pages": [
+    {
+      "index": 0,
+      "bbox": [
+        0,
+        0,
+        880,
+        1280
+      ]
+    }
+  ],
+  "panels": [
+    {
+      "id": "A",
+      "page": 0,
+      "order": 1,
+      "bbox": [
+        40,
+        40,
+        800,
+        480
+      ],
+      "polygon": [
+        [
+          40,
+          40
+        ],
+        [
+          840,
+          40
+        ],
+        [
+          840,
+          520
+        ],
+        [
+          40,
+          520
+        ]
+      ]
+    },
+    {
+      "id": "B",
+      "page": 0,
+      "order": 2,
+      "bbox": [
+        440,
+        536,
+        400,
+        364
+      ],
+      "polygon": [
+        [
+          440,
+          536
+        ],
+        [
+          840,
+          536
+        ],
+        [
+          840,
+          900
+        ],
+        [
+          440,
+          900
+        ]
+      ]
+    },
+    {
+      "id": "C",
+      "page": 0,
+      "order": 3,
+      "bbox": [
+        40,
+        536,
+        384,
+        364
+      ],
+      "polygon": [
+        [
+          40,
+          536
+        ],
+        [
+          424,
+          536
+        ],
+        [
+          424,
+          900
+        ],
+        [
+          40,
+          900
+        ]
+      ]
+    },
+    {
+      "id": "D",
+      "page": 0,
+      "order": 4,
+      "bbox": [
+        40,
+        916,
+        800,
+        324
+      ],
+      "polygon": [
+        [
+          40,
+          916
+        ],
+        [
+          840,
+          916
+        ],
+        [
+          840,
+          1240
+        ],
+        [
+          40,
+          1240
+        ]
+      ]
+    }
+  ],
+  "texts": [
+    {
+      "id": "t1",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "A",
+      "page": 0,
+      "order": 1,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        700,
+        60,
+        120,
+        220
+      ],
+      "textBbox": [
+        742,
+        115,
+        39,
+        110
+      ],
+      "ja": "遅刻だー!!",
+      "jaLines": [
+        "遅刻だー!!"
+      ],
+      "ruby": [
+        {
+          "base": "遅刻",
+          "rt": "ちこく"
+        }
+      ],
+      "reading": "ちこくだー!!",
+      "zh": "要遲到了!!"
+    },
+    {
+      "id": "t2",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": -8,
+      "bbox": [
+        407,
+        12,
+        126,
+        276
+      ],
+      "textBbox": [
+        407,
+        12,
+        126,
+        276
+      ],
+      "ja": "ドドドド",
+      "jaLines": [
+        "ドドドド"
+      ],
+      "ruby": [],
+      "reading": "ドドドド",
+      "zh": "（跑步聲）咚咚咚咚"
+    },
+    {
+      "id": "t3",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 3,
+      "orientation": "horizontal",
+      "rotate": 12,
+      "bbox": [
+        144,
+        334,
+        212,
+        110
+      ],
+      "textBbox": [
+        144,
+        334,
+        212,
+        110
+      ],
+      "ja": "ガシャン",
+      "jaLines": [
+        "ガシャン"
+      ],
+      "ruby": [],
+      "reading": "ガシャン",
+      "zh": "（撞翻東西）哐啷"
+    },
+    {
+      "id": "t4",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "B",
+      "page": 0,
+      "order": 4,
+      "orientation": "vertical",
+      "rotate": -6,
+      "bbox": [
+        755,
+        612,
+        50,
+        55
+      ],
+      "textBbox": [
+        755,
+        612,
+        50,
+        55
+      ],
+      "ja": "ハァ…ハァ…",
+      "jaLines": [
+        "ハァ…",
+        "ハァ…"
+      ],
+      "ruby": [],
+      "reading": "ハァ…ハァ…",
+      "zh": "（喘氣）哈…哈…"
+    },
+    {
+      "id": "t5",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "B",
+      "page": 0,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        465,
+        555,
+        110,
+        190
+      ],
+      "textBbox": [
+        484,
+        606,
+        73,
+        88
+      ],
+      "ja": "間に合った…",
+      "jaLines": [
+        "間に",
+        "合った…"
+      ],
+      "ruby": [
+        {
+          "base": "間",
+          "rt": "ま"
+        },
+        {
+          "base": "合",
+          "rt": "あ"
+        }
+      ],
+      "reading": "まにあった…",
+      "zh": "趕上了…"
+    },
+    {
+      "id": "t6",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "C",
+      "page": 0,
+      "order": 6,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        122,
+        604,
+        216,
+        31
+      ],
+      "textBbox": [
+        122,
+        604,
+        216,
+        31
+      ],
+      "ja": "ひだまりベーカリー",
+      "jaLines": [
+        "ひだまりベーカリー"
+      ],
+      "ruby": [],
+      "reading": "ひだまりベーカリー",
+      "zh": "向陽烘焙坊"
+    },
+    {
+      "id": "t7",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "C",
+      "page": 0,
+      "order": 7,
+      "orientation": "vertical",
+      "rotate": 10,
+      "bbox": [
+        323,
+        810,
+        36,
+        61
+      ],
+      "textBbox": [
+        323,
+        810,
+        36,
+        61
+      ],
+      "ja": "チリン",
+      "jaLines": [
+        "チリン"
+      ],
+      "ruby": [],
+      "reading": "チリン",
+      "zh": "（門鈴）叮鈴"
+    },
+    {
+      "id": "t8",
+      "kind": "narration",
+      "shape": "none",
+      "panel": "D",
+      "page": 0,
+      "order": 8,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        733,
+        941,
+        75,
+        110
+      ],
+      "textBbox": [
+        733,
+        941,
+        75,
+        110
+      ],
+      "ja": "誰もいない店の中",
+      "jaLines": [
+        "誰もいない",
+        "店の中"
+      ],
+      "ruby": [
+        {
+          "base": "誰",
+          "rt": "だれ"
+        },
+        {
+          "base": "店",
+          "rt": "みせ"
+        },
+        {
+          "base": "中",
+          "rt": "なか"
+        }
+      ],
+      "reading": "だれもいないみせのなか",
+      "zh": "空無一人的店裡"
+    },
+    {
+      "id": "t9",
+      "kind": "balloon",
+      "shape": "ellipse",
+      "panel": "D",
+      "page": 0,
+      "order": 9,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        465,
+        965,
+        110,
+        190
+      ],
+      "textBbox": [
+        487,
+        1027,
+        68,
+        66
+      ],
+      "ja": "静かだな…",
+      "jaLines": [
+        "静か",
+        "だな…"
+      ],
+      "ruby": [
+        {
+          "base": "静",
+          "rt": "しず"
+        }
+      ],
+      "reading": "しずかだな…",
+      "zh": "好安靜啊…"
+    },
+    {
+      "id": "t10",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "D",
+      "page": 0,
+      "order": 10,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        80,
+        936,
+        60,
+        27
+      ],
+      "textBbox": [
+        80,
+        936,
+        60,
+        27
+      ],
+      "ja": "※閉店後",
+      "jaLines": [
+        "※閉店後"
+      ],
+      "ruby": [
+        {
+          "base": "閉店後",
+          "rt": "へいてんご"
+        }
+      ],
+      "reading": "※へいてんご",
+      "zh": "※打烊後"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "id": "p06-horizontal",
+  "description": "橫書：手機畫面訊息、英數混排、時間、橫書 Balloon 與直書縦中横並存",
+  "width": 880,
+  "height": 1280,
+  "panels": [
+    { "id": "A", "order": 1, "points": [[40, 40], [840, 40], [840, 600], [40, 600]],
+      "art": [
+        { "type": "rect", "x": 250, "y": 70, "w": 380, "h": 520, "fill": "#fff", "sw": 6 },
+        { "type": "line", "x1": 250, "y1": 130, "x2": 630, "y2": 130 },
+        { "type": "rect", "x": 290, "y": 160, "w": 230, "h": 60 },
+        { "type": "rect", "x": 440, "y": 250, "w": 150, "h": 56, "fill": "#e8e8e8" },
+        { "type": "rect", "x": 290, "y": 340, "w": 250, "h": 90 }
+      ] },
+    { "id": "B", "order": 2, "points": [[440, 616], [840, 616], [840, 1240], [440, 1240]],
+      "art": [
+        { "type": "face", "x": 640, "y": 1060, "r": 70, "mouth": "open", "hair": true },
+        { "type": "speedlines", "x": 640, "y": 1060, "r0": 170, "r1": 500, "n": 40, "seed": 21 }
+      ] },
+    { "id": "C", "order": 3, "points": [[40, 616], [424, 616], [424, 1240], [40, 1240]],
+      "art": [
+        { "type": "line", "x1": 330, "y1": 820, "x2": 330, "y2": 1240, "sw": 6 },
+        { "type": "rect", "x": 250, "y": 760, "w": 160, "h": 60, "fill": "#fff" },
+        { "type": "hlines", "x": 40, "y": 1000, "w": 260, "h": 200, "gap": 10 }
+      ] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "sign", "panel": "A", "orientation": "horizontal",
+      "cx": 440, "cy": 100, "fontSize": 18, "weight": 700,
+      "ja": "ミオ", "reading": "ミオ", "zh": "美緒" },
+    { "id": "t2", "order": 2, "kind": "sign", "panel": "A", "orientation": "horizontal",
+      "cx": 405, "cy": 190, "fontSize": 20, "weight": 400,
+      "ja": "{駅前|えきまえ}に7{時|じ}ね", "reading": "えきまえにしちじね", "zh": "7點在車站前喔" },
+    { "id": "t3", "order": 3, "kind": "sign", "panel": "A", "orientation": "horizontal",
+      "cx": 515, "cy": 278, "fontSize": 22, "weight": 400,
+      "ja": "OK！", "reading": "オーケー！", "zh": "OK！" },
+    { "id": "t4", "order": 4, "kind": "sign", "panel": "A", "orientation": "horizontal",
+      "cx": 415, "cy": 385, "fontSize": 20, "weight": 400,
+      "ja": "{遅|おく}れたら\nアイス{奢|おご}りね", "reading": "おくれたらアイスおごりね", "zh": "遲到的話要請冰淇淋喔" },
+    { "id": "t5", "order": 5, "kind": "sign", "panel": "A", "orientation": "horizontal",
+      "cx": 590, "cy": 560, "fontSize": 14, "weight": 400,
+      "ja": "18:42", "reading": "じゅうはちじよんじゅうにふん", "zh": "18:42" },
+    { "id": "t6", "order": 6, "kind": "balloon", "shape": "burst", "panel": "B", "seed": 13,
+      "orientation": "horizontal", "cx": 640, "cy": 760, "w": 330, "h": 170, "tail": [640, 980], "fontSize": 30,
+      "ja": "え、もう6:50!?", "reading": "え、もうろくじごじゅっぷん!?", "zh": "咦，已經6:50了!?" },
+    { "id": "t7", "order": 7, "kind": "sign", "panel": "C", "orientation": "horizontal",
+      "cx": 330, "cy": 790, "fontSize": 22, "weight": 700,
+      "ja": "BUS STOP", "reading": "バスストップ", "zh": "公車站" },
+    { "id": "t8", "order": 8, "kind": "balloon", "shape": "ellipse", "panel": "C",
+      "cx": 150, "cy": 800, "w": 160, "h": 260, "tail": [250, 950],
+      "ja": "あと[10]{分|ぷん}で\n{着|つ}く{訳|わけ}\nない！", "reading": "あとじゅっぷんでつくわけない！", "zh": "怎麼可能10分鐘就到！" }
+  ]
+}

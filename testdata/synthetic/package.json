@@ -1,0 +1,12 @@
+{
+  "name": "synthetic-manga-pages",
+  "private": true,
+  "type": "module",
+  "description": "Original synthetic manga test Pages with ground truth JSON",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}

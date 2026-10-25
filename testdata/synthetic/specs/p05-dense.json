@@ -1,0 +1,69 @@
+{
+  "id": "p05-dense",
+  "description": "高密度：斜切格線、右側縱長格（先讀右長格再讀左邊上下兩格）、小字、橫跨格間空白的 Balloon",
+  "width": 880,
+  "height": 1280,
+  "panels": [
+    { "id": "A", "order": 1, "points": [[520, 40], [840, 40], [840, 340], [480, 340]],
+      "art": [{ "type": "face", "x": 680, "y": 270, "r": 50 }] },
+    { "id": "B", "order": 2, "points": [[40, 40], [504, 40], [464, 340], [40, 340]],
+      "art": [{ "type": "face", "x": 330, "y": 270, "r": 50, "hair": true, "mouth": "open" }] },
+    { "id": "C", "order": 3, "points": [[600, 356], [840, 356], [840, 900], [600, 900]],
+      "art": [
+        { "type": "face", "x": 720, "y": 820, "r": 50, "eyes": "closed", "mouth": "flat" },
+        { "type": "line", "x1": 600, "y1": 870, "x2": 840, "y2": 870 }
+      ] },
+    { "id": "D", "order": 4, "points": [[40, 356], [584, 356], [584, 620], [40, 620]],
+      "art": [
+        { "type": "face", "x": 470, "y": 540, "r": 45, "hair": true, "mouth": "open" },
+        { "type": "rect", "x": 80, "y": 520, "w": 80, "h": 100 }
+      ] },
+    { "id": "E", "order": 5, "points": [[40, 636], [584, 636], [584, 900], [40, 900]],
+      "art": [{ "type": "face", "x": 480, "y": 820, "r": 45, "mouth": "flat" }] },
+    { "id": "F", "order": 6, "points": [[420, 916], [840, 916], [840, 1240], [380, 1240]],
+      "art": [
+        { "type": "rect", "x": 520, "y": 1120, "w": 160, "h": 120 },
+        { "type": "circle", "x": 600, "y": 1100, "r": 40 }
+      ] },
+    { "id": "G", "order": 7, "points": [[40, 916], [404, 916], [364, 1240], [40, 1240]],
+      "art": [{ "type": "face", "x": 250, "y": 1150, "r": 50, "hair": true }] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "balloon", "shape": "ellipse", "panel": "A",
+      "cx": 780, "cy": 140, "w": 100, "h": 180, "tail": [720, 230], "fontSize": 17,
+      "ja": "{今夜|こんや}の{当番|とうばん}\n{誰|だれ}だっけ？", "reading": "こんやのとうばんだれだっけ？", "zh": "今晚輪到誰煮飯來著？" },
+    { "id": "t2", "order": 2, "kind": "balloon", "shape": "ellipse", "panel": "A",
+      "cx": 590, "cy": 110, "w": 64, "h": 110, "tail": [640, 220], "fontSize": 17,
+      "ja": "…{俺|おれ}？", "reading": "…おれ？", "zh": "…我？" },
+    { "id": "t3", "order": 3, "kind": "balloon", "shape": "ellipse", "panel": "B",
+      "cx": 140, "cy": 150, "w": 120, "h": 190, "tail": [270, 250], "fontSize": 17,
+      "ja": "そうだよ\n{兄|にい}ちゃん", "reading": "そうだよにいちゃん", "zh": "對啊，哥" },
+    { "id": "t4", "order": 4, "kind": "balloon", "shape": "ellipse", "panel": "C",
+      "cx": 760, "cy": 470, "w": 120, "h": 170, "tail": [740, 760], "fontSize": 17,
+      "ja": "えー\n{面倒|めんどう}\nくさい", "reading": "えーめんどうくさい", "zh": "欸～好麻煩" },
+    { "id": "t5", "order": 5, "kind": "balloon", "shape": "ellipse", "panel": "C",
+      "cx": 680, "cy": 640, "w": 110, "h": 160, "tail": [710, 760], "fontSize": 17,
+      "ja": "{昨日|きのう}も\n{作|つく}ったぞ", "reading": "きのうもつくったぞ", "zh": "我昨天也煮了啊" },
+    { "id": "t6", "order": 6, "kind": "balloon", "shape": "burst", "panel": "D", "seed": 9,
+      "cx": 300, "cy": 470, "w": 210, "h": 210, "tail": [420, 520], "fontSize": 17,
+      "ja": "{嘘|うそ}つけ！\nカップ{麺|めん}\nだったじゃん", "reading": "うそつけ！カップめんだったじゃん", "zh": "少騙人！那是泡麵吧" },
+    { "id": "t7", "order": 7, "kind": "balloon", "shape": "ellipse", "panel": "E",
+      "cx": 300, "cy": 650, "w": 140, "h": 150, "tail": [440, 780], "fontSize": 17,
+      "ja": "お{湯|ゆ}を\n{入|い}れたのは\n{俺|おれ}だ", "reading": "おゆをいれたのはおれだ", "zh": "熱水是我倒的" },
+    { "id": "t8", "order": 8, "kind": "balloon", "shape": "ellipse", "panel": "E",
+      "cx": 120, "cy": 790, "w": 110, "h": 150, "fontSize": 17,
+      "ja": "それは\n{料理|りょうり}\nじゃない", "reading": "それはりょうりじゃない", "zh": "那不叫做菜" },
+    { "id": "t9", "order": 9, "kind": "narration", "shape": "rect", "panel": "F",
+      "cx": 800, "cy": 990, "w": 44, "h": 110, "fontSize": 17, "weight": 400, "font": "mincho",
+      "ja": "{結局|けっきょく}…", "reading": "けっきょく…", "zh": "結果…" },
+    { "id": "t10", "order": 10, "kind": "balloon", "shape": "ellipse", "panel": "F",
+      "cx": 680, "cy": 1000, "w": 110, "h": 140, "tail": [620, 1060], "fontSize": 17,
+      "ja": "カレーで\nいい？", "reading": "カレーでいい？", "zh": "咖哩可以嗎？" },
+    { "id": "t11", "order": 11, "kind": "balloon", "shape": "ellipse", "panel": "G",
+      "cx": 260, "cy": 1010, "w": 110, "h": 150, "tail": [250, 1090], "fontSize": 17,
+      "ja": "{辛口|からくち}で\nね！", "reading": "からくちでね！", "zh": "要辣味的喔！" },
+    { "id": "t12", "order": 12, "kind": "outside", "panel": "G",
+      "cx": 100, "cy": 1060, "fontSize": 13, "weight": 400, "rotate": 4,
+      "ja": "（{甘口|あまくち}{派|は}）", "reading": "（あまくちは）", "zh": "（我是甜味派）" }
+  ]
+}

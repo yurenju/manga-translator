@@ -1,0 +1,64 @@
+{
+  "id": "p04-outside",
+  "description": "Balloon 外的文字：大型狀聲詞（旋轉、描邊）、招牌、手寫風小字、暗網點上的白字",
+  "width": 880,
+  "height": 1280,
+  "panels": [
+    { "id": "A", "order": 1, "points": [[40, 40], [840, 40], [840, 520], [40, 520]],
+      "art": [
+        { "type": "hlines", "x": 40, "y": 250, "w": 520, "h": 160, "gap": 12 },
+        { "type": "face", "x": 600, "y": 330, "r": 60, "mouth": "open", "hair": true },
+        { "type": "rect", "x": 80, "y": 430, "w": 120, "h": 70 },
+        { "type": "line", "x1": 80, "y1": 430, "x2": 200, "y2": 500 }
+      ] },
+    { "id": "B", "order": 2, "points": [[440, 536], [840, 536], [840, 900], [440, 900]],
+      "art": [{ "type": "face", "x": 620, "y": 790, "r": 60, "eyes": "closed", "mouth": "open" }] },
+    { "id": "C", "order": 3, "points": [[40, 536], [424, 536], [424, 900], [40, 900]],
+      "art": [
+        { "type": "rect", "x": 70, "y": 660, "w": 320, "h": 240 },
+        { "type": "rect", "x": 100, "y": 590, "w": 260, "h": 60, "fill": "#fff" },
+        { "type": "rect", "x": 190, "y": 760, "w": 90, "h": 140 },
+        { "type": "line", "x1": 300, "y1": 760, "x2": 300, "y2": 790 },
+        { "type": "circle", "x": 300, "y": 800, "r": 10 }
+      ] },
+    { "id": "D", "order": 4, "points": [[40, 916], [840, 916], [840, 1240], [40, 1240]],
+      "fill": "#fff",
+      "art": [
+        { "type": "rect", "x": 40, "y": 916, "w": 800, "h": 160, "fill": "#111" },
+        { "type": "tone", "x": 40, "y": 1076, "w": 800, "h": 164, "dark": true },
+        { "type": "face", "x": 300, "y": 1150, "r": 55 }
+      ] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "balloon", "shape": "ellipse", "panel": "A",
+      "cx": 760, "cy": 170, "w": 120, "h": 220, "tail": [650, 270],
+      "ja": "{遅刻|ちこく}だー[!!]", "reading": "ちこくだー!!", "zh": "要遲到了!!" },
+    { "id": "t2", "order": 2, "kind": "sfx", "panel": "A",
+      "cx": 470, "cy": 150, "fontSize": 70, "rotate": -8, "weight": 900,
+      "ja": "ドドドド", "reading": "ドドドド", "zh": "（跑步聲）咚咚咚咚" },
+    { "id": "t3", "order": 3, "kind": "sfx", "panel": "A", "orientation": "horizontal",
+      "cx": 250, "cy": 390, "fontSize": 54, "rotate": 12, "weight": 900,
+      "ja": "ガシャン", "reading": "ガシャン", "zh": "（撞翻東西）哐啷" },
+    { "id": "t4", "order": 4, "kind": "outside", "panel": "B",
+      "cx": 780, "cy": 640, "fontSize": 17, "weight": 400, "rotate": -6, "skew": true,
+      "ja": "ハァ…\nハァ…", "reading": "ハァ…ハァ…", "zh": "（喘氣）哈…哈…" },
+    { "id": "t5", "order": 5, "kind": "balloon", "shape": "ellipse", "panel": "B",
+      "cx": 520, "cy": 650, "w": 110, "h": 190, "tail": [580, 740],
+      "ja": "{間|ま}に\n{合|あ}った…", "reading": "まにあった…", "zh": "趕上了…" },
+    { "id": "t6", "order": 6, "kind": "sign", "panel": "C", "orientation": "horizontal",
+      "cx": 230, "cy": 620, "fontSize": 24, "weight": 700,
+      "ja": "ひだまりベーカリー", "reading": "ひだまりベーカリー", "zh": "向陽烘焙坊" },
+    { "id": "t7", "order": 7, "kind": "sfx", "panel": "C", "color": "black",
+      "cx": 340, "cy": 840, "fontSize": 20, "weight": 400, "rotate": 10,
+      "ja": "チリン", "reading": "チリン", "zh": "（門鈴）叮鈴" },
+    { "id": "t8", "order": 8, "kind": "narration", "panel": "D", "color": "white",
+      "cx": 770, "cy": 996, "fontSize": 22, "weight": 400, "font": "mincho",
+      "ja": "{誰|だれ}もいない\n{店|みせ}の{中|なか}", "reading": "だれもいないみせのなか", "zh": "空無一人的店裡" },
+    { "id": "t9", "order": 9, "kind": "balloon", "shape": "ellipse", "panel": "D",
+      "cx": 520, "cy": 1060, "w": 110, "h": 190, "tail": [370, 1120],
+      "ja": "{静|しず}か\nだな…", "reading": "しずかだな…", "zh": "好安靜啊…" },
+    { "id": "t10", "order": 10, "kind": "outside", "panel": "D", "color": "white",
+      "cx": 110, "cy": 950, "orientation": "horizontal", "fontSize": 15, "weight": 400,
+      "ja": "※{閉店後|へいてんご}", "reading": "※へいてんご", "zh": "※打烊後" }
+  ]
+}

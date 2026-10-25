@@ -1,0 +1,55 @@
+{
+  "id": "p03-shapes",
+  "description": "Balloon 形狀：爆炸形、思考泡泡、虛線悄悄話、黑底白字、旁白框，以及橫跨格線的 Balloon",
+  "width": 880,
+  "height": 1280,
+  "panels": [
+    { "id": "A", "order": 1, "points": [[440, 40], [840, 40], [840, 400], [440, 400]],
+      "art": [
+        { "type": "speedlines", "x": 560, "y": 300, "r0": 110, "r1": 400, "n": 70, "seed": 11 },
+        { "type": "face", "x": 560, "y": 300, "r": 60, "mouth": "open", "hair": true }
+      ] },
+    { "id": "B", "order": 2, "points": [[40, 40], [424, 40], [424, 400], [40, 400]],
+      "art": [{ "type": "face", "x": 320, "y": 320, "r": 55, "eyes": "closed", "mouth": "flat" }] },
+    { "id": "C", "order": 3, "points": [[40, 416], [840, 416], [840, 800], [40, 800]],
+      "art": [
+        { "type": "tone", "x": 40, "y": 416, "w": 800, "h": 384 },
+        { "type": "face", "x": 560, "y": 690, "r": 55, "eyes": "dot", "mouth": "flat" },
+        { "type": "rect", "x": 60, "y": 470, "w": 180, "h": 330, "fill": "#222" }
+      ] },
+    { "id": "D", "order": 4, "points": [[520, 816], [840, 816], [840, 1240], [520, 1240]],
+      "art": [
+        { "type": "rect", "x": 560, "y": 1050, "w": 70, "h": 190 },
+        { "type": "rect", "x": 650, "y": 990, "w": 80, "h": 250 },
+        { "type": "rect", "x": 750, "y": 1080, "w": 70, "h": 160 }
+      ] },
+    { "id": "E", "order": 5, "points": [[40, 816], [504, 816], [504, 1240], [40, 1240]],
+      "art": [
+        { "type": "face", "x": 400, "y": 1120, "r": 55, "mouth": "open" },
+        { "type": "face", "x": 140, "y": 1150, "r": 50, "hair": true }
+      ] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "balloon", "shape": "burst", "panel": "A", "seed": 5,
+      "cx": 740, "cy": 170, "w": 170, "h": 250, "tail": [620, 270], "fontSize": 30,
+      "ja": "うるさーい[!!]", "reading": "うるさーい!!", "zh": "吵死了!!" },
+    { "id": "t2", "order": 2, "kind": "thought", "shape": "thought", "panel": "B",
+      "cx": 150, "cy": 170, "w": 170, "h": 210, "tail": [280, 290], "fontSize": 20,
+      "ja": "{明日|あした}の\nテスト\nどうしよう…", "reading": "あしたのテストどうしよう…", "zh": "明天的考試怎麼辦…" },
+    { "id": "t3", "order": 3, "kind": "balloon", "shape": "whisper", "panel": "C",
+      "cx": 740, "cy": 560, "w": 130, "h": 200, "tail": [610, 650], "fontSize": 20, "weight": 400,
+      "ja": "ねえ…\n{聞|き}こえる？", "reading": "ねえ…きこえる？", "zh": "喂…聽得到嗎？" },
+    { "id": "t4", "order": 4, "kind": "balloon", "shape": "inverted", "panel": "C",
+      "cx": 350, "cy": 560, "w": 110, "h": 210, "tail": [220, 600],
+      "ja": "……{誰|だれ}だ", "reading": "……だれだ", "zh": "……是誰" },
+    { "id": "t5", "order": 5, "kind": "narration", "shape": "rect", "panel": "D",
+      "cx": 760, "cy": 900, "w": 120, "h": 140, "fontSize": 18, "weight": 400, "font": "mincho",
+      "ja": "その{夜|よる}、\n{町|まち}から\n{音|おと}が\n{消|き}えた", "reading": "そのよる、まちからおとがきえた", "zh": "那一晚，鎮上的聲音消失了" },
+    { "id": "t6", "order": 6, "kind": "balloon", "shape": "ellipse", "panel": "E",
+      "cx": 400, "cy": 860, "w": 110, "h": 160, "tail": [400, 1050],
+      "ja": "{待|ま}って！", "reading": "まって！", "zh": "等一下！" },
+    { "id": "t7", "order": 7, "kind": "balloon", "shape": "ellipse", "panel": "E",
+      "cx": 150, "cy": 960, "w": 120, "h": 200, "tail": [150, 1090],
+      "ja": "どこ\n{行|い}くの？", "reading": "どこいくの？", "zh": "你要去哪？" }
+  ]
+}

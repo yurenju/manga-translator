@@ -1,0 +1,50 @@
+{
+  "id": "p01-basic",
+  "description": "基本款：5 格、直書橢圓 Balloon、右上到左下的標準閱讀順序、一個旁白框",
+  "width": 880,
+  "height": 1280,
+  "panels": [
+    { "id": "A", "order": 1, "points": [[460, 40], [840, 40], [840, 440], [460, 440]],
+      "art": [{ "type": "face", "x": 580, "y": 330, "r": 60 }] },
+    { "id": "B", "order": 2, "points": [[40, 40], [444, 40], [444, 440], [40, 440]],
+      "art": [{ "type": "face", "x": 300, "y": 320, "r": 60, "hair": true, "mouth": "open" }] },
+    { "id": "C", "order": 3, "points": [[40, 456], [840, 456], [840, 856], [40, 856]],
+      "art": [
+        { "type": "line", "x1": 40, "y1": 800, "x2": 840, "y2": 800 },
+        { "type": "face", "x": 520, "y": 700, "r": 50 },
+        { "type": "face", "x": 360, "y": 700, "r": 50, "hair": true }
+      ] },
+    { "id": "D", "order": 4, "points": [[480, 872], [840, 872], [840, 1240], [480, 1240]],
+      "art": [{ "type": "face", "x": 720, "y": 1130, "r": 55, "mouth": "open" }] },
+    { "id": "E", "order": 5, "points": [[40, 872], [464, 872], [464, 1240], [40, 1240]],
+      "art": [
+        { "type": "rect", "x": 90, "y": 980, "w": 300, "h": 260 },
+        { "type": "rect", "x": 200, "y": 1080, "w": 80, "h": 160 },
+        { "type": "line", "x1": 70, "y1": 980, "x2": 410, "y2": 980 },
+        { "type": "tone", "x": 90, "y": 980, "w": 300, "h": 50 }
+      ] }
+  ],
+  "texts": [
+    { "id": "t1", "order": 1, "kind": "balloon", "shape": "ellipse", "panel": "A",
+      "cx": 760, "cy": 160, "w": 120, "h": 200, "tail": [640, 280],
+      "ja": "おはよう！\n今日は早いね", "reading": "おはよう！きょうははやいね", "zh": "早安！今天好早喔" },
+    { "id": "t2", "order": 2, "kind": "balloon", "shape": "ellipse", "panel": "B",
+      "cx": 130, "cy": 170, "w": 160, "h": 210, "tail": [240, 280],
+      "ja": "うん、\nパンを\n買いに\n行くんだ", "reading": "うん、パンをかいにいくんだ", "zh": "嗯，我要去買麵包" },
+    { "id": "t3", "order": 3, "kind": "balloon", "shape": "ellipse", "panel": "C",
+      "cx": 700, "cy": 580, "w": 140, "h": 170, "tail": [570, 660],
+      "ja": "一緒に\n行っても\nいい？", "reading": "いっしょにいってもいい？", "zh": "我可以一起去嗎？" },
+    { "id": "t4", "order": 4, "kind": "balloon", "shape": "ellipse", "panel": "C",
+      "cx": 200, "cy": 600, "w": 90, "h": 180, "tail": [310, 680],
+      "ja": "もちろん！", "reading": "もちろん！", "zh": "當然！" },
+    { "id": "t5", "order": 5, "kind": "balloon", "shape": "ellipse", "panel": "D",
+      "cx": 590, "cy": 990, "w": 160, "h": 180, "tail": [680, 1080],
+      "ja": "あ、\nお店が\nもう\n開いてる", "reading": "あ、おみせがもうあいてる", "zh": "啊，店已經開了" },
+    { "id": "t6", "order": 6, "kind": "narration", "shape": "rect", "panel": "E",
+      "cx": 425, "cy": 950, "w": 50, "h": 120, "fontSize": 20, "weight": 400, "font": "mincho",
+      "ja": "朝七時", "reading": "あさしちじ", "zh": "早上七點" },
+    { "id": "t7", "order": 7, "kind": "balloon", "shape": "ellipse", "panel": "E",
+      "cx": 130, "cy": 930, "w": 110, "h": 90, "orientation": "horizontal", "fontSize": 20,
+      "ja": "いい\nにおい！", "reading": "いいにおい！", "zh": "好香！" }
+  ]
+}
