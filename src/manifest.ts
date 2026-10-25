@@ -17,6 +17,12 @@ export function buildManifest({ e2e }: { e2e: boolean }): chrome.runtime.Manifes
     background: { service_worker: 'background.js', type: 'module' },
     action: { default_title: '漫畫翻譯：在這個分頁啟動' },
     side_panel: { default_path: 'sidepanel.html' },
+    // 讓外掛頁面（offscreen document）crossOriginIsolated，onnxruntime-web 的 wasm 才能用 SharedArrayBuffer 多執行緒。
+    // 外掛頁面只載入自己的檔案、data URL，以及有 CORS 的 Hugging Face 下載，require-corp 不會擋到。
+    cross_origin_embedder_policy: { value: 'require-corp' },
+    cross_origin_opener_policy: { value: 'same-origin' },
+    // MV3 預設的 extension_pages CSP 不允許編譯 wasm；onnxruntime-web 需要 'wasm-unsafe-eval'（不需要 'unsafe-eval'）。
+    content_security_policy: { extension_pages: "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
     commands: {
       activate: {
         suggested_key: { default: 'Alt+Shift+M' },

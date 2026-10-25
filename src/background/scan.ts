@@ -20,7 +20,8 @@ export interface ScannerDeps {
   /** 截圖。要在呼叫當下就送出 captureVisibleTab，限速是以呼叫的時間計算。 */
   captureWindow(windowId: number): Promise<string>;
   crop(request: CropRequest): Promise<PageThumb[]>;
-  publish(tabId: number, pages: PageThumb[]): void;
+  /** capture＝這次的截圖與版面（沒有 Page 或停止時是 undefined），給後面的本機流水線裁全解析度的 Page。 */
+  publish(tabId: number, pages: PageThumb[], capture?: CropRequest): void;
 }
 
 export function createScanner(deps: ScannerDeps) {
@@ -58,16 +59,17 @@ export function createScanner(deps: ScannerDeps) {
       const screenshot = await deps.captureWindow(windowId);
       // side panel 剛打開造成重排、使用者在截圖時捲動……rect 跟截圖對不上就重來。
       if (!sameLayout(before, await deps.findPageCandidates(tabId))) continue;
-      const result = await deps.crop({ screenshot, ...before });
-      if (isCurrentGeneration()) publish(tabId, result);
+      const capture: CropRequest = { screenshot, ...before };
+      const result = await deps.crop(capture);
+      if (isCurrentGeneration()) publish(tabId, result, capture);
       return;
     }
     throw new Error(`layout kept changing during capture (tab ${tabId})`);
   }
 
-  function publish(tabId: number, result: PageThumb[]): void {
+  function publish(tabId: number, result: PageThumb[], capture?: CropRequest): void {
     pages.set(tabId, result);
-    deps.publish(tabId, result);
+    deps.publish(tabId, result, capture);
   }
 
   function scan(tabId: number): Promise<void> {

@@ -1,18 +1,29 @@
+import { createFakeTranslator } from '../shared/fake-translator.ts';
 import type {
+  AnalyzeResponse,
   CropResponse,
   Message,
+  ModelStatus,
+  ModelStatusResponse,
   PageCandidatesResponse,
   PagesResponse,
+  PipelineConfig,
   StatusResponse,
+  TestConfig,
 } from '../shared/messages.ts';
+import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createScanner } from './scan.ts';
+import { SYNTHETIC_GROUND_TRUTH } from './synthetic-ground-truth.ts';
 import { indexedDbTabStore } from './tab-store.ts';
+import { createTranscriber } from './transcribe.ts';
 
 declare global {
   /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
   var __captureLog: number[] | undefined;
+  /** e2e build 才有：在建立任何 Page 之前呼叫（e2e/fixtures.ts）。 */
+  var __configureForTest: ((config: TestConfig) => void) | undefined;
 }
 
 const store = indexedDbTabStore();
@@ -44,10 +55,42 @@ const scanner = createScanner({
     if ('error' in response) throw new Error(`crop failed: ${response.error}`);
     return response.pages;
   },
+  publish(tabId, pages, capture) {
+    if (capture) void transcriber.update(tabId, pages, capture);
+    else transcriber.clear(tabId);
+  },
+});
+
+/** e2e build 才會改（test:configure）。 */
+let pipelineConfig: PipelineConfig = {};
+let fakeTranslator: Translator | undefined;
+
+const transcriber = createTranscriber({
+  async analyze(request) {
+    await ensureOffscreenDocument();
+    const response = await chrome.runtime.sendMessage<Message, AnalyzeResponse>({
+      type: 'offscreen:analyze',
+      ...request,
+      ...(__E2E__ ? { pipeline: pipelineConfig } : {}),
+    });
+    if ('error' in response) throw new Error(response.error);
+    return response.text;
+  },
+  // Claude 與 API key 在 #31；沒有 key 時沒有 Translator（只顯示原文＋kuromoji 讀音）。
+  getTranslator: () => (__E2E__ ? fakeTranslator : undefined),
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
   },
 });
+
+let modelStatus: ModelStatus = { state: 'idle' };
+
+if (__E2E__) {
+  globalThis.__configureForTest = (config) => {
+    pipelineConfig = config.pipeline;
+    fakeTranslator = config.fakeTranslator ? createFakeTranslator(SYNTHETIC_GROUND_TRUTH) : undefined;
+  };
+}
 
 /** 頁面可能剛好換頁、content script 不在，或截圖失敗；這次掃描就放棄，等下一次觸發。 */
 function scan(tabId: number): void {
@@ -102,6 +145,12 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
     return true;
   }
   switch (message.type) {
+    case 'models:status':
+      modelStatus = message.status;
+      return false;
+    case 'panel:getModelStatus':
+      sendResponse({ status: modelStatus } satisfies ModelStatusResponse);
+      return false;
     case 'panel:getStatus':
       activation.isActive(message.tabId).then((active) => sendResponse({ active } satisfies StatusResponse));
       return true;
@@ -109,7 +158,7 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
       activation.stop(message.tabId).then(() => sendResponse());
       return true;
     case 'panel:getPages':
-      sendResponse({ pages: scanner.getPages(message.tabId) } satisfies PagesResponse);
+      sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);
       return false;
     case 'panel:scan':
       activation.isActive(message.tabId).then((active) => {

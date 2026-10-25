@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>漫畫翻譯</title>
     <script type="module" src="sidepanel.js"></script>
+    <style>
+      [aria-label='逐字稿'] li { display: flex; flex-direction: column; margin-bottom: 0.5em; }
+      .loose { font-style: italic; }
+      .reading { color: #2a6fb0; font-size: 0.85em; }
+      .untranslated { color: #888; font-size: 0.85em; }
+      .error, [role='alert'] { color: #b00020; }
+    </style>
   </head>
   <body>
     <div id="app"></div>

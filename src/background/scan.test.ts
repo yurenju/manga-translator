@@ -64,6 +64,16 @@ describe('scan', () => {
     expect(scanner.getPages(1)).toEqual(expected);
   });
 
+  it('公布時一併給出截圖與量到的版面，讓後面的流水線用全解析度的 Page', async () => {
+    const chrome = fakeDeps();
+    const captures: unknown[] = [];
+    const scanner = createScanner({ ...chrome.deps, publish: (_tabId, _pages, capture) => void captures.push(capture) });
+
+    await settle(scanner.scan(1));
+
+    expect(captures).toEqual([{ screenshot: 'data:image/png;base64,SCREENSHOT1', viewport: VIEWPORT, candidates: [P1] }]);
+  });
+
   it('沒有 Page 候選就不截圖，公布空清單', async () => {
     const chrome = fakeDeps([]);
     const scanner = createScanner(chrome.deps);

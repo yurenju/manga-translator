@@ -6,8 +6,8 @@
  *   - background（SW）、sidepanel、offscreen：ES module
  *   - content：IIFE。scripting.executeScript({files}) 只能注入傳統 script，不能有 import。
  */
-import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { copyFile, cp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
 import { buildManifest } from '../src/manifest.ts';
@@ -16,12 +16,23 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * 原樣複製進外掛的檔案：[來源（相對 repo 根目錄）, 輸出路徑]。
- * 之後的 onnxruntime-web wasm、kuromoji 字典、Noto Sans TC 字型也加在這裡。
+ * ONNX 模型不在這裡：第一次使用時才下載（spec #27 第 3.3 節）。Noto Sans TC 字型之後（#32）也加在這裡。
  */
 const STATIC_FILES: [string, string][] = [
   ['src/sidepanel/sidepanel.html', 'sidepanel.html'],
   ['src/offscreen/offscreen.html', 'offscreen.html'],
+  // onnxruntime-web 不打包進 offscreen.js，執行時動態 import（見 src/offscreen/ort-engine.ts）。
+  // webgpu bundle 同時支援 WebGPU 與 wasm，只會載入 asyncify 這一份 wasm（與它的 .mjs，多執行緒 worker 用）。
+  ['node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs', 'ort/ort.webgpu.bundle.min.mjs'],
+  ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.mjs', 'ort/ort-wasm-simd-threaded.asyncify.mjs'],
+  ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm', 'ort/ort-wasm-simd-threaded.asyncify.wasm'],
 ];
+
+/** 原樣複製的目錄。 */
+const STATIC_DIRS: [string, string][] = [['node_modules/kuromoji/dict', 'kuromoji/dict']];
+
+/** e2e build 才有：量 #7 指標用的流水線測試頁（e2e/ocr-accuracy.spec.ts）。 */
+const E2E_STATIC_FILES: [string, string][] = [['src/test-pipeline/test-pipeline.html', 'test-pipeline.html']];
 
 export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
@@ -36,9 +47,12 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
     jsx: 'automatic',
     jsxImportSource: 'preact',
     sourcemap: e2e ? 'inline' : false,
+    // kuromoji 用 Node 的 path.join 拼字典網址
+    alias: { path: './src/offscreen/path-shim.ts' },
     logLevel: 'warning',
   };
 
+  const files = [...STATIC_FILES, ...(e2e ? E2E_STATIC_FILES : [])];
   await Promise.all([
     esbuild.build({
       ...common,
@@ -47,10 +61,15 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
         background: 'src/background/index.ts',
         sidepanel: 'src/sidepanel/main.tsx',
         offscreen: 'src/offscreen/index.ts',
+        ...(e2e ? { 'test-pipeline': 'src/test-pipeline/main.ts' } : {}),
       },
     }),
     esbuild.build({ ...common, format: 'iife', entryPoints: { content: 'src/content/index.ts' } }),
-    ...STATIC_FILES.map(([from, to]) => copyFile(join(root, from), join(outDir, to))),
+    ...files.map(async ([from, to]) => {
+      await mkdir(dirname(join(outDir, to)), { recursive: true });
+      await copyFile(join(root, from), join(outDir, to));
+    }),
+    ...STATIC_DIRS.map(([from, to]) => cp(join(root, from), join(outDir, to), { recursive: true })),
     writeFile(join(outDir, 'manifest.json'), JSON.stringify(buildManifest({ e2e }), null, 2)),
   ]);
 }
