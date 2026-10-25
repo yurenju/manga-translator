@@ -1,6 +1,19 @@
-import type { Message, StatusResponse } from '../shared/messages.ts';
+import type {
+  CropResponse,
+  Message,
+  PageCandidatesResponse,
+  PagesResponse,
+  StatusResponse,
+} from '../shared/messages.ts';
 import { createActivation } from './activation.ts';
+import { ensureOffscreenDocument } from './offscreen.ts';
+import { createScanner } from './scan.ts';
 import { indexedDbTabStore } from './tab-store.ts';
+
+declare global {
+  /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
+  var __captureLog: number[] | undefined;
+}
 
 const store = indexedDbTabStore();
 
@@ -8,6 +21,38 @@ const store = indexedDbTabStore();
 chrome.runtime.onStartup.addListener(() => {
   void store.clear();
 });
+
+/** side panel 沒開時沒有接收者，sendMessage 會 reject，忽略即可。 */
+function notifyPanel(message: Message): void {
+  chrome.runtime.sendMessage(message).catch(() => {});
+}
+
+const scanner = createScanner({
+  findPageCandidates: (tabId) =>
+    chrome.tabs.sendMessage<Message, PageCandidatesResponse>(tabId, { type: 'content:findPageCandidates' }),
+  async getVisibleWindowId(tabId) {
+    const tab = await chrome.tabs.get(tabId);
+    return tab.active ? tab.windowId : undefined;
+  },
+  captureWindow(windowId) {
+    if (__E2E__) (globalThis.__captureLog ??= []).push(Date.now());
+    return chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+  },
+  async crop(request) {
+    await ensureOffscreenDocument();
+    const response = await chrome.runtime.sendMessage<Message, CropResponse>({ type: 'offscreen:crop', ...request });
+    if ('error' in response) throw new Error(`crop failed: ${response.error}`);
+    return response.pages;
+  },
+  publish(tabId, pages) {
+    notifyPanel({ type: 'pages:updated', tabId, pages });
+  },
+});
+
+/** 頁面可能剛好換頁、content script 不在，或截圖失敗；這次掃描就放棄，等下一次觸發。 */
+function scan(tabId: number): void {
+  scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
+}
 
 const activation = createActivation({
   store,
@@ -27,8 +72,9 @@ const activation = createActivation({
     await chrome.tabs.sendMessage(tabId, { type: 'content:stop' } satisfies Message);
   },
   onStatusChanged(tabId, active) {
-    // side panel 沒開時沒有接收者，sendMessage 會 reject，忽略即可。
-    chrome.runtime.sendMessage({ type: 'status:changed', tabId, active } satisfies Message).catch(() => {});
+    notifyPanel({ type: 'status:changed', tabId, active });
+    if (active) scan(tabId);
+    else scanner.clear(tabId);
   },
 });
 
@@ -46,6 +92,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void activation.handleTabRemoved(tabId);
+  scanner.clear(tabId);
 });
 
 chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
@@ -60,6 +107,15 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
       return true;
     case 'panel:stop':
       activation.stop(message.tabId).then(() => sendResponse());
+      return true;
+    case 'panel:getPages':
+      sendResponse({ pages: scanner.getPages(message.tabId) } satisfies PagesResponse);
+      return false;
+    case 'panel:scan':
+      activation.isActive(message.tabId).then((active) => {
+        if (active) scan(message.tabId);
+        sendResponse();
+      });
       return true;
   }
   return false;
