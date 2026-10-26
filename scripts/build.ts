@@ -7,7 +7,7 @@
  *   - background（SW）、sidepanel、offscreen：ES module
  *   - content：IIFE。scripting.executeScript({files}) 只能注入傳統 script，不能有 import。
  */
-import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -60,8 +60,10 @@ async function copyFonts(outDir: string): Promise<void> {
 }
 
 export async function build({ e2e, debug = false, outDir }: { e2e: boolean; debug?: boolean; outDir: string }): Promise<void> {
-  await rm(outDir, { recursive: true, force: true });
+  // 只清空內容、不刪資料夾本身：debug Chrome 載入的就是這個資料夾，整個刪掉再建，
+  // 重新載入時 Chrome 曾回報「File path cannot be resolved」並卡在停用（#27 除錯）
   await mkdir(outDir, { recursive: true });
+  for (const name of await readdir(outDir)) await rm(join(outDir, name), { recursive: true, force: true });
 
   const common: esbuild.BuildOptions = {
     absWorkingDir: root,

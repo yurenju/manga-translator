@@ -10,7 +10,7 @@ import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import { createTrace } from '../shared/trace.ts';
-import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -243,9 +243,14 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     ];
     const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
 
-    const items = balloons.map((balloon) => {
+    const regionsList = balloons.map((balloon) => {
+      const text = toPx(balloon.textBbox, size);
+      return { text, ...textRegions(toPx(balloon.balloonBbox, size), text) };
+    });
+    separateRegions(regionsList);
+    const items = balloons.map((balloon, i) => {
       const balloonBox = toPx(balloon.balloonBbox, size);
-      const regions = textRegions(balloonBox, toPx(balloon.textBbox, size));
+      const regions = regionsList[i]!;
       const luminance = balloon.eraseLuminance ?? 255;
       const erase = document.createElement('div');
       erase.className = 'er';
@@ -259,10 +264,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       box.style.color = luminance < 128 ? '#fff' : '#111';
       const inner = buildText(balloon.譯文, vertical);
       box.append(inner);
-      element.append(erase, box);
-      return { balloon, regions, box, inner };
+      return { balloon, regions, erase, box, inner };
     });
-    element.append(highlight, tip);
+    // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
+    element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
 
     const old = entry.layers.get(subKey(sub));
     if (old && hovered?.layer === old) setHovered(undefined);
@@ -312,6 +317,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     highlight.style.borderWidth = `${HIGHLIGHT_SCREEN_PX / screenScale}px`;
     highlight.style.borderRadius = `${(2 * HIGHLIGHT_SCREEN_PX) / screenScale}px`;
     renderHighlights();
+    // 等畫到畫面上才 resolve：呼叫端接著會截「帶覆蓋層的樣子」，太早截會截到還沒畫出來的畫面
+    await Promise.race([nextFrame().then(nextFrame), new Promise((resolve) => setTimeout(resolve, FRAME_TIMEOUT_MS))]);
   }
 
   /**
@@ -438,6 +445,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return ms;
   }
 
+  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；覆蓋開關關著或 host 不在畫面上就是空的。 */
+  function shownPages(anchor: Element): string[] {
+    const entry = entries.get(anchor as HTMLElement);
+    if (!entry || !enabled || stopped || !entry.host.isConnected) return [];
+    return [...entry.layers.values()].map((layer) => layer.pageHash);
+  }
+
   /** 停止：拿掉所有 host、還原被改成 relative 的父元素。 */
   function clear(): void {
     stopped = true;
@@ -458,7 +472,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return changedParents.has(element as HTMLElement);
   }
 
-  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, clear, ownsStyleOf };
+  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;

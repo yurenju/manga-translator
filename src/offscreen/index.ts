@@ -39,11 +39,10 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
       candidates.map(async (candidate) => {
         const src = toImageRect(candidate.rect, viewport, bitmap);
         const size = thumbnailSize(src, THUMBNAIL_WIDTH);
-        const canvas = new OffscreenCanvas(size.width, size.height);
-        const ctx = canvas.getContext('2d')!;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(bitmap, src.x, src.y, src.width, src.height, 0, 0, size.width, size.height);
-        const thumbnail = await toDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
+        const thumbnail = pngDataUrl(size, (ctx) => {
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(bitmap, src.x, src.y, src.width, src.height, 0, 0, size.width, size.height);
+        });
         return { ...candidate, thumbnail, pageHash: pageHash(grayOf(bitmap, src)) };
       }),
     );
@@ -63,14 +62,17 @@ function grayOf(bitmap: ImageBitmap, rect: Rect): GrayImage {
   return { gray, width: rect.width, height: rect.height };
 }
 
-/** messaging 是 JSON 序列化，Blob 傳不過去，跨 context 一律用 data URL（#4）。 */
-function toDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
+/**
+ * 畫好的圖編成 PNG data URL（messaging 是 JSON 序列化，跨 context 一律用 data URL，#4）。
+ * 用 DOM 的 canvas.toDataURL，不用 OffscreenCanvas.convertToBlob：真實 Chrome 的 offscreen document
+ * 沒有畫面幀，convertToBlob 每次都要等約 1 秒（#27 除錯實測；toDataURL 約 10 ms，Playwright 的 Chromium 測不出來）。
+ */
+function pngDataUrl(size: { width: number; height: number }, draw: (ctx: CanvasRenderingContext2D) => void): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = size.width;
+  canvas.height = size.height;
+  draw(canvas.getContext('2d')!);
+  return canvas.toDataURL('image/png');
 }
 
 /** 上一次記錄的模型狀態：下載進度每個 chunk 都會回報一次，只記狀態改變（例如開始下載、下載完）。 */
@@ -103,7 +105,7 @@ async function analyze({ screenshot, viewport, candidate, pipeline: config }: An
         ms: Math.round(performance.now() - startedAt),
         balloons: text.balloons.map(({ id, order, orientation, 原文, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, balloonBbox, textBbox })),
         looseText: text.looseText.map(({ id, order, orientation, 原文, bbox }) => ({ id, order, orientation, 原文, bbox })),
-        detections: await detectionImage(bitmap, rect, text),
+        detections: detectionImage(bitmap, rect, text),
       });
     }
     const image = createPageImage(bitmap, rect).gray();
@@ -122,9 +124,11 @@ async function analyze({ screenshot, viewport, candidate, pipeline: config }: An
  * debug build 才用：裁好的 Page 疊上偵測結果（藍＝Balloon 外框、紅＝文字框、綠＝Loose Text，數字是閱讀順序），
  * 對照 OCR 漏字或覆蓋位置。
  */
-async function detectionImage(bitmap: ImageBitmap, rect: Rect, text: PageText): Promise<string> {
-  const canvas = new OffscreenCanvas(rect.width, rect.height);
-  const ctx = canvas.getContext('2d')!;
+function detectionImage(bitmap: ImageBitmap, rect: Rect, text: PageText): string {
+  return pngDataUrl(rect, (ctx) => drawDetections(ctx, bitmap, rect, text));
+}
+
+function drawDetections(ctx: CanvasRenderingContext2D, bitmap: ImageBitmap, rect: Rect, text: PageText): void {
   ctx.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
   const line = Math.max(2, Math.round(rect.width / 400));
   ctx.lineWidth = line;
@@ -142,7 +146,6 @@ async function detectionImage(bitmap: ImageBitmap, rect: Rect, text: PageText): 
     stroke(b.textBbox, '#ff2d2d');
   }
   for (const l of text.looseText) stroke(l.bbox, '#18b84a', l.order);
-  return toDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
 }
 
 const apiKeys = indexedDbApiKeyStore();

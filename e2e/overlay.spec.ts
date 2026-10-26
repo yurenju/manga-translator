@@ -141,10 +141,12 @@ test('主頁面重繪把 host 拿掉後自動掛回；停止後所有 host 消�
   ]);
 });
 
-test('截圖時覆蓋層是隱藏的（截圖裡沒有中文），並量測覆蓋層消失的時間', async ({ context, sw, extensionId, mockSite }) => {
+test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子認頁），也不會重翻', async ({ context, sw, extensionId, mockSite }) => {
   test.setTimeout(OVERLAY_TIMEOUT + 60_000);
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await waitForOverlay(page);
+  // 覆蓋層畫好後 SW 會不藏覆蓋層補截一次（記下帶覆蓋層的樣子），等兩頁都記好
+  await expect.poll(() => sw.evaluate(() => globalThis.__overlaidRecords ?? 0), { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
   const screenshot = async () => `data:image/png;base64,${(await page.screenshot()).toString('base64')}`;
   const setHostDisplay = (display: string) =>
     page.evaluate((display) => {
@@ -154,7 +156,8 @@ test('截圖時覆蓋層是隱藏的（截圖裡沒有中文），並量測覆�
   await setHostDisplay('none');
   const withoutOverlay = await screenshot();
   await setHostDisplay('');
-  const withOverlayVisible = await screenshot();
+  const hiddenBefore = (await overlayHiddenMs(sw, tabId)).length;
+  const translateCalls = await sw.evaluate(() => globalThis.__translateCalls ?? 0);
 
   // 覆蓋層顯示中再擷取一次（SW 的 captureVisibleTab）
   const count = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
@@ -162,18 +165,16 @@ test('截圖時覆蓋層是隱藏的（截圖裡沒有中文），並量測覆�
   await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(count);
   await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
   const captured = (await sw.evaluate(() => globalThis.__captures!.at(-1)!)) as string;
-  await expect.poll(() => hostVisibility(page)).toEqual(['visible', 'visible']);
 
+  // 截圖裡有我們的中文（沒藏），覆蓋層一直是顯示的，頁也還認得（沒有重翻）
   const capturedDiff = await changedFraction(page, withoutOverlay, captured);
-  const visibleDiff = await changedFraction(page, withoutOverlay, withOverlayVisible);
-  console.log(`跟沒有覆蓋層的畫面相比，像素變化比例：SW 截圖 ${capturedDiff.toFixed(5)}、覆蓋層顯示時 ${visibleDiff.toFixed(5)}`);
-  expect(visibleDiff).toBeGreaterThan(0.005);
-  expect(capturedDiff).toBeLessThan(0.0005);
-
-  const hiddenMs = await overlayHiddenMs(sw, tabId);
-  console.log(`截圖時覆蓋層消失的時間（ms）：${hiddenMs.map((ms) => ms.toFixed(1)).join(', ')}`);
-  expect(hiddenMs.length).toBeGreaterThan(0);
-  for (const ms of hiddenMs) expect(ms).toBeLessThan(1000);
+  console.log(`跟沒有覆蓋層的畫面相比，SW 截圖的像素變化比例：${capturedDiff.toFixed(5)}`);
+  expect(capturedDiff).toBeGreaterThan(0.005);
+  expect((await overlayHiddenMs(sw, tabId)).length).toBe(hiddenBefore);
+  await expect.poll(() => hostVisibility(page)).toEqual(['visible', 'visible']);
+  await page.waitForTimeout(1_000);
+  expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(translateCalls);
+  await waitForOverlay(page);
 });
 
 /** 兩張截圖之間 RGB 任一通道差超過 32 的像素比例。 */

@@ -40,6 +40,8 @@ declare global {
   var __translateCalls: number | undefined;
   /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
   var __jobLog: (JobEvent & { at: number })[] | undefined;
+  /** e2e build 才有：記下過幾個 Page「帶覆蓋層的樣子」（scan.ts），給測試等它做完。 */
+  var __overlaidRecords: number | undefined;
 }
 
 const trace = createTrace('sw');
@@ -78,9 +80,10 @@ const scanner = createScanner({
   },
   async crop(request) {
     await ensureOffscreenDocument();
+    const startedAt = Date.now();
     const response = await chrome.runtime.sendMessage<Message, CropResponse>({ type: 'offscreen:crop', ...request });
     if ('error' in response) throw new Error(`crop failed: ${response.error}`);
-    trace('crop', { pages: response.pages });
+    trace('crop', { ms: Date.now() - startedAt, pages: response.pages });
     return response.pages;
   },
   publish(tabId, pages, capture) {
@@ -287,6 +290,14 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       if (tabId !== undefined)
         void activation.isActive(tabId).then((active) => {
           if (active) scan(tabId);
+        });
+      return false;
+    }
+    case 'content:overlayShown': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined)
+        void activation.isActive(tabId).then((active) => {
+          if (active) scanner.recordOverlaid(tabId).catch((e: unknown) => console.warn('record overlaid failed', e));
         });
       return false;
     }
