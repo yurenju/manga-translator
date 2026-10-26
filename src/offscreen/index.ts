@@ -11,6 +11,7 @@ import type {
   CropResponse,
   FakeTranslatorConfig,
   Message,
+  ModelStatus,
   PageThumb,
   Rect,
   TestConnectionResponse,
@@ -72,9 +73,13 @@ function toDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** 上一次記錄的模型狀態：下載進度每個 chunk 都會回報一次，只記狀態改變（例如開始下載、下載完）。 */
+let lastTracedModelState: ModelStatus['state'] | undefined;
+
 const pipeline = createLocalPipeline({
   onStatus(status) {
-    trace('models', { ...status });
+    if (status.state !== lastTracedModelState) trace('models', { ...status });
+    lastTracedModelState = status.state;
     // SW 記下最新狀態給之後打開的 side panel；已開著的 side panel 直接收到。
     chrome.runtime.sendMessage({ type: 'models:status', status } satisfies Message).catch(() => {});
   },
