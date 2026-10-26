@@ -11,6 +11,7 @@ import type {
   PageCandidatesResponse,
   PagesResponse,
   PipelineConfig,
+  SeriesResponse,
   StatusResponse,
   TestConfig,
   TestConnectionResponse,
@@ -18,11 +19,11 @@ import type {
 } from '../shared/messages.ts';
 import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
-import { indexedDbPageCache, indexedDbSeriesStore } from './cache-store.ts';
+import { indexedDbPageCache, indexedDbSeriesRepo } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
-import { provisionalSeries } from './series.ts';
+import { createSeriesCatalog } from './series-catalog.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber, type JobEvent } from './transcribe.ts';
 
@@ -163,15 +164,29 @@ function scan(tabId: number): void {
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
 }
 
-const seriesStore = indexedDbSeriesStore();
+const seriesCatalog = createSeriesCatalog(indexedDbSeriesRepo(), { now: () => new Date(), newId: () => crypto.randomUUID() });
+
+async function seriesResponse(tabId: number): Promise<SeriesResponse> {
+  const [current, options] = await Promise.all([activation.getSeriesId(tabId), seriesCatalog.menu()]);
+  return { current, options };
+}
+
+/**
+ * side panel 的 Series 操作（#36）。rescan：切換到另一部 Series 時重新擷取，快取查詢與翻譯改用新的 ID；
+ * 改名（ID 不變）與合併（不自動重翻）不重新擷取。
+ */
+async function changeSeries(tabId: number, change: (url: string, current: string) => Promise<string>, rescan: boolean): Promise<void> {
+  const [url, current] = await Promise.all([chrome.tabs.get(tabId).then((t) => t.url), activation.getSeriesId(tabId)]);
+  if (url === undefined || current === undefined) return;
+  const next = await change(url, current);
+  await activation.setSeriesId(tabId, next);
+  notifyPanel({ type: 'series:changed', tabId });
+  if (rescan && next !== current) scan(tabId);
+}
 
 const activation = createActivation({
   store,
-  async createProvisionalSeries(url) {
-    const series = provisionalSeries(url, new Date(), crypto.randomUUID());
-    await seriesStore.add(series);
-    return series.id;
-  },
+  seriesForUrl: (url) => seriesCatalog.seriesForUrl(url),
   getTabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
   openSidePanel(tabId) {
     // 不 await setOptions：await 會讓 open() 離開 user gesture。兩個呼叫會依序送到瀏覽器。
@@ -272,6 +287,29 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
         .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }) satisfies TestConnectionResponse)
         .then(sendResponse);
       return true;
+    case 'panel:getSeries':
+      seriesResponse(message.tabId).then(sendResponse);
+      return true;
+    case 'panel:selectSeries': {
+      const { seriesId } = message;
+      changeSeries(message.tabId, (url) => seriesCatalog.select(seriesId, url).then(() => seriesId), true).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:createSeries': {
+      const { name } = message;
+      changeSeries(message.tabId, async (url) => (await seriesCatalog.create(name, url)).id, true).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:renameSeries': {
+      const { name } = message;
+      changeSeries(message.tabId, (url, current) => seriesCatalog.rename(current, name, url).then(() => current), false).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:mergeSeries': {
+      const { targetId } = message;
+      changeSeries(message.tabId, (url, current) => seriesCatalog.merge(current, targetId, url).then(() => targetId), false).then(() => sendResponse());
+      return true;
+    }
     case 'panel:scan':
       activation.isActive(message.tabId).then((active) => {
         if (active) scan(message.tabId);

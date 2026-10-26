@@ -23,8 +23,10 @@ export interface ActivationDeps {
   injectContentScript(tabId: number): Promise<void>;
   stopContentScript(tabId: number): Promise<void>;
   onStatusChanged(tabId: number, active: boolean): void;
-  /** 建一個 Provisional Series，回傳它的 ID。網址模式預選（#36）之前，每次新的啟動都會呼叫。 */
-  createProvisionalSeries(url: string): Promise<string>;
+  /**
+   * 新的啟動要用的 Series ID：網址模式預選到的 Series，沒有就建一個 Provisional Series（spec #27 第 4.1 節）。
+   */
+  seriesForUrl(url: string): Promise<string>;
 }
 
 export function createActivation(deps: ActivationDeps) {
@@ -37,7 +39,7 @@ export function createActivation(deps: ActivationDeps) {
     if (url === undefined) return;
     if (!(await tryInject(tabId))) return;
     // 已啟動的 tab 再點一次圖示不算新的啟動，沿用同一個 Series。
-    const seriesId = (await deps.store.get(tabId))?.seriesId ?? (await deps.createProvisionalSeries(url));
+    const seriesId = (await deps.store.get(tabId))?.seriesId ?? (await deps.seriesForUrl(url));
     await deps.store.set(tabId, { origin: new URL(url).origin, seriesId });
     deps.onStatusChanged(tabId, true);
   }
@@ -48,6 +50,12 @@ export function createActivation(deps: ActivationDeps) {
 
   async function getSeriesId(tabId: number): Promise<string | undefined> {
     return (await deps.store.get(tabId))?.seriesId;
+  }
+
+  /** side panel 選了別的 Series（或合併後改用目標）：之後的快取查詢與翻譯都用它。沒啟動就不動。 */
+  async function setSeriesId(tabId: number, seriesId: string): Promise<void> {
+    const state = await deps.store.get(tabId);
+    if (state) await deps.store.set(tabId, { ...state, seriesId });
   }
 
   async function tryInject(tabId: number): Promise<boolean> {
@@ -89,5 +97,5 @@ export function createActivation(deps: ActivationDeps) {
     await deps.stopContentScript(tabId).catch(() => {});
   }
 
-  return { activate, stop, isActive, getSeriesId, handleTabUpdated, handleTabRemoved };
+  return { activate, stop, isActive, getSeriesId, setSeriesId, handleTabUpdated, handleTabRemoved };
 }

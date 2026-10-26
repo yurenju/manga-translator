@@ -51,7 +51,8 @@ export async function startMockSite(): Promise<MockSite> {
   const site = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     const path = url.pathname;
-    if (path === '/jumpplus/') {
+    // /jumpplus/ 以下的任何路徑都是同一個仿 Jump+（同網站的另一話，#36 網址模式）
+    if (path.startsWith('/jumpplus/')) {
       const paged = url.searchParams.get('mode') === 'paged';
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin, { paged }));
       return;

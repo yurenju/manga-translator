@@ -1,4 +1,5 @@
 import type { PageText, RatioRect } from './page-text.ts';
+import type { SeriesOption } from './series.ts';
 import type { TranslateInput, TranslateOutput } from './translator.ts';
 
 /** onnxruntime-web 的執行環境。 */
@@ -61,6 +62,18 @@ export type Message =
   | { type: 'panel:setAutoTranslate'; tabId: number; enabled: boolean }
   /** side panel → SW：自動翻譯開關目前的狀態。回應 AutoTranslateResponse。 */
   | { type: 'panel:getAutoTranslate'; tabId: number }
+  /** side panel → SW：Series 下拉選單與這個 tab 目前的 Series。回應 SeriesResponse。 */
+  | { type: 'panel:getSeries'; tabId: number }
+  /** side panel → SW：選了一部 Series（非 Provisional 才記住網址模式）；之後的快取查詢與翻譯改用它。 */
+  | { type: 'panel:selectSeries'; tabId: number; seriesId: string }
+  /** side panel → SW：「新增 Series…」並選它。 */
+  | { type: 'panel:createSeries'; tabId: number; name: string }
+  /** side panel → SW：目前的 Series 改名（Provisional 改名＝歸類，ID 不變）。 */
+  | { type: 'panel:renameSeries'; tabId: number; name: string }
+  /** side panel → SW：目前的 Provisional Series 合併進 targetId；不自動重翻。 */
+  | { type: 'panel:mergeSeries'; tabId: number; targetId: string }
+  /** SW → side panel：這個 tab 的 Series 或 Series 清單變了，重新 panel:getSeries。 */
+  | { type: 'series:changed'; tabId: number }
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
   | { type: 'test:activate'; tabId: number };
 
@@ -88,6 +101,13 @@ export type TestConnectionResponse = { ok: true; model: string } | { ok: false; 
 
 export interface StatusResponse {
   active: boolean;
+}
+
+export interface SeriesResponse {
+  /** 這個 tab 目前的 Series；沒啟動是 undefined。 */
+  current: string | undefined;
+  /** 已排好：最近用過的在最上面。 */
+  options: SeriesOption[];
 }
 
 export interface OverlayResponse {

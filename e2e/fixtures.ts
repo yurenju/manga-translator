@@ -97,7 +97,7 @@ export const test = base.extend<{
 
 export const expect = test.expect;
 
-/** 打開仿 Jump+ 並等全部 canvas 畫完。 */
+/** 打開仿 Jump+ 並等全部 canvas 畫完。url：同網站的另一個網址（預設 site.jumpPlusUrl）。 */
 export async function openJumpPlus(context: BrowserContext, site: MockSite, url = site.jumpPlusUrl): Promise<Page> {
   const page = await context.newPage();
   await page.goto(url);
@@ -141,17 +141,17 @@ export async function activateOnJumpPlus(
     sw,
     extensionId,
     mockSite,
-    beforeActivate,
     url = mockSite.jumpPlusUrl,
+    beforeActivate,
   }: {
     context: BrowserContext;
     sw: Worker;
     extensionId: string;
     mockSite: MockSite;
+    /** 仿 Jump+ 的網址（預設 mockSite.jumpPlusUrl；翻頁版用 mockSite.jumpPlusPagedUrl）。 */
+    url?: string;
     /** side panel 打開後、啟動前（例如在 panel 裡掛 listener）。 */
     beforeActivate?: (panel: Page) => Promise<void>;
-    /** 預設是縱向排列的仿 Jump+；翻頁版用 mockSite.jumpPlusPagedUrl。 */
-    url?: string;
   },
 ): Promise<{ page: Page; panel: Page; tabId: number }> {
   const page = await openJumpPlus(context, mockSite, url);
@@ -173,4 +173,21 @@ export async function isContentScriptInjected(sw: Worker, tabId: number): Promis
     });
     return result?.result === true;
   }, tabId);
+}
+
+/** 在 SW 裡直接讀外掛的 IndexedDB（只讀，不經過外掛的程式）。 */
+export function readStore<T>(sw: Worker, store: string): Promise<T[]> {
+  return sw.evaluate(
+    (store) =>
+      new Promise<T[]>((resolve, reject) => {
+        const open = indexedDB.open('manga-translator');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const request = open.result.transaction(store).objectStore(store).getAll();
+          request.onsuccess = () => resolve(request.result as T[]);
+          request.onerror = () => reject(request.error);
+        };
+      }),
+    store,
+  );
 }
