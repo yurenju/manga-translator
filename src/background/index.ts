@@ -17,6 +17,7 @@ import type {
   TestConnectionResponse,
   TranslateResponse,
 } from '../shared/messages.ts';
+import { createTrace } from '../shared/trace.ts';
 import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { indexedDbPageCache } from './cache-store.ts';
@@ -41,6 +42,7 @@ declare global {
   var __jobLog: (JobEvent & { at: number })[] | undefined;
 }
 
+const trace = createTrace('sw');
 const store = indexedDbTabStore();
 
 // 瀏覽器重開後 tab id 會重新編號，上一次的啟動狀態都不算數。
@@ -68,14 +70,17 @@ const scanner = createScanner({
   },
   async captureWindow(windowId) {
     if (__E2E__) (globalThis.__captureLog ??= []).push(Date.now());
+    const startedAt = Date.now();
     const screenshot = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
     if (__E2E__) globalThis.__captures = [...(globalThis.__captures ?? []), screenshot].slice(-3);
+    trace('capture', { windowId, ms: Date.now() - startedAt, screenshot });
     return screenshot;
   },
   async crop(request) {
     await ensureOffscreenDocument();
     const response = await chrome.runtime.sendMessage<Message, CropResponse>({ type: 'offscreen:crop', ...request });
     if ('error' in response) throw new Error(`crop failed: ${response.error}`);
+    trace('crop', { pages: response.pages });
     return response.pages;
   },
   publish(tabId, pages, capture) {
@@ -134,6 +139,7 @@ const transcriber = createTranscriber({
     overlaySync.publish(tabId, pages);
   },
   onJobEvent(event) {
+    trace('job', { ...event });
     if (__E2E__) (globalThis.__jobLog ??= []).push({ ...event, at: Date.now() });
   },
 });
@@ -162,6 +168,7 @@ if (__E2E__) {
 
 /** 頁面可能剛好換頁、content script 不在，或截圖失敗；這次掃描就放棄，等下一次觸發。 */
 function scan(tabId: number): void {
+  trace('scan', { tabId });
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
 }
 
@@ -217,6 +224,7 @@ const activation = createActivation({
     await chrome.tabs.sendMessage(tabId, { type: 'content:stop' } satisfies Message);
   },
   onStatusChanged(tabId, active) {
+    trace('status', { tabId, active });
     notifyPanel({ type: 'status:changed', tabId, active });
     if (active) scan(tabId);
     else {

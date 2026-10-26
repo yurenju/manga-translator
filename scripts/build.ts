@@ -1,6 +1,7 @@
 /**
- * 用法：node scripts/build.ts [--e2e]
- *   正式 build → dist/prod；e2e build → dist/e2e（多 <all_urls> 與測試入口，spec #27 第 12 節）
+ * 用法：node scripts/build.ts [--e2e | --debug]
+ *   正式 build → dist/prod；e2e build → dist/e2e（多 <all_urls> 與測試入口，spec #27 第 12 節）；
+ *   debug build → dist/debug（多印除錯記錄，src/shared/trace.ts；平常由 scripts/debug-chrome.ts 建到固定位置）
  *
  * 每個入口各自用 esbuild 打包，因為格式不同：
  *   - background（SW）、sidepanel、offscreen：ES module
@@ -58,7 +59,7 @@ async function copyFonts(outDir: string): Promise<void> {
   ]);
 }
 
-export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): Promise<void> {
+export async function build({ e2e, debug = false, outDir }: { e2e: boolean; debug?: boolean; outDir: string }): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
@@ -67,10 +68,10 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
     bundle: true,
     outdir: outDir,
     target: 'chrome116',
-    define: { __E2E__: String(e2e) },
+    define: { __E2E__: String(e2e), __DEBUG__: String(debug) },
     jsx: 'automatic',
     jsxImportSource: 'preact',
-    sourcemap: e2e ? 'inline' : false,
+    sourcemap: e2e || debug ? 'inline' : false,
     // kuromoji 用 Node 的 path.join 拼字典網址
     alias: { path: './src/offscreen/path-shim.ts' },
     loader: { '.css': 'text' },
@@ -96,13 +97,15 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
     }),
     copyFonts(outDir),
     ...STATIC_DIRS.map(([from, to]) => cp(join(root, from), join(outDir, to), { recursive: true })),
-    writeFile(join(outDir, 'manifest.json'), JSON.stringify(buildManifest({ e2e }), null, 2)),
+    writeFile(join(outDir, 'manifest.json'), JSON.stringify(buildManifest({ e2e, debug }), null, 2)),
   ]);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const e2e = process.argv.includes('--e2e');
-  const outDir = join(root, 'dist', e2e ? 'e2e' : 'prod');
-  await build({ e2e, outDir });
-  console.log(`built ${e2e ? 'e2e' : 'prod'} → ${outDir}`);
+  const debug = process.argv.includes('--debug');
+  const flavor = e2e ? 'e2e' : debug ? 'debug' : 'prod';
+  const outDir = join(root, 'dist', flavor);
+  await build({ e2e, debug, outDir });
+  console.log(`built ${flavor} → ${outDir}`);
 }

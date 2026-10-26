@@ -18,12 +18,15 @@ import type {
 } from '../shared/messages.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
 import type { PageText } from '../shared/page-text.ts';
+import { createTrace } from '../shared/trace.ts';
 import type { TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
 import { thumbnailSize, toImageRect } from './crop.ts';
 import { eraseLuminance } from './erase-color.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { createPageImage } from './page-image.ts';
+
+const trace = createTrace('offscreen');
 
 /** side panel 縮圖的寬度（截圖像素）。 */
 const THUMBNAIL_WIDTH = 240;
@@ -71,6 +74,7 @@ function toDataUrl(blob: Blob): Promise<string> {
 
 const pipeline = createLocalPipeline({
   onStatus(status) {
+    trace('models', { ...status });
     // SW 記下最新狀態給之後打開的 side panel；已開著的 side panel 直接收到。
     chrome.runtime.sendMessage({ type: 'models:status', status } satisfies Message).catch(() => {});
   },
@@ -85,7 +89,18 @@ async function analyze({ screenshot, viewport, candidate, pipeline: config }: An
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
     const rect = toImageRect(candidate.rect, viewport, bitmap);
+    const startedAt = performance.now();
     const text = await pipeline.analyze(bitmap, rect);
+    if (__DEBUG__) {
+      trace('analyze', {
+        anchorId: candidate.anchorId,
+        imageRect: rect,
+        ms: Math.round(performance.now() - startedAt),
+        balloons: text.balloons.map(({ id, order, orientation, 原文, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, balloonBbox, textBbox })),
+        looseText: text.looseText.map(({ id, order, orientation, 原文, bbox }) => ({ id, order, orientation, 原文, bbox })),
+        detections: await detectionImage(bitmap, rect, text),
+      });
+    }
     const image = createPageImage(bitmap, rect).gray();
     const balloons = text.balloons.map((b) => {
       const box = { x: b.textBbox.x * image.width, y: b.textBbox.y * image.height, w: b.textBbox.w * image.width, h: b.textBbox.h * image.height };
@@ -96,6 +111,33 @@ async function analyze({ screenshot, viewport, candidate, pipeline: config }: An
   } finally {
     bitmap.close();
   }
+}
+
+/**
+ * debug build 才用：裁好的 Page 疊上偵測結果（藍＝Balloon 外框、紅＝文字框、綠＝Loose Text，數字是閱讀順序），
+ * 對照 OCR 漏字或覆蓋位置。
+ */
+async function detectionImage(bitmap: ImageBitmap, rect: Rect, text: PageText): Promise<string> {
+  const canvas = new OffscreenCanvas(rect.width, rect.height);
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
+  const line = Math.max(2, Math.round(rect.width / 400));
+  ctx.lineWidth = line;
+  ctx.font = `bold ${line * 10}px sans-serif`;
+  const stroke = (box: { x: number; y: number; w: number; h: number }, color: string, label?: number) => {
+    const [x, y, w, h] = [box.x * rect.width, box.y * rect.height, box.w * rect.width, box.h * rect.height];
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x, y, w, h);
+    if (label === undefined) return;
+    ctx.fillStyle = color;
+    ctx.fillText(String(label), x + line, y + line * 10);
+  };
+  for (const b of text.balloons) {
+    stroke(b.balloonBbox, '#1e6fff', b.order);
+    stroke(b.textBbox, '#ff2d2d');
+  }
+  for (const l of text.looseText) stroke(l.bbox, '#18b84a', l.order);
+  return toDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
 }
 
 const apiKeys = indexedDbApiKeyStore();
@@ -124,7 +166,15 @@ async function translate(input: TranslateInput, fake: FakeTranslatorConfig | und
   if (__E2E__ && fake) return createFakeTranslator(SYNTHETIC_GROUND_TRUTH, fake).translatePage(input);
   const translator = await claude();
   if (!translator) throw new NoApiKeyError('尚未設定 API key');
-  return translator.translatePage(input);
+  trace('translate:request', { input });
+  try {
+    const output = await translator.translatePage(input);
+    trace('translate:response', { output });
+    return output;
+  } catch (e) {
+    trace('translate:error', { error: e });
+    throw e;
+  }
 }
 
 async function testConnection(): Promise<TestConnectionResponse> {

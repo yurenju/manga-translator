@@ -9,6 +9,7 @@
 import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
+import { createTrace } from '../shared/trace.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
@@ -108,6 +109,8 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 
 /** 滑鼠移到哪一句上（null＝離開）。 */
 export type OnHover = (line: LineRef | null) => void;
+
+const trace = createTrace('content');
 
 export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHover?: OnHover }) {
   const entries = new Map<HTMLElement, Entry>();
@@ -266,6 +269,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算。
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
+    const fits: Record<string, unknown>[] = [];
     for (const { balloon, regions, box, inner } of items) {
       const result = fitText(
         {
@@ -283,6 +287,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         minLayerPx,
       );
       box.dataset.fit = String(result.stage);
+      if (__DEBUG__) fits.push({ id: balloon.id, 譯文: balloon.譯文, vertical: box.classList.contains('v'), ...result, regions, eraseLuminance: balloon.eraseLuminance });
+    }
+    if (__DEBUG__) {
+      const anchorRect = anchor.getBoundingClientRect();
+      trace('overlay:show', {
+        pageHash,
+        sub,
+        pageSize: size,
+        anchorRect: { x: anchorRect.x, y: anchorRect.y, width: anchorRect.width, height: anchorRect.height },
+        screenScale,
+        minLayerPx,
+        skipped: text.balloons.filter((b) => !balloons.includes(b)).map((b) => ({ id: b.id, unreadable: b.unreadable, 譯文: b.譯文 })),
+        fits,
+      });
     }
     tip.style.fontSize = `${TOOLTIP_SCREEN_PX / screenScale}px`;
     tip.style.maxWidth = `${size.width * 0.8}px`;
