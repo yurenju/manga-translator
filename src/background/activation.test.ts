@@ -10,6 +10,8 @@ function fakeChrome(urls: Record<number, string>) {
   const statusEvents: [number, boolean][] = [];
   const failInjectionFor = new Set<number>();
   const createdSeries: string[] = [];
+  /** 網址模式：網址 → Series ID。 */
+  const patterns = new Map<string, string>();
   const deps: ActivationDeps = {
     store: {
       get: async (tabId) => states.get(tabId),
@@ -24,13 +26,15 @@ function fakeChrome(urls: Record<number, string>) {
     },
     stopContentScript: async (tabId) => void calls.stopped.push(tabId),
     onStatusChanged: (tabId, active) => void statusEvents.push([tabId, active]),
-    createProvisionalSeries: async (url) => {
+    seriesForUrl: async (url) => {
+      const remembered = patterns.get(url);
+      if (remembered) return remembered;
       const id = `provisional-${createdSeries.length + 1}`;
       createdSeries.push(url);
       return id;
     },
   };
-  return { deps, calls, statusEvents, failInjectionFor, urls, createdSeries };
+  return { deps, calls, statusEvents, failInjectionFor, urls, createdSeries, patterns };
 }
 
 describe('activate', () => {
@@ -208,6 +212,36 @@ describe('Series', () => {
 
     expect(chrome.createdSeries).toHaveLength(1);
     expect(await activation.getSeriesId(1)).toBe('provisional-1');
+  });
+
+  it('網址模式預選到 Series 時用它，不建 Provisional Series', async () => {
+    const chrome = fakeChrome({ 1: JUMP });
+    chrome.patterns.set(JUMP, 'series-a');
+    const activation = createActivation(chrome.deps);
+
+    await activation.activate(1);
+
+    expect(chrome.createdSeries).toEqual([]);
+    expect(await activation.getSeriesId(1)).toBe('series-a');
+  });
+
+  it('切換 Series 後這個 tab 改用新的 Series ID', async () => {
+    const chrome = fakeChrome({ 1: JUMP });
+    const activation = createActivation(chrome.deps);
+    await activation.activate(1);
+
+    await activation.setSeriesId(1, 'series-b');
+
+    expect(await activation.getSeriesId(1)).toBe('series-b');
+    expect(await activation.isActive(1)).toBe(true);
+  });
+
+  it('沒啟動的 tab 不能切換 Series', async () => {
+    const activation = createActivation(fakeChrome({ 1: JUMP }).deps);
+
+    await activation.setSeriesId(1, 'series-b');
+
+    expect(await activation.isActive(1)).toBe(false);
   });
 
   it('沒啟動的 tab 沒有 Series', async () => {

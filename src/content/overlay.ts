@@ -6,7 +6,9 @@
  * translate＋scale 對到 anchor 的 offset*×subRect，捲動、祖先 transform、overflow 裁切都由瀏覽器自然套用。
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛。
  */
+import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
+import { rubyDisplay } from '../shared/ruby.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
@@ -25,8 +27,17 @@ const STYLE = `
 .tx .u { text-combine-upright: all; }
 .tx[data-fit="3"] { align-items: flex-start; justify-content: flex-start; }
 .tip { position: absolute; display: none; box-sizing: border-box; padding: 0.4em 0.6em; border-radius: 0.4em;
-  background: rgba(20, 20, 20, 0.92); color: #fff; font-weight: 600; line-height: 1.4; white-space: pre-wrap; }
+  background: rgba(20, 20, 20, 0.92); color: #fff; font-weight: 600; line-height: 1.4; white-space: pre-wrap;
+  font-family: system-ui, sans-serif; z-index: 2; }
 .tip.on { display: block; }
+.tip-ja { font-size: 1.15em; line-height: 1.9; }
+.tip-ja rt, .tip-guess { color: #f9d36b; }
+.tip-guess { font-size: 0.75em; }
+.tip-unreadable { color: #aaa; text-decoration: line-through dotted; }
+.tip-note { margin-top: 0.3em; font-size: 0.75em; color: #f9d36b; }
+.hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: #1a73e8;
+  background: rgba(26, 115, 232, 0.12); }
+.hl.on { display: block; }
 `;
 
 const WHOLE_PAGE: RatioRect = { x: 0, y: 0, w: 1, h: 1 };
@@ -34,14 +45,29 @@ const WHOLE_PAGE: RatioRect = { x: 0, y: 0, w: 1, h: 1 };
 const FRAME_TIMEOUT_MS = 200;
 /** tooltip 的畫面字級。 */
 const TOOLTIP_SCREEN_PX = 13;
+/** 高亮框的畫面邊框粗細。 */
+const HIGHLIGHT_SCREEN_PX = 2;
+
+/** 頁面上可以 hover 的一句（Balloon 或 Loose Text），座標是 Page 原始像素。 */
+interface HoverLine {
+  id: string;
+  box: Box;
+  原文: string;
+  讀音: string;
+  譯文: string;
+  unreadable: boolean;
+}
 
 interface PageLayer {
+  /** Page 身分（pageHash），hover 同步用：同一個 anchor 上的兩個 Page 各自一個。 */
+  pageHash: string;
   sub: RatioRect;
   size: { width: number; height: number };
   element: HTMLElement;
   tip: HTMLElement;
-  /** 第 3 階截斷的譯文元素與它的全文。 */
-  truncated: Map<HTMLElement, string>;
+  /** 高亮框（滑過頁面或 side panel 那行時）。 */
+  highlight: HTMLElement;
+  lines: HoverLine[];
 }
 
 interface Entry {
@@ -71,9 +97,19 @@ function setBox(el: HTMLElement, box: Box): void {
   Object.assign(el.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
 }
 
+function textDiv(className: string, text: string): HTMLElement {
+  const div = document.createElement('div');
+  div.className = className;
+  div.textContent = text;
+  return div;
+}
+
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
+/** 滑鼠移到哪一句上（null＝離開）。 */
+export type OnHover = (line: LineRef | null) => void;
+
+export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHover?: OnHover }) {
   const entries = new Map<HTMLElement, Entry>();
   /** 被我們從 static 改成 relative 的父元素 → 原本的 inline position，停止時還原。 */
   const changedParents = new Map<HTMLElement, string>();
@@ -94,16 +130,16 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
   mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
   const onResize = () => entries.forEach(place);
   window.addEventListener('resize', onResize);
-  let pointerFrame = 0;
-  let pointer = { x: 0, y: 0 };
-  const onPointerMove = (event: PointerEvent) => {
-    pointer = { x: event.clientX, y: event.clientY };
-    if (!pointerFrame) pointerFrame = requestAnimationFrame(updateTooltips);
-  };
+  /** 滑鼠目前在哪一句上（頁面 hover）。 */
+  let hovered: { layer: PageLayer; line: HoverLine } | undefined;
+  /** side panel 那邊滑過的那句。 */
+  let panelHighlight: LineRef | undefined;
+  const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
   function applyVisibility(entry: Entry): void {
     entry.host.style.visibility = enabled && !capturing ? 'visible' : 'hidden';
+    if (!enabled || capturing) setHovered(undefined);
   }
 
   /** host 插回 anchor 後面；父元素是 static 就改成 relative（唯一碰主頁面樣式的地方）。 */
@@ -169,8 +205,8 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
     return inner;
   }
 
-  /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。 */
-  async function show(anchor: HTMLElement, sub: RatioRect = WHOLE_PAGE, text: PageText): Promise<void> {
+  /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。pageHash＝hover 同步用的 Page 身分。 */
+  async function show(anchor: HTMLElement, sub: RatioRect = WHOLE_PAGE, text: PageText, pageHash = ''): Promise<void> {
     // unreadable 與 Loose Text 不覆蓋（spec 第 7.2 節）
     const balloons = text.balloons.filter((b) => !b.unreadable && b.譯文 !== '');
     const fontFamily = await loadFont(balloons.map((b) => b.譯文).join(''));
@@ -182,7 +218,22 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
     Object.assign(element.style, { width: `${size.width}px`, height: `${size.height}px` });
     const tip = document.createElement('div');
     tip.className = 'tip';
-    const layer: PageLayer = { sub, size, element, tip, truncated: new Map() };
+    const highlight = document.createElement('div');
+    highlight.className = 'hl';
+    const toHoverLine = (t: PageText['balloons'][number] | PageText['looseText'][number], bbox: RatioRect): HoverLine => ({
+      id: t.id,
+      box: toPx(bbox, size),
+      原文: t.原文,
+      讀音: t.讀音,
+      譯文: t.譯文,
+      unreadable: t.unreadable,
+    });
+    // unreadable 與 Loose Text 不覆蓋，但滑過時一樣有 tooltip、一樣跟 side panel 同步
+    const lines: HoverLine[] = [
+      ...text.balloons.map((b) => toHoverLine(b, b.balloonBbox)),
+      ...text.looseText.map((l) => toHoverLine(l, l.bbox)),
+    ];
+    const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
 
     const items = balloons.map((balloon) => {
       const balloonBox = toPx(balloon.balloonBbox, size);
@@ -203,9 +254,10 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
       element.append(erase, box);
       return { balloon, regions, box, inner };
     });
-    element.append(tip);
+    element.append(highlight, tip);
 
     const old = entry.layers.get(subKey(sub));
+    if (old && hovered?.layer === old) setHovered(undefined);
     entry.layers.set(subKey(sub), layer);
     entry.root.append(element);
     old?.element.remove();
@@ -231,39 +283,112 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
         minLayerPx,
       );
       box.dataset.fit = String(result.stage);
-      if (result.truncated) layer.truncated.set(box, balloon.譯文);
     }
     tip.style.fontSize = `${TOOLTIP_SCREEN_PX / screenScale}px`;
     tip.style.maxWidth = `${size.width * 0.8}px`;
+    highlight.style.borderWidth = `${HIGHLIGHT_SCREEN_PX / screenScale}px`;
+    highlight.style.borderRadius = `${(2 * HIGHLIGHT_SCREEN_PX) / screenScale}px`;
+    renderHighlights();
   }
 
-  /** 覆蓋層一律 pointer-events:none，tooltip 靠座標自己 hit-test（spec 第 7.1 節）。 */
-  function updateTooltips(): void {
-    pointerFrame = 0;
+  /**
+   * 覆蓋層一律 pointer-events:none，hover 靠座標自己 hit-test（spec 第 7.1 節）：Page 層的畫面 rect（含捲動與
+   * 祖先 transform）換算回 Page 原始像素，找包含滑鼠的最小那句。
+   */
+  function updateHover(x: number, y: number): void {
+    let hit: { layer: PageLayer; line: HoverLine; area: number } | undefined;
+    if (enabled && !capturing) {
+      for (const entry of entries.values()) {
+        for (const layer of entry.layers.values()) {
+          const r = layer.element.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          const px = ((x - r.left) / r.width) * layer.size.width;
+          const py = ((y - r.top) / r.height) * layer.size.height;
+          for (const line of layer.lines) {
+            const { box } = line;
+            if (px < box.x || px > box.x + box.w || py < box.y || py > box.y + box.h) continue;
+            const area = box.w * box.h;
+            if (!hit || area < hit.area) hit = { layer, line, area };
+          }
+        }
+      }
+    }
+    setHovered(hit && { layer: hit.layer, line: hit.line });
+  }
+
+  function setHovered(next: { layer: PageLayer; line: HoverLine } | undefined): void {
+    if (next?.layer === hovered?.layer && next?.line === hovered?.line) return;
+    const previous = hovered;
+    hovered = next;
+    previous?.layer.tip.classList.remove('on');
+    if (next) showTooltip(next.layer, next.line);
+    renderHighlights();
+    if (next) onHover?.({ pageHash: next.layer.pageHash, lineId: next.line.id });
+    else if (previous) onHover?.(null);
+  }
+
+  /** tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。 */
+  function showTooltip(layer: PageLayer, line: HoverLine): void {
+    const { tip } = layer;
+    const ja = document.createElement('div');
+    ja.className = 'tip-ja';
+    ja.lang = 'ja';
+    const parts: Node[] = [ja];
+    if (line.unreadable) {
+      ja.classList.add('tip-unreadable');
+      ja.textContent = line.原文;
+      parts.push(textDiv('tip-zh', '無法辨識'));
+    } else {
+      const display = rubyDisplay(line.原文, line.讀音);
+      if ('segments' in display) {
+        for (const segment of display.segments) {
+          if (segment.rt === undefined) ja.append(segment.text);
+          else {
+            const ruby = document.createElement('ruby');
+            const rt = document.createElement('rt');
+            rt.textContent = segment.rt;
+            ruby.append(segment.text, rt);
+            ja.append(ruby);
+          }
+        }
+      } else {
+        // 對不上：原文＋整句讀音
+        ja.append(line.原文, textDiv('tip-guess', display.fallback));
+      }
+      if (line.譯文) parts.push(textDiv('tip-zh', line.譯文));
+      if (line.讀音) parts.push(textDiv('tip-note', '讀音為推測'));
+    }
+    tip.replaceChildren(...parts);
+    tip.classList.add('on');
+    // 置中在那句的框下方，夾在 Page 內；下方放不下就放上方
+    const { box } = line;
+    const left = box.x + box.w / 2 - tip.offsetWidth / 2;
+    tip.style.left = `${Math.max(0, Math.min(left, layer.size.width - tip.offsetWidth))}px`;
+    const below = box.y + box.h;
+    tip.style.top = `${below + tip.offsetHeight <= layer.size.height ? below : Math.max(0, box.y - tip.offsetHeight)}px`;
+  }
+
+  /** 每個 Page 層最多一個高亮框：頁面 hover 優先，其次是 side panel 滑過的那句。 */
+  function renderHighlights(): void {
     for (const entry of entries.values()) {
       for (const layer of entry.layers.values()) {
-        let hit: [HTMLElement, string] | undefined;
-        for (const [box, full] of layer.truncated) {
-          const r = box.getBoundingClientRect();
-          if (pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom) hit = [box, full];
-        }
-        if (!hit) {
-          layer.tip.classList.remove('on');
-          continue;
-        }
-        const [box, full] = hit;
-        const tip = layer.tip;
-        tip.textContent = full;
-        tip.classList.add('on');
-        // 置中在譯文框下方，夾在 Page 內；下方放不下就放上方
-        const left = box.offsetLeft + box.offsetWidth / 2 - tip.offsetWidth / 2;
-        tip.style.left = `${Math.max(0, Math.min(left, layer.size.width - tip.offsetWidth))}px`;
-        const below = box.offsetTop + box.offsetHeight;
-        tip.style.top = `${below + tip.offsetHeight <= layer.size.height ? below : Math.max(0, box.offsetTop - tip.offsetHeight)}px`;
+        const line =
+          hovered?.layer === layer
+            ? hovered.line
+            : panelHighlight?.pageHash === layer.pageHash
+              ? layer.lines.find((l) => l.id === panelHighlight!.lineId)
+              : undefined;
+        layer.highlight.classList.toggle('on', line !== undefined);
+        if (line) setBox(layer.highlight, line.box);
       }
     }
   }
 
+  /** side panel 滑過那行 → 頁面上那句高亮；null＝取消。 */
+  function highlight(line: LineRef | null): void {
+    panelHighlight = line ?? undefined;
+    renderHighlights();
+  }
   /** side panel 的覆蓋開關。用 visibility，關著時仍能量測排版。 */
   function setEnabled(value: boolean): void {
     enabled = value;
@@ -295,14 +420,20 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
     resizeObserver.disconnect();
     window.removeEventListener('resize', onResize);
     document.removeEventListener('pointermove', onPointerMove, { capture: true });
-    if (pointerFrame) cancelAnimationFrame(pointerFrame);
+    hovered = undefined;
+    panelHighlight = undefined;
     for (const entry of entries.values()) entry.host.remove();
     entries.clear();
     for (const [parent, position] of changedParents) parent.style.position = position;
     changedParents.clear();
   }
 
-  return { show, setEnabled, hideForCapture, restoreAfterCapture, clear };
+  /** 這個元素的 style 被我們改過（static → relative）。 */
+  function ownsStyleOf(element: Element): boolean {
+    return changedParents.has(element as HTMLElement);
+  }
+
+  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;

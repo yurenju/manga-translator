@@ -111,7 +111,7 @@ test.describe('覆蓋渲染（ground truth）', () => {
     expect(ink.height).toBeGreaterThan(ink.width * 1.5);
   });
 
-  test('譯文太長時截斷，字級仍不小於畫面 9px，滑過時 tooltip 顯示全文', async ({ context, extensionId }) => {
+  test('譯文太長時截斷，字級仍不小於畫面 9px，滑過時 tooltip 顯示原文＋ルビ＋譯文全文', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);
     const pages = groundTruthPageTexts('p01-basic').map(({ sub, text }) => ({
@@ -125,13 +125,20 @@ test.describe('覆蓋渲染（ground truth）', () => {
     for (const text of texts) expect(text.screenFontPx).toBeGreaterThanOrEqual(9 - 0.01);
     const truncated = texts.find((t) => t.fit === 3);
     expect(truncated).toBeDefined();
-    const full = pages[0]!.text.balloons.find((b) => b.id === truncated!.id)!.譯文;
+    const balloon = pages[0]!.text.balloons.find((b) => b.id === truncated!.id)!;
 
     const tooltip = page.locator('[data-manga-translator-overlay] .tip');
     await expect(tooltip).toBeHidden();
     await page.mouse.move(truncated!.rect.x + truncated!.rect.width / 2, truncated!.rect.y + truncated!.rect.height / 2);
     await expect(tooltip).toBeVisible();
-    await expect(tooltip).toHaveText(full);
+    await expect(tooltip.locator('.tip-zh')).toHaveText(balloon.譯文);
+    // 原文去掉ルビ後就是 ground truth 原文
+    expect(await tooltip.locator('.tip-ja').evaluate((el) => {
+      const copy = el.cloneNode(true) as Element;
+      copy.querySelectorAll('rt, .tip-guess').forEach((rt) => rt.remove());
+      return copy.textContent;
+    })).toBe(balloon.原文);
+    await expect(tooltip).toContainText('讀音為推測');
     await page.mouse.move(1, 1);
     await expect(tooltip).toBeHidden();
   });

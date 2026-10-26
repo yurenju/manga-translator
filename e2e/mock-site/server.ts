@@ -15,6 +15,8 @@ const PAGES_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
 export interface MockSite {
   /** 仿 Jump+：每頁一個 tainted canvas。 */
   jumpPlusUrl: string;
+  /** 仿 Jump+ 的 RTL 翻頁版（一次一頁、翻頁動畫，#34）。 */
+  jumpPlusPagedUrl: string;
   /** 取代 https://huggingface.co 的模型下載來源（e2e 透過 test:configure 告訴外掛）。 */
   modelBaseUrl: string;
   /** 外掛向模型下載來源要過的路徑（判斷有沒有重新下載）。 */
@@ -47,9 +49,12 @@ export async function startMockSite(): Promise<MockSite> {
   const modelRequests: string[] = [];
   const corrupted = new Set<string>();
   const site = createServer(async (req, res) => {
-    const path = new URL(req.url ?? '/', 'http://x').pathname;
-    if (path === '/jumpplus/') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin));
+    const url = new URL(req.url ?? '/', 'http://x');
+    const path = url.pathname;
+    // /jumpplus/ 以下的任何路徑都是同一個仿 Jump+（同網站的另一話，#36 網址模式）
+    if (path.startsWith('/jumpplus/')) {
+      const paged = url.searchParams.get('mode') === 'paged';
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin, { paged }));
       return;
     }
     if (path.startsWith('/hf/')) {
@@ -71,6 +76,7 @@ export async function startMockSite(): Promise<MockSite> {
 
   return {
     jumpPlusUrl: `${siteOrigin}/jumpplus/`,
+    jumpPlusPagedUrl: `${siteOrigin}/jumpplus/?mode=paged`,
     modelBaseUrl: `${siteOrigin}/hf`,
     modelRequests,
     corruptModel: (path) => void corrupted.add(path),

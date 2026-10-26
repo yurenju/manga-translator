@@ -6,16 +6,24 @@
     <title>漫畫翻譯</title>
     <script type="module" src="sidepanel.js"></script>
     <style>
-      [aria-label='逐字稿'] li { display: flex; flex-direction: column; margin-bottom: 0.5em; }
-      .loose { font-style: italic; }
-      .reading { color: #2a6fb0; font-size: 0.85em; }
+      [aria-label='逐字稿'] li { display: flex; flex-direction: column; margin-bottom: 0.5em; padding: 0.1em 0.3em; border-left: 3px solid transparent; }
+      [aria-label='逐字稿'] li.hl { background: #e8f0fe; border-left-color: #1a73e8; }
+      .original, .loose { font-size: 1.1em; line-height: 2; }
+      .loose { font-style: italic; color: #b06000; }
+      /* 振り仮名用另一個顏色（spec #27 第 8 節） */
+      rt, .reading { color: #a07c00; }
+      .reading { display: block; font-size: 0.6em; line-height: 1.4; }
+      .levels { display: flex; flex-wrap: wrap; gap: 0.25em; margin: 0.5em 0; }
+      .levels button[aria-pressed='true'] { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+      .ruby-legend { color: #8a6d00; background: #fef7e0; font-size: 0.85em; padding: 0.3em 0.5em; margin: 0 0 0.5em; }
       .untranslated { color: #888; font-size: 0.85em; }
       .error, [role='alert'] { color: #b00020; }
       .unreadable { color: #888; text-decoration: line-through; }
       .unreadable-label { color: #888; font-size: 0.85em; }
       .settings { border: 1px solid #ccc; padding: 0.5em; margin: 0.5em 0; }
       .settings .hint { color: #555; font-size: 0.85em; }
-      footer { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #ccc; padding: 0.5em 0; display: flex; gap: 0.5em; align-items: center; justify-content: space-between; }
+      footer { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #ccc; padding: 0.5em 0; display: flex; gap: 0.5em; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+      .series, .series form { display: flex; flex-wrap: wrap; gap: 0.25em; align-items: center; }
     </style>
   </head>
   <body>

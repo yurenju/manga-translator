@@ -1,6 +1,7 @@
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import type {
   AnalyzeResponse,
+  AutoTranslateResponse,
   CropResponse,
   FakeTranslatorConfig,
   Message,
@@ -10,6 +11,7 @@ import type {
   PageCandidatesResponse,
   PagesResponse,
   PipelineConfig,
+  SeriesResponse,
   StatusResponse,
   TestConfig,
   TestConnectionResponse,
@@ -17,13 +19,14 @@ import type {
 } from '../shared/messages.ts';
 import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
-import { indexedDbPageCache, indexedDbSeriesStore } from './cache-store.ts';
+import { indexedDbPageCache } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
-import { provisionalSeries } from './series.ts';
+import { createSeriesCatalog } from './series-catalog.ts';
+import { indexedDbSeriesRepo } from './series-store.ts';
 import { indexedDbTabStore } from './tab-store.ts';
-import { createTranscriber } from './transcribe.ts';
+import { createTranscriber, type JobEvent } from './transcribe.ts';
 
 declare global {
   /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
@@ -34,6 +37,8 @@ declare global {
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
   var __translateCalls: number | undefined;
+  /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
+  var __jobLog: (JobEvent & { at: number })[] | undefined;
 }
 
 const store = indexedDbTabStore();
@@ -74,8 +79,8 @@ const scanner = createScanner({
     return response.pages;
   },
   publish(tabId, pages, capture) {
-    if (capture) void transcriber.update(tabId, pages, capture);
-    else transcriber.clear(tabId);
+    // 沒有 capture＝畫面上沒有完整可見的 Page（或停止）；停止時的清理在 onStatusChanged
+    void transcriber.update(tabId, pages, capture);
   },
 });
 
@@ -128,14 +133,17 @@ const transcriber = createTranscriber({
     notifyPanel({ type: 'pages:updated', tabId, pages });
     overlaySync.publish(tabId, pages);
   },
+  onJobEvent(event) {
+    if (__E2E__) (globalThis.__jobLog ??= []).push({ ...event, at: Date.now() });
+  },
 });
 
 /** side panel 的覆蓋開關（每個 tab；預設開，停止後回到預設）。 */
 const overlayEnabled = new Map<number, boolean>();
 
 const overlaySync = createOverlaySync({
-  show(tabId, anchorId, text) {
-    const message: Message = { type: 'content:showOverlay', anchorId, text, enabled: overlayEnabled.get(tabId) ?? true };
+  show({ tabId, anchorId, pageHash, text }) {
+    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, text, enabled: overlayEnabled.get(tabId) ?? true };
     chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });
@@ -146,6 +154,7 @@ if (__E2E__) {
   globalThis.__configureForTest = (config) => {
     pipelineConfig = config.pipeline;
     globalThis.__translateCalls = 0;
+    globalThis.__jobLog = [];
     fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
   };
@@ -156,15 +165,42 @@ function scan(tabId: number): void {
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
 }
 
-const seriesStore = indexedDbSeriesStore();
+const seriesCatalog = createSeriesCatalog({ repo: indexedDbSeriesRepo(), now: () => new Date(), newId: () => crypto.randomUUID() });
+
+async function seriesResponse(tabId: number): Promise<SeriesResponse> {
+  const [current, options] = await Promise.all([activation.getSeriesId(tabId), seriesCatalog.menu()]);
+  return { current, options };
+}
+
+/** 這個 tab 的 Series 操作（#36）共用的部分：算出新的 Series ID、記下來、通知 panel。回傳新的 ID；沒變（或沒啟動）是 undefined。 */
+async function applySeriesChange(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<string | undefined> {
+  const [url, current] = await Promise.all([chrome.tabs.get(tabId).then((t) => t.url), activation.getSeriesId(tabId)]);
+  if (url === undefined || current === undefined) return undefined;
+  const next = await change(url, current);
+  await activation.setSeriesId(tabId, next);
+  notifyPanel({ type: 'series:changed', tabId });
+  return next === current ? undefined : next;
+}
+
+/**
+ * 選一部（或新增）Series：換成另一個 ID 就重新擷取，快取查詢與翻譯改用新的 ID。
+ * #34 的 transcriber 以 pageHash 記住看過的 Page；不先忘掉的話重新擷取會沿用舊 ID 的結果。
+ */
+async function switchSeries(tabId: number, choose: (url: string) => Promise<string>): Promise<void> {
+  if ((await applySeriesChange(tabId, choose)) === undefined) return;
+  transcriber.resetPages(tabId);
+  scan(tabId);
+}
+
+/** 改名（ID 不變）或合併（快取已改到目標 ID、不自動重翻）：不重新擷取，畫面上的 Page 改記在新的 ID 下。 */
+async function updateSeries(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<void> {
+  const next = await applySeriesChange(tabId, change);
+  if (next !== undefined) transcriber.reassignSeries(tabId, next);
+}
 
 const activation = createActivation({
   store,
-  async createProvisionalSeries(url) {
-    const series = provisionalSeries(url, new Date(), crypto.randomUUID());
-    await seriesStore.add(series);
-    return series.id;
-  },
+  seriesForUrl: (url) => seriesCatalog.seriesForUrl(url),
   getTabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
   openSidePanel(tabId) {
     // 不 await setOptions：await 會讓 open() 離開 user gesture。兩個呼叫會依序送到瀏覽器。
@@ -185,6 +221,7 @@ const activation = createActivation({
     if (active) scan(tabId);
     else {
       scanner.clear(tabId);
+      transcriber.clear(tabId);
       overlayEnabled.delete(tabId);
     }
   },
@@ -199,15 +236,18 @@ chrome.commands.onCommand.addListener((command, tab) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  // 重新整理或換頁：anchor 都換了，重新查快取（同 origin 會重新注入、繼續啟動）
+  if (changeInfo.status === 'loading') transcriber.resetPages(tabId);
   void activation.handleTabUpdated(tabId, changeInfo);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void activation.handleTabRemoved(tabId);
   scanner.clear(tabId);
+  transcriber.clear(tabId);
 });
 
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
   // __E2E__ 是 build 時的常數，正式 build 裡這段會被整段移除。
   if (__E2E__ && message.type === 'test:activate') {
     activation.activate(message.tabId).then(() => sendResponse());
@@ -234,6 +274,21 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
       chrome.tabs.sendMessage(message.tabId, { type: 'content:setOverlayEnabled', enabled: message.enabled } satisfies Message).catch(() => {});
       sendResponse();
       return false;
+    case 'content:pageTurn': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined)
+        void activation.isActive(tabId).then((active) => {
+          if (active) scan(tabId);
+        });
+      return false;
+    }
+    case 'panel:getAutoTranslate':
+      sendResponse({ enabled: transcriber.isAutoTranslate(message.tabId) } satisfies AutoTranslateResponse);
+      return false;
+    case 'panel:setAutoTranslate':
+      void transcriber.setAutoTranslate(message.tabId, message.enabled);
+      sendResponse();
+      return false;
     case 'panel:getPages':
       sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);
       return false;
@@ -246,6 +301,32 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
         .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }) satisfies TestConnectionResponse)
         .then(sendResponse);
       return true;
+    case 'panel:getSeries':
+      seriesResponse(message.tabId).then(sendResponse);
+      return true;
+    case 'panel:selectSeries': {
+      const { seriesId } = message;
+      switchSeries(message.tabId, (url) => seriesCatalog.select(seriesId, url).then(() => seriesId)).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:createSeries': {
+      const { name } = message;
+      switchSeries(message.tabId, async (url) => (await seriesCatalog.create(name, url)).id).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:renameSeries': {
+      const { name } = message;
+      updateSeries(message.tabId, (url, current) => seriesCatalog.rename(current, name, url).then(() => current)).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:mergeSeries': {
+      const { targetId } = message;
+      // 來源不是 Provisional Series（或目標不在）時 merge 不動，這個 tab 留在原本的 Series
+      updateSeries(message.tabId, async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current)).then(() =>
+        sendResponse(),
+      );
+      return true;
+    }
     case 'panel:scan':
       activation.isActive(message.tabId).then((active) => {
         if (active) scan(message.tabId);

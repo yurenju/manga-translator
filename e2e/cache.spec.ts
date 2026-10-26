@@ -8,7 +8,7 @@ import { hammingDistance, pageHash, SAME_PAGE_MAX_DISTANCE } from '../src/shared
 import type { PageTranslation } from '../src/shared/page-text.ts';
 import type { Series } from '../src/shared/series.ts';
 import { readGray } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, testActivate, test } from './fixtures.ts';
+import { activateOnJumpPlus, expect, readStore, testActivate, test } from './fixtures.ts';
 
 /** 跟 pages.spec.ts 一樣用真的視窗：截圖與 rect 才對得上。 */
 test.use({ viewport: null, fakeTranslator: true });
@@ -17,23 +17,6 @@ test.use({ viewport: null, fakeTranslator: true });
 const TRANSCRIPT_TIMEOUT = 60_000;
 
 const translateCalls = (sw: Worker) => sw.evaluate(() => globalThis.__translateCalls ?? 0);
-
-/** 在 SW 裡直接讀 IndexedDB（只讀，不經過外掛的程式）。 */
-function readStore<T>(sw: Worker, store: string): Promise<T[]> {
-  return sw.evaluate(
-    (store) =>
-      new Promise<T[]>((resolve, reject) => {
-        const open = indexedDB.open('manga-translator');
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const request = open.result.transaction(store).objectStore(store).getAll();
-          request.onsuccess = () => resolve(request.result as T[]);
-          request.onerror = () => reject(request.error);
-        };
-      }),
-    store,
-  );
-}
 
 const statusLines = (panel: Page) => panel.getByRole('status', { name: '翻譯狀態' });
 

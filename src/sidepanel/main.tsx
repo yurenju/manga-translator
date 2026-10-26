@@ -2,17 +2,20 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
 import type {
+  LineRef,
   Message,
   ModelStatus,
   ModelStatusResponse,
+  AutoTranslateResponse,
   OverlayResponse,
   PagesResponse,
   PageView,
+  SeriesResponse,
   StatusResponse,
   TestConnectionResponse,
   TranslationInfo,
 } from '../shared/messages.ts';
-import type { PageText } from '../shared/page-text.ts';
+import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
 
 /**
  * 點圖示啟動時，SW 用 sidepanel.html?tabId=N 打開這個 tab 專屬的 side panel。
@@ -52,39 +55,6 @@ function ModelStatusLine({ status, onRetry }: { status: ModelStatus; onRetry: ()
   }
 }
 
-/** 逐字稿：Balloon 與 Loose Text 依閱讀順序混在同一串；Loose Text 用斜體＋🔊（spec #27 第 8 節）。 */
-function Transcript({ text, translated }: { text: PageText; translated: boolean }) {
-  const lines = [
-    ...text.balloons.map((b) => ({ ...b, loose: false })),
-    ...text.looseText.map((l) => ({ ...l, loose: true })),
-  ].sort((a, b) => a.order - b.order);
-  return (
-    <ol aria-label="逐字稿">
-      {lines.map((line) => {
-        // unreadable：OCR 原文（灰、刪除線）＋「無法辨識」（spec #27 第 8 節）
-        const unreadable = translated && line.unreadable;
-        const cls = unreadable ? ' unreadable' : '';
-        const original = line.loose ? <em class={`loose${cls}`}>🔊 {line.原文}</em> : <span class={`original${cls}`}>{line.原文}</span>;
-        return (
-          <li key={line.id} data-kind={line.loose ? 'loose' : 'balloon'}>
-            {original}
-            {unreadable ? (
-              <span class="unreadable-label">無法辨識</span>
-            ) : (
-              <>
-                <span class="reading" lang="ja">
-                  {line.讀音}
-                </span>
-                {translated && line.譯文 ? <span class="translation">{line.譯文}</span> : <span class="untranslated">未翻譯</span>}
-              </>
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 /** 「已翻譯」或「快取」・模型・秒數・費用（spec #27 第 8 節）；快取時是當初翻譯的模型與數字。 */
 function TranslationStatusLine({ status }: { status: TranslationInfo }) {
   const label = status.source === 'cache' ? '快取' : '已翻譯';
@@ -95,21 +65,45 @@ function TranslationStatusLine({ status }: { status: TranslationInfo }) {
   );
 }
 
-function PageItem({ page, index }: { page: PageView; index: number }) {
+/** 學習模式的共用狀態：全域顯示層級與 hover 同步（#39）。 */
+interface LearningProps {
+  level: Level;
+  /** 頁面上滑鼠所在的那句。 */
+  hovered: LineRef | undefined;
+  /** 滑過 panel 的某行 → 頁面上那句高亮；null＝離開。 */
+  onLineHover: (line: LineRef | null) => void;
+}
+
+function PageItem({ page, index, onRetry, learning }: { page: PageView; index: number; onRetry: () => void; learning: LearningProps }) {
   const { transcript } = page;
+  const { level, hovered, onLineHover } = learning;
   return (
     <li>
       <img src={page.thumbnail} alt={`Page ${index + 1}`} />
       {transcript.state === 'analyzing' && <p>辨識中…</p>}
+      {transcript.state === 'pending' && <p class="hint">未翻譯（自動翻譯已關閉，按「翻譯此頁」）</p>}
       {transcript.state === 'error' && <p class="error">辨識失敗：{transcript.message}</p>}
       {transcript.state === 'done' && transcript.translation && !transcript.translating && !transcript.translateError && (
         <TranslationStatusLine status={transcript.translation} />
       )}
       {transcript.state === 'done' && transcript.translating && <p>翻譯中…</p>}
       {transcript.state === 'done' && transcript.translateError && (
-        <p class="error">翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
+        <div role="alert">
+          <p class="error">翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
+          <button type="button" onClick={onRetry}>
+            重試
+          </button>
+        </div>
       )}
-      {transcript.state === 'done' && <Transcript text={transcript.text} translated={transcript.translated} />}
+      {transcript.state === 'done' && (
+        <Transcript
+          text={transcript.text}
+          translated={transcript.translated}
+          level={level}
+          hoveredId={hovered?.pageHash === page.pageHash ? hovered.lineId : undefined}
+          onHover={(lineId) => onLineHover(lineId === null ? null : { pageHash: page.pageHash, lineId })}
+        />
+      )}
     </li>
   );
 }
@@ -241,16 +235,143 @@ function OverlayToggle({ tabId }: { tabId: number }) {
   );
 }
 
+/** 自動翻譯開關（spec #27 第 3.4、8 節；預設開）；關掉後翻頁只顯示快取，其他要按「翻譯此頁」。 */
+function AutoTranslateToggle({ tabId }: { tabId: number }) {
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => {
+    void send<AutoTranslateResponse>({ type: 'panel:getAutoTranslate', tabId }).then((r) => setEnabled(r.enabled));
+  }, [tabId]);
+  const toggle = (value: boolean) => {
+    setEnabled(value);
+    void send({ type: 'panel:setAutoTranslate', tabId, enabled: value });
+  };
+  return (
+    <label>
+      <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.currentTarget.checked)} />
+      自動翻譯
+    </label>
+  );
+}
+
+const NEW_SERIES = '__new__';
+
+/** 名稱輸入（新增 Series／改名）；送出空白不算。 */
+function NameForm({ label, submit, initial = '', onDone }: { label: string; submit: string; initial?: string; onDone: (name: string | undefined) => void }) {
+  const [name, setName] = useState(initial);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim()) onDone(name.trim());
+      }}
+    >
+      <input aria-label={label} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+      <button type="submit">{submit}</button>
+      <button type="button" onClick={() => onDone(undefined)}>
+        取消
+      </button>
+    </form>
+  );
+}
+
+/**
+ * 底部列的 Series 下拉（spec #27 第 8 節、#36）：最近用過的在最上面、Provisional Series 顯示為「未歸類」、
+ * 「新增 Series…」、改名、把 Provisional Series 合併進既有 Series。
+ */
+function SeriesPicker({ tabId }: { tabId: number }) {
+  const [series, setSeries] = useState<SeriesResponse | undefined>(undefined);
+  const [editing, setEditing] = useState<'new' | 'rename' | undefined>(undefined);
+  const [mergeTarget, setMergeTarget] = useState('');
+
+  useEffect(() => {
+    const refresh = () => void send<SeriesResponse>({ type: 'panel:getSeries', tabId }).then(setSeries);
+    const onMessage = (message: Message) => {
+      if ((message.type === 'series:changed' || message.type === 'status:changed') && message.tabId === tabId) refresh();
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    refresh();
+    return () => chrome.runtime.onMessage.removeListener(onMessage);
+  }, [tabId]);
+
+  if (!series?.current) return null;
+  const current = series.options.find((o) => o.id === series.current);
+  const targets = series.options.filter((o) => !o.provisional && o.id !== series.current);
+  const choose = (value: string) => {
+    if (value === NEW_SERIES) setEditing('new');
+    else void send({ type: 'panel:selectSeries', tabId, seriesId: value });
+  };
+  return (
+    <div class="series">
+      <select aria-label="Series" value={editing === 'new' ? NEW_SERIES : series.current} onChange={(e) => choose(e.currentTarget.value)}>
+        {series.options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+        <option value={NEW_SERIES}>新增 Series…</option>
+      </select>
+      {editing === undefined && (
+        <button type="button" onClick={() => setEditing('rename')}>
+          改名
+        </button>
+      )}
+      {editing === 'new' && (
+        <NameForm
+          label="Series 名稱"
+          submit="建立"
+          onDone={(name) => {
+            setEditing(undefined);
+            if (name) void send({ type: 'panel:createSeries', tabId, name });
+          }}
+        />
+      )}
+      {editing === 'rename' && (
+        <NameForm
+          label="新名稱"
+          submit="儲存"
+          initial={current?.provisional ? '' : current?.name}
+          onDone={(name) => {
+            setEditing(undefined);
+            if (name) void send({ type: 'panel:renameSeries', tabId, name });
+          }}
+        />
+      )}
+      {current?.provisional && targets.length > 0 && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (mergeTarget) void send({ type: 'panel:mergeSeries', tabId, targetId: mergeTarget });
+          }}
+        >
+          <select aria-label="合併進" value={mergeTarget} onChange={(e) => setMergeTarget(e.currentTarget.value)}>
+            <option value="">合併進…</option>
+            {targets.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit">合併</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
   const [active, setActive] = useState<boolean | undefined>(tabId === undefined ? false : undefined);
   const [pages, setPages] = useState<PageView[]>([]);
   const [modelStatus, setModelStatus] = useState<ModelStatus>({ state: 'idle' });
   const [hasKey, setHasKey] = useState(true);
+  const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
+  const [hovered, setHovered] = useState<LearningProps['hovered']>(undefined);
 
   useEffect(() => {
     if (tabId === undefined) return;
-    const onMessage = (message: Message) => {
+    const onMessage = (message: Message, sender: chrome.runtime.MessageSender) => {
+      if (message.type === 'content:hover' && sender.tab?.id === tabId)
+        setHovered(message.line ?? undefined);
       if (message.type === 'status:changed' && message.tabId === tabId) setActive(message.active);
       if (message.type === 'pages:updated' && message.tabId === tabId) setPages(message.pages);
       if (message.type === 'models:status') setModelStatus(message.status);
@@ -273,8 +394,16 @@ function App({ tabId }: { tabId: number | undefined }) {
     );
   const scan = () => void send({ type: 'panel:scan', tabId });
   const done = pages.filter((p) => p.transcript.state === 'done');
-  const untranslated = done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
+  const pending = pages.some((p) => p.transcript.state === 'pending');
+  const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
   const translate = () => void send({ type: 'panel:translate', tabId });
+  const learning: LearningProps = {
+    level,
+    hovered,
+    onLineHover(line) {
+      chrome.tabs.sendMessage(tabId, { type: 'content:highlight', line } satisfies Message).catch(() => {});
+    },
+  };
   return (
     <>
       <main>
@@ -282,24 +411,28 @@ function App({ tabId }: { tabId: number | undefined }) {
         <button type="button" onClick={() => void send({ type: 'panel:stop', tabId })}>
           停止
         </button>
-        {/* 翻頁偵測（#34）之前，捲動或翻頁後要手動重新擷取。 */}
+        {/* 翻頁會自動偵測（#34）；這顆給偵測漏掉時手動補一次。 */}
         <button type="button" onClick={scan}>
           重新擷取
         </button>
         <OverlayToggle tabId={tabId} />
+        <AutoTranslateToggle tabId={tabId} />
         {settings}
         <ModelStatusLine status={modelStatus} onRetry={scan} />
         {untranslated && !hasKey && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</p>}
+        {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
         <ul aria-label="Page">
           {pages.map((page, i) => (
-            <PageItem key={page.anchorId} page={page} index={i} />
+            // 同一個 anchor 可能有兩個 Page（Spread），key 要帶 Page 身分
+            <PageItem key={`${page.anchorId}/${page.pageHash}`} page={page} index={i} onRetry={translate} learning={learning} />
           ))}
         </ul>
       </main>
       {/* 底部固定列；放在 main 外面才是 contentinfo landmark */}
       <footer aria-label="狀態列">
+        <SeriesPicker tabId={tabId} />
         <StatusText pages={pages} />
-        {done.length > 0 && (
+        {(done.length > 0 || pending) && (
           <button type="button" onClick={translate}>
             {untranslated ? '翻譯此頁' : '重新翻譯'}
           </button>

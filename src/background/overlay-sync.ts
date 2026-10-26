@@ -5,8 +5,16 @@
 import type { PageView } from '../shared/messages.ts';
 import type { PageText } from '../shared/page-text.ts';
 
+/** 一個翻好的 Page 要覆蓋到哪：anchor（元素）＋ pageHash（Page 身分，hover 同步用）。 */
+export interface OverlayShow {
+  tabId: number;
+  anchorId: string;
+  pageHash: string;
+  text: PageText;
+}
+
 export interface OverlaySyncDeps {
-  show(tabId: number, anchorId: string, text: PageText): void;
+  show(show: OverlayShow): void;
 }
 
 export function createOverlaySync(deps: OverlaySyncDeps) {
@@ -18,7 +26,7 @@ export function createOverlaySync(deps: OverlaySyncDeps) {
       const { transcript } = page;
       if (transcript.state !== 'done' || !transcript.translated || sent.has(transcript.text)) continue;
       sent.add(transcript.text);
-      deps.show(tabId, page.anchorId, transcript.text);
+      deps.show({ tabId, anchorId: page.anchorId, pageHash: page.pageHash, text: transcript.text });
     }
   }
 

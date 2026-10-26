@@ -32,6 +32,18 @@ _Avoid_: bubble, text box
 Text on a Page that belongs to no Balloon: sound effects, narration, signs.
 _Avoid_: SFX (only one kind of Loose Text), stray text
 
+**Line** (句)
+One Balloon or one Loose Text entry on a Page, as the transcript lists it in reading order; the unit that hover sync and furigana work on. Its id (b1, l1…) is only unique within its Page, so a Line is always named together with its Page.
+_Avoid_: item, sentence (one Balloon can hold several sentences)
+
+**URL Pattern** (網址模式)
+A reading-page URL reduced to origin + path (query and hash ignored), remembered against a Series once the reader chooses a non-provisional Series for it. Only used to preselect that Series the next time the extension is activated on the same URL; never activates the extension by itself.
+_Avoid_: site rule, domain mapping
+
+**Display Level** (顯示層級)
+Which parts of every Line the side panel shows, switched once for all Pages: 只看譯文, 原文＋譯文, 加振り仮名 (the default), 只看日文.
+_Avoid_: mode, learning mode (that is the whole feature)
+
 **Series Notes** (作品筆記)
 The fixed translations a Series has settled on — names and terms, plus how each character refers to themself, speaks, and addresses others — used to keep translations consistent. Mostly accumulated by the translator as it reads; the reader reviews it and occasionally corrects it. No plot progress. Belongs to the Series, shared across every site the Series is read on.
 _Avoid_: context, glossary (ambiguous with this file), dictionary
