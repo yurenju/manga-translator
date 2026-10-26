@@ -1,3 +1,6 @@
+// 版本號只寫在 package.json，由 release workflow 更新（.github/workflows/release.yml）
+import pkg from '../package.json' with { type: 'json' };
+
 /**
  * 權限照 spec #27 第 6 節：沒有 host_permissions、沒有靜態 content_scripts，
  * 也不用 openPanelOnActionClick（ADR 0003）。e2e build 額外宣告 <all_urls>（第 12 節）；debug build 只改名字。
@@ -9,7 +12,7 @@ export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: bo
   return {
     manifest_version: 3,
     name: e2e ? 'Manga Translator (e2e)' : debug ? 'Manga Translator (debug)' : 'Manga Translator',
-    version: '0.1.0',
+    version: pkg.version,
     description: '把畫面上的日文漫畫原地翻成繁體中文',
     minimum_chrome_version: '116',
     permissions: ['activeTab', 'scripting', 'sidePanel', 'offscreen', 'unlimitedStorage'],

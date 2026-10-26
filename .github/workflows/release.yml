@@ -1,0 +1,96 @@
+# 手動發版：在 Actions 頁面選 Release → Run workflow。
+# 先跑型別檢查與單元測試，再改 package.json 的版本號、build、commit 回 main 並打 tag，
+# 最後建立 GitHub Release，附上 manga-translator.zip（dist/prod 的內容）。
+# zip 檔名固定不帶版本號：README 的下載連結指向 releases/latest/download/manga-translator.zip，
+# 使用者每次解壓縮出來的資料夾名稱也一樣（換資料夾 Chrome 會當成另一個外掛，資料就看不到了）。
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 版本號要升哪一段（version 有填時忽略）
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: 指定版本號，例如 0.2.0（選填，必須比目前版本大）
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 只允許從 main 發版
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Release 只能在 main 上執行，目前是 ${{ github.ref }}"
+          exit 1
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: 決定新版本號
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          current=$(node -p "require('./package.json').version")
+          if [ -n "$VERSION" ]; then
+            # Chrome 的 manifest version 只接受數字與點，不能有 -beta 之類的後綴
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::版本號格式要是 X.Y.Z：$VERSION"
+              exit 1
+            fi
+            newer=$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -n1)
+            if [ "$VERSION" = "$current" ] || [ "$newer" != "$VERSION" ]; then
+              echo "::error::新版本 $VERSION 必須比目前的 $current 大"
+              exit 1
+            fi
+            target="$VERSION"
+          else
+            target="$BUMP"
+          fi
+          # 同時更新 package.json 與 package-lock.json；不讓 npm 自己 commit 和打 tag
+          new=$(npm version "$target" --no-git-tag-version)
+          new=${new#v}
+          if git ls-remote --exit-code --tags origin "refs/tags/v$new" > /dev/null; then
+            echo "::error::tag v$new 已經存在"
+            exit 1
+          fi
+          echo "Release v$new（目前 $current）"
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+
+      - run: npm run build
+      - name: 打包 zip
+        run: cd dist/prod && zip -r ../../manga-translator.zip .
+
+      - name: Commit 版本號並打 tag
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "Release v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:main "v$VERSION"
+
+      - name: 建立 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: gh release create "v$VERSION" manga-translator.zip --title "v$VERSION" --generate-notes
