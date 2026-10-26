@@ -40,6 +40,21 @@ function setup(overrides: Partial<TranscriberDeps> = {}) {
   return { transcriber: createTranscriber(deps), published, deps };
 }
 
+function translatorReturning(zh: string, calls: TranslateInput[] = []): Translator {
+  return {
+    async translatePage(input) {
+      calls.push(input);
+      return {
+        items: input.items.map((i) => ({ id: i.id, 讀音: `${i.id}-讀音`, 譯文: `${zh}-${i.id}`, unreadable: false })),
+        notes_changes: { added: [], filled: [], suggestions: [] },
+        usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 700, costUsd: 0.000137 },
+        model: 'claude-haiku-5-5',
+        latencyMs: 2300,
+      };
+    },
+  };
+}
+
 describe('逐字稿：本機流水線＋Translator', () => {
   it('先列出縮圖（分析中），分析完顯示原文＋kuromoji 讀音，沒有 Translator 時標示未翻譯', async () => {
     const { transcriber, published } = setup();
@@ -86,13 +101,31 @@ describe('逐字稿：本機流水線＋Translator', () => {
     expect(last.text.looseText[0]).toMatchObject({ 讀音: 'どん', 讀音來源: 'llm', 譯文: '咚', unreadable: true });
   });
 
-  it('Translator 失敗時保留 kuromoji 讀音、標示未翻譯', async () => {
-    const translator: Translator = { translatePage: async () => Promise.reject(new Error('429')) };
+  it('Translator 失敗時保留 kuromoji 讀音、標示未翻譯，並帶上錯誤訊息', async () => {
+    const translator: Translator = { translatePage: async () => Promise.reject(new Error('Claude API 429：slow down')) };
     const { transcriber, published } = setup({ getTranslator: () => translator });
 
     await transcriber.update(1, [thumb('a1')], capture);
 
-    expect(published.at(-1)![0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false });
+    expect(published.at(-1)![0]!.transcript).toEqual({
+      state: 'done',
+      text: pageText,
+      translated: false,
+      translateError: 'Claude API 429：slow down',
+    });
+  });
+
+  it('翻譯成功時帶上模型、秒數與費用（狀態列用）', async () => {
+    const { transcriber } = setup({ getTranslator: async () => translatorReturning('今天') });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    const transcript = transcriber.get(1)[0]!.transcript;
+    expect(transcript.state === 'done' && transcript.translation).toEqual({
+      model: 'claude-haiku-5-5',
+      latencyMs: 2300,
+      usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 700, costUsd: 0.000137 },
+    });
   });
 
   it('本機流水線失敗（例如模型 SHA-256 不符）時這頁顯示錯誤', async () => {
@@ -138,5 +171,88 @@ describe('逐字稿：本機流水線＋Translator', () => {
     finishers[1]!(pageText);
     await second;
     expect(transcriber.get(1).map((p) => [p.anchorId, p.transcript.state])).toEqual([['a2', 'done']]);
+  });
+});
+
+describe('翻譯此頁', () => {
+  it('沒有 key 時擷取的 Page 設定 key 後按「翻譯此頁」：不重跑本機流水線，用同一份 OCR 結果翻譯', async () => {
+    let translator: Translator | undefined;
+    const calls: TranslateInput[] = [];
+    const { transcriber, published, deps } = setup({ getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    expect(transcriber.get(1).every((p) => p.transcript.state === 'done' && !p.transcript.translated)).toBe(true);
+
+    translator = translatorReturning('今天', calls);
+    published.length = 0;
+    await transcriber.translate(1);
+
+    expect(deps.analyze).toHaveBeenCalledTimes(2);
+    expect(calls).toHaveLength(2);
+    // 先標翻譯中，再一頁一頁換成譯文
+    expect(published[0]!.map((p) => p.transcript.state === 'done' && p.transcript.translating)).toEqual([true, true]);
+    const pages = transcriber.get(1);
+    for (const page of pages) {
+      expect(page.transcript.state === 'done' && page.transcript.translated).toBe(true);
+      expect(page.transcript.state === 'done' && page.transcript.translating).toBeFalsy();
+    }
+    const first = pages[0]!.transcript;
+    if (first.state !== 'done') throw new Error('not done');
+    expect(first.text.balloons[0]).toMatchObject({ 讀音: 'b1-讀音', 讀音來源: 'llm', 譯文: '今天-b1' });
+  });
+
+  it('重新翻譯失敗時退回 kuromoji 讀音（不是上一次的譯文），並顯示錯誤', async () => {
+    let translator: Translator = translatorReturning('今天');
+    const { transcriber } = setup({ getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    translator = { translatePage: async () => Promise.reject(new Error('Claude API 500：boom')) };
+    await transcriber.translate(1);
+
+    expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false, translateError: 'Claude API 500：boom' });
+  });
+
+  it('還沒設定 key 時按「翻譯此頁」不改變逐字稿', async () => {
+    const { transcriber, published } = setup();
+    await transcriber.update(1, [thumb('a1')], capture);
+    const before = published.length;
+
+    await transcriber.translate(1);
+
+    expect(published).toHaveLength(before);
+    expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false });
+  });
+
+  it('分析失敗的 Page 不送翻譯', async () => {
+    const calls: TranslateInput[] = [];
+    const { transcriber } = setup({ analyze: async () => Promise.reject(new Error('壞掉')), getTranslator: () => translatorReturning('x', calls) });
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    await transcriber.translate(1);
+
+    expect(calls).toEqual([]);
+    expect(transcriber.get(1)[0]!.transcript.state).toBe('error');
+  });
+
+  it('翻譯中又有新的擷取時，舊的翻譯結果丟掉', async () => {
+    let finish: (() => void) | undefined;
+    const slow: Translator = {
+      translatePage: (input) =>
+        new Promise((resolve) => {
+          finish = () => void translatorReturning('舊').translatePage(input).then(resolve);
+        }),
+    };
+    let translator: Translator | undefined;
+    const { transcriber } = setup({ getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    translator = slow;
+    const running = transcriber.translate(1);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    translator = undefined;
+    await transcriber.update(1, [thumb('a2')], capture);
+    finish!();
+    await running;
+
+    expect(transcriber.get(1).map((p) => [p.anchorId, p.transcript.state === 'done' && p.transcript.translated])).toEqual([['a2', false]]);
   });
 });

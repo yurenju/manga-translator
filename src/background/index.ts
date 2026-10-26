@@ -1,7 +1,8 @@
-import { createFakeTranslator } from '../shared/fake-translator.ts';
+import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import type {
   AnalyzeResponse,
   CropResponse,
+  FakeTranslatorConfig,
   Message,
   ModelStatus,
   ModelStatusResponse,
@@ -10,12 +11,13 @@ import type {
   PipelineConfig,
   StatusResponse,
   TestConfig,
+  TestConnectionResponse,
+  TranslateResponse,
 } from '../shared/messages.ts';
 import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createScanner } from './scan.ts';
-import { SYNTHETIC_GROUND_TRUTH } from './synthetic-ground-truth.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber } from './transcribe.ts';
 
@@ -63,7 +65,32 @@ const scanner = createScanner({
 
 /** e2e build 才會改（test:configure）。 */
 let pipelineConfig: PipelineConfig = {};
-let fakeTranslator: Translator | undefined;
+/** e2e build 才會設：offscreen 用 FakeTranslator 取代 Claude。 */
+let fakeTranslator: FakeTranslatorConfig | undefined;
+/** e2e build：false＝FakeTranslator 不需要 API key（#30 起的 e2e 預設）。 */
+let requireApiKey = true;
+
+const apiKeys = indexedDbApiKeyStore();
+
+/** SW 不讀 key：翻譯在 offscreen document 裡做，offscreen 自己從 IndexedDB 讀 key（spec #27 第 5 節）。 */
+const offscreenTranslator: Translator = {
+  async translatePage(input) {
+    await ensureOffscreenDocument();
+    const response = await chrome.runtime.sendMessage<Message, TranslateResponse>({
+      type: 'offscreen:translate',
+      input,
+      ...(__E2E__ && fakeTranslator ? { fake: fakeTranslator } : {}),
+    });
+    if ('error' in response) throw new Error(response.error);
+    return response.output;
+  },
+};
+
+/** 沒有 key 時不排 LLM 工作（spec 第 5 節）。 */
+async function getTranslator(): Promise<Translator | undefined> {
+  if (__E2E__ && fakeTranslator && !requireApiKey) return offscreenTranslator;
+  return (await apiKeys.has()) ? offscreenTranslator : undefined;
+}
 
 const transcriber = createTranscriber({
   async analyze(request) {
@@ -76,8 +103,7 @@ const transcriber = createTranscriber({
     if ('error' in response) throw new Error(response.error);
     return response.text;
   },
-  // Claude 與 API key 在 #31；沒有 key 時沒有 Translator（只顯示原文＋kuromoji 讀音）。
-  getTranslator: () => (__E2E__ ? fakeTranslator : undefined),
+  getTranslator,
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
   },
@@ -88,7 +114,8 @@ let modelStatus: ModelStatus = { state: 'idle' };
 if (__E2E__) {
   globalThis.__configureForTest = (config) => {
     pipelineConfig = config.pipeline;
-    fakeTranslator = config.fakeTranslator ? createFakeTranslator(SYNTHETIC_GROUND_TRUTH) : undefined;
+    fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [] } : undefined;
+    requireApiKey = config.requireApiKey ?? false;
   };
 }
 
@@ -160,6 +187,15 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
     case 'panel:getPages':
       sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);
       return false;
+    case 'panel:translate':
+      void transcriber.translate(message.tabId).finally(() => sendResponse());
+      return true;
+    case 'panel:testConnection':
+      ensureOffscreenDocument()
+        .then(() => chrome.runtime.sendMessage<Message, TestConnectionResponse>({ type: 'offscreen:testConnection' }))
+        .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }) satisfies TestConnectionResponse)
+        .then(sendResponse);
+      return true;
     case 'panel:scan':
       activation.isActive(message.tabId).then((active) => {
         if (active) scan(message.tabId);

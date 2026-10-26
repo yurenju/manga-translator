@@ -40,3 +40,22 @@ describe('FakeTranslator', () => {
     expect(output.model).toBe('fake');
   });
 });
+
+describe('FakeTranslator：模擬無法辨識', () => {
+  it('指定的 ground truth 原文回傳 unreadable，讀音與譯文留空', async () => {
+    const fake = createFakeTranslator([readGroundTruth('p01-basic')], { unreadableTexts: ['もちろん！'] });
+
+    const output = await fake.translatePage({
+      seriesNotes: [],
+      items: [
+        { id: 'b1', kind: 'balloon', 原文: 'もちろん', orientation: 'vertical' },
+        { id: 'b2', kind: 'balloon', 原文: 'いいにおい！', orientation: 'vertical' },
+      ],
+    });
+
+    expect(output.items).toEqual([
+      { id: 'b1', 讀音: '', 譯文: '', unreadable: true },
+      { id: 'b2', 讀音: 'いいにおい！', 譯文: '好香！', unreadable: false },
+    ]);
+  });
+});

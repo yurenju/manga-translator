@@ -36,8 +36,17 @@ function similarity(a: string, b: string): number {
   return 1 - levenshtein(x, y) / Math.max(x.length, y.length, 1);
 }
 
-export function createFakeTranslator(pages: readonly { texts: readonly GroundTruthText[] }[]): Translator {
+export interface FakeTranslatorOptions {
+  /** 這些 ground truth 原文回傳 unreadable（模擬 Claude 判定 OCR 亂碼）。 */
+  unreadableTexts?: readonly string[];
+}
+
+export function createFakeTranslator(
+  pages: readonly { texts: readonly GroundTruthText[] }[],
+  { unreadableTexts = [] }: FakeTranslatorOptions = {},
+): Translator {
   const texts = pages.flatMap((p) => p.texts);
+  const unreadable = new Set(unreadableTexts);
   return {
     async translatePage(input: TranslateInput): Promise<TranslateOutput> {
       return {
@@ -51,6 +60,7 @@ export function createFakeTranslator(pages: readonly { texts: readonly GroundTru
               bestScore = score;
             }
           }
+          if (best && unreadable.has(best.ja)) return { id: item.id, 讀音: '', 譯文: '', unreadable: true };
           return best
             ? { id: item.id, 讀音: best.reading, 譯文: best.zh, unreadable: false }
             : { id: item.id, 讀音: '', 譯文: NO_MATCH, unreadable: false };

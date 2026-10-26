@@ -1,4 +1,5 @@
 import type { PageText } from './page-text.ts';
+import type { TranslateInput, TranslateOutput } from './translator.ts';
 
 /** onnxruntime-web 的執行環境。 */
 export type ExecutionProvider = 'webgpu' | 'wasm';
@@ -29,6 +30,16 @@ export type Message =
   | { type: 'models:status'; status: ModelStatus }
   /** side panel → SW：目前的模型狀態。回應 ModelStatusResponse。 */
   | { type: 'panel:getModelStatus' }
+  /** side panel → SW：「翻譯此頁／重新翻譯」：用已經辨識好的原文重新呼叫 Translator。 */
+  | { type: 'panel:translate'; tabId: number }
+  /**
+   * SW → offscreen：翻譯一個 Page。回應 TranslateResponse。
+   * API key 不在訊息裡：offscreen 自己從 IndexedDB 讀（spec 第 5 節：key 永遠不經過 messaging）。
+   */
+  | { type: 'offscreen:translate'; input: TranslateInput; fake?: FakeTranslatorConfig }
+  /** side panel → SW → offscreen：「測試連線」。回應 TestConnectionResponse。 */
+  | { type: 'panel:testConnection' }
+  | { type: 'offscreen:testConnection' }
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
   | { type: 'test:activate'; tabId: number };
 
@@ -36,7 +47,23 @@ export type Message =
 export interface TestConfig {
   pipeline: PipelineConfig;
   fakeTranslator: boolean;
+  /**
+   * true：跟正式 build 一樣，要先在設定區存 API key 才會翻譯（FakeTranslator 取代的只是 Claude）。
+   * 預設 false：FakeTranslator 不需要 key（#30 起的 e2e 都這樣用）。
+   */
+  requireApiKey?: boolean;
+  /** FakeTranslator 把這些 ground truth 原文當成無法辨識（模擬 Claude 回 unreadable）。 */
+  unreadableTexts?: string[];
 }
+
+/** e2e build 才有：offscreen 用 FakeTranslator 取代 Claude。 */
+export interface FakeTranslatorConfig {
+  unreadableTexts: string[];
+}
+
+export type TranslateResponse = { output: TranslateOutput } | { error: string; noApiKey?: true };
+
+export type TestConnectionResponse = { ok: true; model: string } | { ok: false; error: string };
 
 export interface StatusResponse {
   active: boolean;
@@ -79,12 +106,25 @@ export interface PageThumb extends PageCandidate {
 
 export type CropResponse = { pages: PageThumb[] } | { error: string };
 
+/** 狀態列顯示的翻譯資訊（spec #27 第 8 節：模型・秒數・費用）。 */
+export type TranslationInfo = Pick<TranslateOutput, 'model' | 'latencyMs' | 'usage'>;
+
 /** side panel 顯示的一個 Page：縮圖＋逐字稿的狀態。 */
 export interface PageView extends PageThumb {
   transcript:
     | { state: 'analyzing' }
-    /** translated=false：沒有 Translator（沒有 API key），讀音是 kuromoji、沒有譯文。 */
-    | { state: 'done'; text: PageText; translated: boolean }
+    /**
+     * translated=false：沒有 Translator（沒有 API key）或翻譯失敗（translateError），讀音是 kuromoji、沒有譯文。
+     * translating：按了「翻譯此頁」，正在等 Translator；text 仍是上一份。
+     */
+    | {
+        state: 'done';
+        text: PageText;
+        translated: boolean;
+        translating?: boolean;
+        translation?: TranslationInfo;
+        translateError?: string;
+      }
     | { state: 'error'; message: string };
 }
 
