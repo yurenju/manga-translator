@@ -4,7 +4,7 @@ v1 沒有網站 adapter。Page 的定位、翻頁偵測、Page 的身分都用�
 
 ## 做法
 
-- **定位 Page**：可視區域裡夠大的 `<img>` / `<canvas>`，每個元素是一個 Page 候選。看起來是 Spread 的候選（寬 > 高）在 offscreen document 去暗色邊緣、找中縫，切成兩個 Page。Jump+ 是每頁一個 canvas，Kindle 是整個 viewport 合成一張 img。
+- **定位 Page**：可視區域裡夠大的 `<img>` / `<canvas>`，每個元素是一個 Page 候選（「完整可見」也要在每個會裁切的祖先裡面，見 [ADR 0004](0004-fully-visible-page-inside-every-clipping-ancestor.md)）。看起來是 Spread 的候選（寬 > 高）在 offscreen document 去暗色邊緣、找中縫，切成兩個 Page。Jump+ 是每頁一個 canvas，Kindle 是整個 viewport 合成一張 img。
 - **偵測翻頁**：DOM mutation、scroll、resize、按鍵、點擊、img load 等訊號經過 debounce（約 300–500 ms）後截圖，再比對每個 Page 的縮圖 hash，hash 變了才算翻頁。不做定時輪詢。
 - **Page 的身分**：快取 key 是 `(Series, Page 影像的 perceptual hash)`，比對時用 Hamming 距離門檻。同一個 Page 在不同網站讀，會命中同一筆快取。
 - **覆蓋座標**：Balloon 框存成相對 Page 的 0～1 比例座標。每個 Page 記一個 anchor 元素，Spread 另外記 `subRect`（例如左半）。渲染時用 anchor 目前的 rect 換算成畫面座標。
