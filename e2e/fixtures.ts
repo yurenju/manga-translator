@@ -2,6 +2,9 @@
  * 用 launchPersistentContext＋--load-extension 載入 dist/e2e（spec #27 第 12 節）。
  * 用 Playwright 內建的 Chromium（channel: 'chromium'），新版一般 Chrome 已不接受 --load-extension。
  */
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, test as base, type BrowserContext, type Page, type Worker } from '@playwright/test';
 import type { Message, PipelineConfig, TestConfig } from '../src/shared/messages.ts';
@@ -10,15 +13,31 @@ import { startMockSite, type MockSite } from './mock-site/server.ts';
 const EXTENSION_DIR = fileURLToPath(new URL('../dist/e2e', import.meta.url));
 
 /**
- * userDataDir 給 '' 是每次全新的暫存設定檔；給同一個目錄就能模擬「重開瀏覽器」。
+ * Windows 上 Chromium 的密碼管理器會用空密碼呼叫 LogonUser，檢查 OS 密碼是不是空的，結果快取在 Local State。
+ * 全新設定檔沒有快取，每開一次就記一次登入失敗；e2e 一次開很多個，10 分鐘內滿 10 次就把 Windows 帳號鎖住。
+ * 先寫好「不是空密碼、最後變更時間在很久以後」，Chromium 就直接用快取（password_manager_util_win.cc）。
+ * 已有 Local State 就不動（重開瀏覽器的設定檔裡已經有 Chromium 自己的快取）。
+ */
+async function seedLocalState(userDataDir: string): Promise<void> {
+  const localState = { password_manager: { os_password_blank: false, os_password_last_changed: '9223372036854775807' } };
+  await writeFile(join(userDataDir, 'Local State'), JSON.stringify(localState), { flag: 'wx' }).catch((e: NodeJS.ErrnoException) => {
+    if (e.code !== 'EEXIST') throw e;
+  });
+}
+
+/**
+ * userDataDir 給 '' 是每次全新的暫存設定檔（關閉時刪掉）；給同一個目錄就能模擬「重開瀏覽器」。
  * extensionDir 預設是 dist/e2e；smoke test 也用它載入正式 build。
  */
-export function launchWithExtension(
+export async function launchWithExtension(
   userDataDir: string,
   realDeviceScaleFactor?: number,
   extensionDir = EXTENSION_DIR,
 ): Promise<BrowserContext> {
-  return chromium.launchPersistentContext(userDataDir, {
+  const temporary = userDataDir === '';
+  if (temporary) userDataDir = await mkdtemp(join(tmpdir(), 'manga-e2e-'));
+  await seedLocalState(userDataDir);
+  const context = await chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
     args: [
       `--disable-extensions-except=${extensionDir}`,
@@ -28,6 +47,9 @@ export function launchWithExtension(
       ...(realDeviceScaleFactor === undefined ? [] : [`--force-device-scale-factor=${realDeviceScaleFactor}`]),
     ],
   });
+  // Windows 上瀏覽器剛關時 lockfile 可能還被占用
+  if (temporary) context.on('close', () => void rm(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }).catch(() => {}));
+  return context;
 }
 
 /**
