@@ -181,7 +181,12 @@ async function changeSeries(tabId: number, change: (url: string, current: string
   const next = await change(url, current);
   await activation.setSeriesId(tabId, next);
   notifyPanel({ type: 'series:changed', tabId });
-  if (rescan && next !== current) scan(tabId);
+  if (next === current) return;
+  if (rescan) {
+    // #34 的 transcriber 以 pageHash 記住看過的 Page；不忘掉的話重新擷取會沿用舊 ID 的結果
+    transcriber.resetPages(tabId);
+    scan(tabId);
+  } else transcriber.reassignSeries(tabId, next);
 }
 
 const activation = createActivation({

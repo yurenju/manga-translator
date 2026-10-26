@@ -510,6 +510,19 @@ describe('翻譯佇列（#34）', () => {
     expect(transcriber.get(1)[0]!.transcript.state).toBe('done');
   });
 
+  it('Series 換了 ID（reassignSeries，#36 合併）：之後重新翻譯寫進新的 ID', async () => {
+    const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
+    const cache = memoryCache();
+    const { transcriber } = setup({ getTranslator: () => translator, cache });
+    await transcriber.update(1, [thumb('a1')], capture);
+    expect(cache.saved.map((t) => t.seriesId)).toEqual(['series-1']);
+
+    transcriber.reassignSeries(1, 'series-2');
+    await transcriber.translate(1);
+
+    expect(cache.saved.map((t) => t.seriesId)).toEqual(['series-1', 'series-2']);
+  });
+
   it('同 origin 重新整理（resetPages）：同一頁重新從快取拿，自動翻譯設定保留', async () => {
     const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
     const { transcriber, published } = setup({ getTranslator: () => translator });

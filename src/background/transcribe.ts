@@ -398,11 +398,19 @@ export function createTranscriber(deps: TranscriberDeps) {
     deps.publish(tabId, []);
   }
 
+  /**
+   * 這個 tab 的 Series 換了 ID 但畫面上的 Page 不必重做（#36 合併：快取已改到目標 ID）：
+   * 已記住的 Page 之後「翻譯此頁／重試」寫進新的 ID。
+   */
+  function reassignSeries(tabId: number, seriesId: string): void {
+    for (const record of tabs.get(tabId)?.records ?? []) record.seriesId = seriesId;
+  }
+
   /** 停止或關 tab：同 resetPages，設定也回到預設。 */
   function clear(tabId: number): void {
     autoTranslate.delete(tabId);
     resetPages(tabId);
   }
 
-  return { update, translate, setAutoTranslate, isAutoTranslate, get, resetPages, clear };
+  return { update, translate, setAutoTranslate, isAutoTranslate, get, resetPages, reassignSeries, clear };
 }
