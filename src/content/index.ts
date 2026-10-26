@@ -85,12 +85,19 @@ if (!globalThis.__mangaTranslator) {
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
   const isOwn = (node: Node, attribute?: string) =>
     node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
+  // 還沒量到任何 Page（剛啟動、上次沒有完整可見的 Page）時一律算，免得漏掉第一頁
+  const relatesToPage = (node: Node, added: boolean) => {
+    if (anchors.size === 0) return true;
+    for (const anchor of anchors.values()) if (node.contains(anchor) || anchor.contains(node)) return true;
+    return added && node instanceof Element && (node.matches('img, canvas') || node.querySelector('img, canvas') !== null);
+  };
   const stopWatching = watchPageTurns({
-    notify() {
-      trace('pageTurn');
+    notify(reasons) {
+      trace('pageTurn', { reasons });
       chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
     },
     isOwn,
+    relatesToPage,
     document,
     window,
     MutationObserver,
