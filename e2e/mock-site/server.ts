@@ -48,7 +48,8 @@ export async function startMockSite(): Promise<MockSite> {
   const corrupted = new Set<string>();
   const site = createServer(async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://x').pathname;
-    if (path === '/jumpplus/') {
+    // /jumpplus/ 以下的任何路徑都是同一個仿 Jump+（同網站的另一話，#36 網址模式）
+    if (path.startsWith('/jumpplus/')) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin));
       return;
     }

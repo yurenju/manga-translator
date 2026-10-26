@@ -8,6 +8,7 @@ import type {
   OverlayResponse,
   PagesResponse,
   PageView,
+  SeriesResponse,
   StatusResponse,
   TestConnectionResponse,
   TranslationInfo,
@@ -241,6 +242,111 @@ function OverlayToggle({ tabId }: { tabId: number }) {
   );
 }
 
+const NEW_SERIES = '__new__';
+
+/** 名稱輸入（新增 Series／改名）；送出空白不算。 */
+function NameForm({ label, submit, initial = '', onDone }: { label: string; submit: string; initial?: string; onDone: (name: string | undefined) => void }) {
+  const [name, setName] = useState(initial);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (name.trim()) onDone(name.trim());
+      }}
+    >
+      <input aria-label={label} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+      <button type="submit">{submit}</button>
+      <button type="button" onClick={() => onDone(undefined)}>
+        取消
+      </button>
+    </form>
+  );
+}
+
+/**
+ * 底部列的 Series 下拉（spec #27 第 8 節、#36）：最近用過的在最上面、Provisional Series 顯示為「未歸類」、
+ * 「新增 Series…」、改名、把 Provisional Series 合併進既有 Series。
+ */
+function SeriesPicker({ tabId }: { tabId: number }) {
+  const [series, setSeries] = useState<SeriesResponse | undefined>(undefined);
+  const [editing, setEditing] = useState<'new' | 'rename' | undefined>(undefined);
+  const [mergeTarget, setMergeTarget] = useState('');
+
+  useEffect(() => {
+    const refresh = () => void send<SeriesResponse>({ type: 'panel:getSeries', tabId }).then(setSeries);
+    const onMessage = (message: Message) => {
+      if ((message.type === 'series:changed' || message.type === 'status:changed') && message.tabId === tabId) refresh();
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    refresh();
+    return () => chrome.runtime.onMessage.removeListener(onMessage);
+  }, [tabId]);
+
+  if (!series?.current) return null;
+  const current = series.options.find((o) => o.id === series.current);
+  const targets = series.options.filter((o) => !o.provisional && o.id !== series.current);
+  const choose = (value: string) => {
+    if (value === NEW_SERIES) setEditing('new');
+    else void send({ type: 'panel:selectSeries', tabId, seriesId: value });
+  };
+  return (
+    <div class="series">
+      <select aria-label="Series" value={editing === 'new' ? NEW_SERIES : series.current} onChange={(e) => choose(e.currentTarget.value)}>
+        {series.options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.label}
+          </option>
+        ))}
+        <option value={NEW_SERIES}>新增 Series…</option>
+      </select>
+      {editing === undefined && (
+        <button type="button" onClick={() => setEditing('rename')}>
+          改名
+        </button>
+      )}
+      {editing === 'new' && (
+        <NameForm
+          label="Series 名稱"
+          submit="建立"
+          onDone={(name) => {
+            setEditing(undefined);
+            if (name) void send({ type: 'panel:createSeries', tabId, name });
+          }}
+        />
+      )}
+      {editing === 'rename' && (
+        <NameForm
+          label="新名稱"
+          submit="儲存"
+          initial={current?.provisional ? '' : current?.name}
+          onDone={(name) => {
+            setEditing(undefined);
+            if (name) void send({ type: 'panel:renameSeries', tabId, name });
+          }}
+        />
+      )}
+      {current?.provisional && targets.length > 0 && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (mergeTarget) void send({ type: 'panel:mergeSeries', tabId, targetId: mergeTarget });
+          }}
+        >
+          <select aria-label="合併進" value={mergeTarget} onChange={(e) => setMergeTarget(e.currentTarget.value)}>
+            <option value="">合併進…</option>
+            {targets.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <button type="submit">合併</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
   const [active, setActive] = useState<boolean | undefined>(tabId === undefined ? false : undefined);
@@ -298,6 +404,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       </main>
       {/* 底部固定列；放在 main 外面才是 contentinfo landmark */}
       <footer aria-label="狀態列">
+        <SeriesPicker tabId={tabId} />
         <StatusText pages={pages} />
         {done.length > 0 && (
           <button type="button" onClick={translate}>
