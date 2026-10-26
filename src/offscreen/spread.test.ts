@@ -109,6 +109,15 @@ describe('Spread 切頁', () => {
     expect(splitSpread(image).map(box)).toEqual(readGroundTruth('p08-action').pages.map((p) => p.bbox));
   });
 
+  it('白底網站上左右留白很寬的 Spread：照樣從中縫切成兩頁（留白跟單頁一樣算在頁面裡）', () => {
+    const { image, content } = letterbox(readGray('p07-spread'), { width: 4400, height: 2160 }, 255);
+    const seam = expectedPages('p07-spread', content)[0]!.x;
+    expectNear(splitSpread(image), [
+      { x: seam, y: 0, width: image.width - seam, height: image.height },
+      { x: 0, y: 0, width: seam, height: image.height },
+    ]);
+  });
+
   it('白色邊框不切（白底網站的頁面留白）', () => {
     const { image } = letterbox(readGray('p01-basic'), { width: 1600, height: 1000 }, 255);
     expect(splitSpread(image).map(box)).toEqual([[0, 0, 1600, 1000]]);

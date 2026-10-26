@@ -227,6 +227,16 @@ describe('staleReason（過時提示）', () => {
     expect(staleReason(page, [entry('s', 'パン', '胖', { locked: true })], current)).toBe('notes');
   });
 
+  it('用到的條目當時譯文是空的、之後 LLM 翻別頁時補上：算新增，不過時', () => {
+    const blank = { ...page, usedNotes: [{ 原文: 'パン', 譯文: '' }] };
+    expect(staleReason(blank, [entry('s', 'パン', '麵包')], current)).toBeUndefined();
+  });
+
+  it('用到的條目當時譯文是空的、之後人補上（locked）：notes', () => {
+    const blank = { ...page, usedNotes: [{ 原文: 'パン', 譯文: '' }] };
+    expect(staleReason(blank, [entry('s', 'パン', '麵包', { locked: true })], current)).toBe('notes');
+  });
+
   it('只改了用到的條目的其他欄位（譯文沒變）不算過時', () => {
     expect(staleReason(page, [entry('s', 'パン', '麵包', { 讀音: 'ぱん', locked: true })], current)).toBeUndefined();
   });

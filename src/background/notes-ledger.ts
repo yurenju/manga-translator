@@ -31,8 +31,11 @@ export interface NotesTurn {
 export function createNotesLedger(store: NotesStore) {
   /** 每個 Series 最後一張號碼牌輪完時 resolve。 */
   const tails = new Map<string, Promise<void>>();
-  /** Spread 記號 → 第一頁送出時拿的快照。記號不再被引用（那次排程結束）就自動放掉。 */
-  const snapshots = new WeakMap<object, Promise<NotesEntry[]>>();
+  /**
+   * Spread 記號 → 第一頁送出時拿的快照，與這組裡已套用的頁新增的條目原文（後面的頁看不到它們）。
+   * 記號不再被引用（那次排程結束）就自動放掉。
+   */
+  const snapshots = new WeakMap<object, { notes: Promise<NotesEntry[]>; added: Set<string> }>();
   /** 每個 Series 最後一次「讀 → 改 → 寫」做完時 resolve。 */
   const writes = new Map<string, Promise<unknown>>();
 
@@ -64,20 +67,25 @@ export function createNotesLedger(store: NotesStore) {
       void turn.then(() => {
         if (tails.get(seriesId) === turn) tails.delete(seriesId);
       });
-      const notes =
-        (spread && snapshots.get(spread)) ??
-        store.list(seriesId).catch((e: unknown) => {
-          console.warn('notes lookup failed', e);
-          return [];
-        });
-      if (spread) snapshots.set(spread, notes);
+      const shared =
+        (spread && snapshots.get(spread)) ?? {
+          notes: store.list(seriesId).catch((e: unknown) => {
+            console.warn('notes lookup failed', e);
+            return [];
+          }),
+          added: new Set<string>(),
+        };
+      if (spread) snapshots.set(spread, shared);
+      const { notes } = shared;
       return {
         notes,
         async commit(changes, page) {
           try {
             await previous;
             const next = await exclusive(seriesId, (current) => {
-              const merged = applyNotesChanges(current.entries, changes, { ...page, seriesId });
+              const merged = applyNotesChanges(current.entries, changes, { ...page, seriesId, unseen: new Set(shared.added) });
+              const before = new Set(current.entries.map((e) => e.原文));
+              for (const e of merged.entries) if (!before.has(e.原文)) shared.added.add(e.原文);
               return { entries: merged.entries, suggestions: addSuggestions(current.suggestions, merged.suggestions) };
             });
             return next.entries;

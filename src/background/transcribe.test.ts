@@ -869,7 +869,7 @@ describe('Spread（#35）', () => {
     expect(calls.map((input) => input.items[0]!.原文)).toEqual(['右', '左']);
   });
 
-  it('兩頁拿到同一份 Notes 快照：右頁的變更在左頁送出前就套用了，左頁仍送右頁送出時的 Notes', async () => {
+  it('兩頁拿到同一份 Notes 快照：右頁的變更在左頁送出前就套用了，左頁仍送右頁送出時的 Notes；左頁看不到的新增不變成建議', async () => {
     const inputs: TranslateInput[] = [];
     const notes = memoryNotes([note('明日', '明天')]);
     let releaseLeft!: () => void;
@@ -877,7 +877,7 @@ describe('Spread（#35）', () => {
     const translator = translatorWithNotes(
       [
         { ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] },
-        { ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今兒', 類別: '用語' }] },
+        { ...noChanges(), added: [{ 原文: '今日', 讀音: 'きょう', 譯文: '今兒', 類別: '用語' }] },
       ],
       inputs,
     );
@@ -896,9 +896,9 @@ describe('Spread（#35）', () => {
     await running;
 
     expect(inputs.map((i) => i.seriesNotes)).toEqual([[note('明日', '明天')], [note('明日', '明天')]]);
-    // 套用仍依送出順序：右頁先贏，左頁的變成建議
-    expect(notes.entries).toEqual([note('明日', '明天'), note('今日', '今天')]);
-    expect(notes.suggestions.map((s) => s.建議譯文)).toEqual(['今兒']);
+    // 套用仍依送出順序：右頁先贏。左頁的快照裡沒有右頁剛新增的條目，給不同譯名不算想改它：丟掉，空欄位照補
+    expect(notes.entries).toEqual([note('明日', '明天'), note('今日', '今天', { 讀音: 'きょう' })]);
+    expect(notes.suggestions).toEqual([]);
   });
 
   it('不同 anchor 的兩頁不共用快照：後送出的帶著前一頁套用後的 Notes', async () => {
@@ -969,6 +969,24 @@ describe('過時提示（#38）', () => {
 
     expect(staleOf(published.at(-1)!)).toEqual(['version', undefined]);
     expect(cache.saved.find((t) => t.pageHash === HASHES.a2)?.promptVersion).toBe('v2');
+  });
+
+  it('API 回報的模型 ID 跟送出時的不同（例如帶日期）：快取記的是送出時的版本，之後命中不算過時', async () => {
+    const cache = memoryCache();
+    const version = { model: 'claude-haiku-5-5', promptVersion: 'v2' };
+    const dated: Translator = {
+      async translatePage(input) {
+        return { ...(await translatorReturning('譯').translatePage(input)), model: 'claude-haiku-5-5-20261001' };
+      },
+    };
+    const first = setup({ cache, notes: memoryNotes(), getTranslator: () => dated, translatorVersion: () => version });
+    await first.transcriber.update(1, [thumb('a1')], capture);
+
+    const second = setup({ cache, notes: memoryNotes(), getTranslator: () => dated, translatorVersion: () => version });
+    await second.transcriber.update(1, [thumb('a1')], capture);
+
+    expect(second.published.at(-1)![0]!.transcript).toMatchObject({ state: 'done', translation: { source: 'cache' } });
+    expect(staleOf(second.published.at(-1)!)).toEqual([undefined]);
   });
 
   it('Notes 改了（notesChanged）：畫面上用到那個條目的頁馬上更新提示，改回來就消失', async () => {

@@ -83,6 +83,11 @@ export interface NotesPage {
   pageHash: string;
   /** 這頁每個 Balloon 的 OCR 原文。 */
   balloonTexts: readonly string[];
+  /**
+   * 這頁送出時的快照裡還沒有、同一個 Spread 先套用的頁剛新增的條目原文（兩頁共用快照，#35）。
+   * 這頁對它們的「新增」只補空欄位，譯名不同也不變成建議：這頁根本沒看到那個譯名，不是想改它。
+   */
+  unseen?: ReadonlySet<string>;
 }
 
 const normalize = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
@@ -113,8 +118,11 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
     seriesId: page.seriesId,
     locked: false,
   });
+  const unseen = (原文: string) => page.unseen?.has(原文) ?? false;
   const incoming = [
-    ...changes.added.filter((a) => known.has(a.原文) || appearsIn(page.balloonTexts, a.原文)).map(asEntry),
+    ...changes.added
+      .filter((a) => known.has(a.原文) || appearsIn(page.balloonTexts, a.原文))
+      .map((a) => asEntry(unseen(a.原文) ? { ...a, 譯文: '' } : a)),
     // 補空欄位只對既有條目有意義
     ...changes.filled.filter((f) => known.has(f.原文)).map((f) => asEntry({ ...f.fields, 原文: f.原文 })),
   ];
@@ -180,7 +188,9 @@ export type StaleReason = 'notes' | 'version';
 
 /**
  * 快取的這頁是不是過時了（spec #27 第 4.3 節：過時只提示、不自動重翻）。只看這頁翻譯時用到的條目（usedNotes）：
- * 新增條目不算，用到的條目只改了譯文以外的欄位也不算。current 是 undefined（沒有 API key）時不比版本。
+ * 新增條目不算，用到的條目只改了譯文以外的欄位也不算。當時譯文是空的條目之後被 LLM 補上（翻別頁時 filled）也算新增；
+ * LLM 只能補空欄位、不能改有值的譯文，所以套用 notes_changes 不會讓任何頁過時，只有人改（locked）會。
+ * current 是 undefined（沒有 API key）時不比版本。
  */
 export function staleReason(
   page: { usedNotes: readonly { 原文: string; 譯文: string }[]; model: string; promptVersion: string },
@@ -191,7 +201,7 @@ export function staleReason(
   // 條目不在了（不會發生：條目不能刪）就當沒改
   const changed = (u: { 原文: string; 譯文: string }) => {
     const now = byOriginal.get(u.原文);
-    return now !== undefined && now.譯文 !== u.譯文;
+    return now !== undefined && now.譯文 !== u.譯文 && (u.譯文 !== '' || now.locked);
   };
   if (page.usedNotes.some(changed)) return 'notes';
   if (current && (current.model !== page.model || current.promptVersion !== page.promptVersion)) return 'version';

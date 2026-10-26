@@ -118,15 +118,16 @@ async function translateText(
     ? await turn.commit(output.notes_changes, { pageHash: target.pageHash, balloonTexts: text.balloons.map((b) => b.原文) })
     : seriesNotes;
   if (target.seriesId !== undefined) {
-    // 過時提示（#38）拿它跟目前的 prompt 版本比；model 用 LLM 回報的
-    const promptVersion = (await translatorVersion?.())?.promptVersion ?? '';
+    // 過時提示（#38）拿它跟目前的版本比，所以兩個欄位都記送出時的版本（同一個來源）。API 回報的模型 ID 可能跟送出的
+    // 不同（例如帶日期），用它比對會讓每頁都過時；沒有版本資訊時才退回 API 回報的。
+    const version = await translatorVersion?.();
     const entry: PageTranslation = {
       ...translated,
       seriesId: target.seriesId,
       pageHash: target.pageHash,
       usedNotes: usedNotes(notes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
-      model,
-      promptVersion,
+      model: version?.model ?? model,
+      promptVersion: version?.promptVersion ?? '',
       usage,
       latencyMs,
       translatedAt: Date.now(),
