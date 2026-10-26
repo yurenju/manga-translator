@@ -101,12 +101,16 @@ test('連續觸發時截圖不超過 2 次/秒', async ({ context, sw, extension
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await expectThumbnailsMatch(panel, ['p01-basic', 'p02-ruby']);
 
-  // 翻頁偵測（#34）也會觸發截圖（例如 side panel 打開時的 resize），所以用相對次數
-  const before = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
+  // 同一個 tab 還沒開始的掃描會合併，連按 5 次截幾次不一定；所以每次截圖一送出就馬上再按，
+  // 下一次掃描排在這次後面、不限速的話會緊接著截。翻頁偵測（#34）也會觸發截圖，所以用相對次數。
+  const captureCount = () => sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
   const button = panel.getByRole('button', { name: '重新擷取' });
-  for (let i = 0; i < 5; i++) await button.click();
+  for (let i = 0; i < 5; i++) {
+    const before = await captureCount();
+    await button.click();
+    await expect.poll(captureCount, { intervals: [20] }).toBeGreaterThan(before);
+  }
 
-  await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThanOrEqual(before + 5);
   const log = await sw.evaluate(() => globalThis.__captureLog!);
   for (let i = 1; i < log.length; i++) expect(log[i]! - log[i - 1]!).toBeGreaterThanOrEqual(500);
 });
