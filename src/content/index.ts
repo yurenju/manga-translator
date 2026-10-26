@@ -62,7 +62,13 @@ if (!globalThis.__mangaTranslator) {
     return clips;
   }
 
-  const overlay = createOverlay({ loadFont: createOverlayFontLoader() });
+  const overlay = createOverlay({
+    loadFont: createOverlayFontLoader(),
+    // 頁面 hover → side panel 高亮那行（panel 用 sender.tab 分辨是哪個 tab）
+    onHover(anchorId, lineId) {
+      chrome.runtime.sendMessage({ type: 'content:hover', anchorId, lineId } satisfies Message).catch(() => {});
+    },
+  });
 
   // 翻頁訊號 → SW 截圖比對 hash（#34）。SW 停止或重新載入時送不到，忽略。
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
@@ -81,7 +87,7 @@ if (!globalThis.__mangaTranslator) {
         // anchor 不在最近一次量到的 Page 裡（已經捲走或換頁）就不覆蓋
         const anchor = anchors.get(message.anchorId);
         overlay.setEnabled(message.enabled);
-        if (anchor instanceof HTMLElement) overlay.show(anchor, message.sub, message.text).catch((e: unknown) => console.warn('overlay failed', e));
+        if (anchor instanceof HTMLElement) overlay.show(anchor, message.sub, message.text, message.anchorId).catch((e: unknown) => console.warn('overlay failed', e));
         return false;
       }
       case 'content:hideOverlay':
@@ -93,6 +99,9 @@ if (!globalThis.__mangaTranslator) {
         sendResponse(null);
         return false;
       }
+      case 'content:highlight':
+        overlay.highlight(message.anchorId, message.lineId);
+        return false;
       case 'content:setOverlayEnabled':
         overlay.setEnabled(message.enabled);
         return false;

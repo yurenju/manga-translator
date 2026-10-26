@@ -14,7 +14,7 @@ import type {
   TestConnectionResponse,
   TranslationInfo,
 } from '../shared/messages.ts';
-import type { PageText } from '../shared/page-text.ts';
+import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
 
 /**
  * 點圖示啟動時，SW 用 sidepanel.html?tabId=N 打開這個 tab 專屬的 side panel。
@@ -54,39 +54,6 @@ function ModelStatusLine({ status, onRetry }: { status: ModelStatus; onRetry: ()
   }
 }
 
-/** 逐字稿：Balloon 與 Loose Text 依閱讀順序混在同一串；Loose Text 用斜體＋🔊（spec #27 第 8 節）。 */
-function Transcript({ text, translated }: { text: PageText; translated: boolean }) {
-  const lines = [
-    ...text.balloons.map((b) => ({ ...b, loose: false })),
-    ...text.looseText.map((l) => ({ ...l, loose: true })),
-  ].sort((a, b) => a.order - b.order);
-  return (
-    <ol aria-label="逐字稿">
-      {lines.map((line) => {
-        // unreadable：OCR 原文（灰、刪除線）＋「無法辨識」（spec #27 第 8 節）
-        const unreadable = translated && line.unreadable;
-        const cls = unreadable ? ' unreadable' : '';
-        const original = line.loose ? <em class={`loose${cls}`}>🔊 {line.原文}</em> : <span class={`original${cls}`}>{line.原文}</span>;
-        return (
-          <li key={line.id} data-kind={line.loose ? 'loose' : 'balloon'}>
-            {original}
-            {unreadable ? (
-              <span class="unreadable-label">無法辨識</span>
-            ) : (
-              <>
-                <span class="reading" lang="ja">
-                  {line.讀音}
-                </span>
-                {translated && line.譯文 ? <span class="translation">{line.譯文}</span> : <span class="untranslated">未翻譯</span>}
-              </>
-            )}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
 /** 「已翻譯」或「快取」・模型・秒數・費用（spec #27 第 8 節）；快取時是當初翻譯的模型與數字。 */
 function TranslationStatusLine({ status }: { status: TranslationInfo }) {
   const label = status.source === 'cache' ? '快取' : '已翻譯';
@@ -97,8 +64,18 @@ function TranslationStatusLine({ status }: { status: TranslationInfo }) {
   );
 }
 
-function PageItem({ page, index, onRetry }: { page: PageView; index: number; onRetry: () => void }) {
+/** 學習模式的共用狀態：全域顯示層級與 hover 同步（#39）。 */
+interface LearningProps {
+  level: Level;
+  /** 頁面上滑鼠所在的那句。 */
+  hovered: { anchorId: string; lineId: string } | undefined;
+  /** 滑過 panel 的某行 → 頁面上那句高亮。 */
+  onLineHover: (anchorId: string, lineId: string | null) => void;
+}
+
+function PageItem({ page, index, onRetry, learning }: { page: PageView; index: number; onRetry: () => void; learning: LearningProps }) {
   const { transcript } = page;
+  const { level, hovered, onLineHover } = learning;
   return (
     <li>
       <img src={page.thumbnail} alt={`Page ${index + 1}`} />
@@ -117,7 +94,15 @@ function PageItem({ page, index, onRetry }: { page: PageView; index: number; onR
           </button>
         </div>
       )}
-      {transcript.state === 'done' && <Transcript text={transcript.text} translated={transcript.translated} />}
+      {transcript.state === 'done' && (
+        <Transcript
+          text={transcript.text}
+          translated={transcript.translated}
+          level={level}
+          hoveredId={hovered?.anchorId === page.anchorId ? hovered.lineId : undefined}
+          onHover={(lineId) => onLineHover(page.anchorId, lineId)}
+        />
+      )}
     </li>
   );
 }
@@ -378,10 +363,14 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [pages, setPages] = useState<PageView[]>([]);
   const [modelStatus, setModelStatus] = useState<ModelStatus>({ state: 'idle' });
   const [hasKey, setHasKey] = useState(true);
+  const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
+  const [hovered, setHovered] = useState<LearningProps['hovered']>(undefined);
 
   useEffect(() => {
     if (tabId === undefined) return;
-    const onMessage = (message: Message) => {
+    const onMessage = (message: Message, sender: chrome.runtime.MessageSender) => {
+      if (message.type === 'content:hover' && sender.tab?.id === tabId)
+        setHovered(message.lineId === null ? undefined : { anchorId: message.anchorId, lineId: message.lineId });
       if (message.type === 'status:changed' && message.tabId === tabId) setActive(message.active);
       if (message.type === 'pages:updated' && message.tabId === tabId) setPages(message.pages);
       if (message.type === 'models:status') setModelStatus(message.status);
@@ -407,6 +396,13 @@ function App({ tabId }: { tabId: number | undefined }) {
   const pending = pages.some((p) => p.transcript.state === 'pending');
   const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
   const translate = () => void send({ type: 'panel:translate', tabId });
+  const learning: LearningProps = {
+    level,
+    hovered,
+    onLineHover(anchorId, lineId) {
+      chrome.tabs.sendMessage(tabId, { type: 'content:highlight', anchorId, lineId } satisfies Message).catch(() => {});
+    },
+  };
   return (
     <>
       <main>
@@ -423,9 +419,10 @@ function App({ tabId }: { tabId: number | undefined }) {
         {settings}
         <ModelStatusLine status={modelStatus} onRetry={scan} />
         {untranslated && !hasKey && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</p>}
+        {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
         <ul aria-label="Page">
           {pages.map((page, i) => (
-            <PageItem key={page.anchorId} page={page} index={i} onRetry={translate} />
+            <PageItem key={page.anchorId} page={page} index={i} onRetry={translate} learning={learning} />
           ))}
         </ul>
       </main>

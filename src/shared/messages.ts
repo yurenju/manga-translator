@@ -74,6 +74,13 @@ export type Message =
   | { type: 'panel:mergeSeries'; tabId: number; targetId: string }
   /** SW → side panel：這個 tab 的 Series 或 Series 清單變了，重新 panel:getSeries。 */
   | { type: 'series:changed'; tabId: number }
+  /**
+   * content script → side panel（runtime 廣播，panel 用 sender.tab 分辨）：滑鼠在頁面上的哪一句（Balloon 或
+   * Loose Text）上；lineId null＝離開（#39）。anchorId 對應 PageView.anchorId。
+   */
+  | { type: 'content:hover'; anchorId: string; lineId: string | null }
+  /** side panel → content script（tabs.sendMessage）：滑過 panel 那行時高亮頁面上的那句；null＝取消。 */
+  | { type: 'content:highlight'; anchorId: string; lineId: string | null }
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
   | { type: 'test:activate'; tabId: number };
 

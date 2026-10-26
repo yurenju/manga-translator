@@ -51,14 +51,20 @@ const transcriptOf = (panel: Page, pageIndex: number): Locator =>
 
 async function lines(transcript: Locator) {
   return transcript.getByRole('listitem').evaluateAll((items) =>
-    items.map((li) => ({
-      kind: (li as HTMLElement).dataset.kind,
-      original: li.querySelector('.original, .loose')?.textContent ?? '',
-      reading: li.querySelector('.reading')?.textContent ?? '',
-      translation: li.querySelector('.translation')?.textContent ?? null,
-      untranslated: li.querySelector('.untranslated')?.textContent ?? null,
-      italic: getComputedStyle(li.querySelector('.original, .loose')!).fontStyle === 'italic',
-    })),
+    items.map((li) => {
+      // 預設層級「加振り仮名」：原文帶 <rt>，對不上時下面是整句讀音（.reading）
+      const original = li.querySelector('.original, .loose')!.cloneNode(true) as Element;
+      const rts = [...original.querySelectorAll('rt, .reading')].map((rt) => (rt.remove(), rt.textContent ?? ''));
+      return {
+        kind: (li as HTMLElement).dataset.kind,
+        original: original.textContent ?? '',
+        hasKanji: /[一-鿿々〆ヶ]/.test(original.textContent ?? ''),
+        reading: rts.join(''),
+        translation: li.querySelector('.translation')?.textContent ?? null,
+        untranslated: li.querySelector('.untranslated')?.textContent ?? null,
+        italic: getComputedStyle(li.querySelector('.original, .loose')!).fontStyle === 'italic',
+      };
+    }),
   );
 }
 
@@ -78,7 +84,7 @@ test.describe('沒有 API key', () => {
     expect(orders.length).toBeGreaterThanOrEqual(6);
     expect(orders).toEqual([...orders].sort((a, b) => a - b));
     for (const line of p01) {
-      expect(line.reading).not.toBe('');
+      if (line.hasKanji) expect(line.reading).not.toBe('');
       expect(line.untranslated).toBe('未翻譯');
       expect(line.translation).toBeNull();
     }
@@ -113,8 +119,8 @@ test.describe('FakeTranslator', () => {
     const zh = new Set(readGroundTruth('p01-basic').texts.map((t) => t.zh));
     expect(p01.filter((l) => l.translation !== null && zh.has(l.translation)).length).toBeGreaterThanOrEqual(6);
     expect(p01.every((l) => l.untranslated === null)).toBe(true);
-    // 讀音換成 Translator 的（ground truth 的整句讀音）
-    expect(p01.map((l) => l.reading)).toContain('おはよう！きょうははやいね');
+    // 讀音換成 Translator 的（ground truth 的整句讀音「おはよう！きょうははやいね」對齊回漢字）
+    expect(p01.map((l) => l.reading)).toContain('きょうはや');
   });
 });
 
