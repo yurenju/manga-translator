@@ -1,0 +1,180 @@
+# 真實網站手動驗收清單（#40）
+
+在真實的 Jump+ 與 Kindle 上各走一次。這是唯一會走到真正 `activeTab` 授權路徑（點工具列圖示）的驗收；e2e 的 mock site 測不到。用語見 `GLOSSARY.md`，spec 見 #27 第 9、12 節。
+
+## 分工
+
+- **使用者**：開 `npm run debug:chrome` 錄 trace，照下面每一項操作，把「使用者回報」的項目記下來（通過／不通過＋一句話）。做完通知 Claude，並告訴它各段落大約是哪個時間做的。
+- **Claude**：從錄到的 session（`%LOCALAPPDATA%\manga-translator\debug\<session>\trace.jsonl`）與 `npm run debug:eval` 核對標「trace」或「eval」的項目。讀法見 `docs/agents/real-site-debugging.md`。
+
+每一項的「判斷」欄標註來源：
+
+- **trace**：`npm run debug:summary -- --grep <event>` 或 trace.jsonl 的整行記錄。事件名稱與欄位都在 `grep -rn "trace('" src` 的呼叫處。
+- **eval**：`npm run debug:eval -- <sw|content|page> -e "<expression>"`。外掛的 IndexedDB（`manga-translator`，store 名見 `src/shared/db.ts`）從 `sw` 讀。
+- **使用者回報**：只能用肉眼判斷的項目。
+
+## 準備
+
+1. Terminal panel 開 `npm run debug:chrome`（第一次要在那個 Chrome 載入 `%LOCALAPPDATA%\manga-translator\extension`、在 side panel 設 API key、登入網站）。
+2. 每個網站開始前：重新整理漫畫 tab。中途用 `npm run debug:reload` 改過 code，就要重新整理 tab 再點一次圖示。
+3. 準備兩部作品各一話：Jump+ 一話（直向捲動或翻頁皆可）、Kindle 一本有跨頁的書（試閱本即可）。各自都要能讀到至少 6 個 Page。
+4. 第一次驗收建議清空舊資料（side panel 的快取／Notes），讓「第一次翻譯 → 快取命中」的對照乾淨。要保留就先匯出備份。
+
+**不保存、不 commit 任何真實頁面的截圖或內容。** 截圖只留在 `%LOCALAPPDATA%` 的 session 資料夾，驗收結束、問題都處理完後刪掉。回報給 Claude 的截圖也不要放進 repo。
+
+## 清單
+
+以下 A–L 兩個網站都要走；開頭標「Kindle：」或「Jump+：」的項目只在那個網站走。
+
+### A. 點圖示啟動
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| A1 | 在漫畫 tab 點工具列圖示 | trace：出現 `status`（`active: true`）、`scan`，接著 `candidates`。使用者回報：side panel 自動打開 |
+| A2 | 啟動前先捲動、翻幾頁再點圖示 | trace：點圖示之前沒有任何 `ctx: content` 的記錄（content script 只在點圖示後才注入） |
+| A3 | 已啟動時再點一次圖示 | trace：沒有第二輪新的 Series（後續 `cache:*` 的 `seriesId` 不變） |
+| A4 | 在沒有漫畫的普通網頁點圖示 | trace：`scan:noCandidates`；沒有 `console-error`／`exception`。使用者回報：side panel 顯示沒有 Page，不當掉 |
+| A5 | 啟動中重新整理 tab，**不點圖示**，等 10 秒 | 記錄結果即可：同 origin 會重新注入、繼續啟動（`src/background/index.ts` 的 `tabs.onUpdated`），但 Chrome 換頁時會收回 `activeTab`。trace：看有沒有新的 `capture`，或 `console-warn`／`console-error` 出現截圖失敗。使用者回報：有沒有繼續翻譯 |
+
+### B. 截圖與 Page 定位
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| B1 | 啟動後停在一頁不動 | trace：`candidates` 列出的候選數＝畫面上完整可見的 Page 數；`rejected`／`small` 裡沒有應該是 Page 的元素（看 `rect` 與 viewport） |
+| B2 | 同上 | trace：`capture` 的 `ms`（真實 Chrome 約 0.2–1.7 s）；`capture` 的截圖（images/）裡看不到我們的譯文 |
+| B3 | 同上 | trace：`crop` 的每個 Page 縮圖（images/）各是一整頁，沒切到別頁、沒多切黑邊或網站 UI |
+| B4 | 同上 | trace：`analyze` 的 `detections` 疊圖：藍框（Balloon）有框到對話框、數字是由右到左、由上到下的閱讀順序 |
+| B5 | 捲動到兩頁各露一半的位置停住 | trace：只露一半的 Page 不在 `candidates`，或在 `rejected` 裡有理由；沒有翻譯不完整的 Page |
+| B6 | 截圖期間一直捲動 | trace：允許 `scan:layoutChanged` 重試；最後的 `crop` 跟最後的畫面一致，沒有 `overlay:skip` 以外的錯誤 |
+
+### C. Spread（跨頁）
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| C1 | Kindle：視窗橫長，顯示跨頁 | trace：一個 `candidates` 候選切成兩個 `crop` Page（同一個 `anchorId`，各有 `sub`），兩頁的 `pageHash` 不同 |
+| C2 | 同上 | trace：job 佇列先右頁後左頁：`job` 的 `enqueue`／`start`／`llm` 依序是右頁 `pageHash` 再左頁 |
+| C3 | Kindle：封面或章節首頁（跨頁模式只顯示一頁） | trace：只切出一個 Page，沒切出空白頁（看 `crop` 縮圖） |
+| C4 | Kindle：深色或滿版出血的頁面 | trace：`crop` 縮圖沒有把頁面本身的深色邊當黑邊切掉 |
+| C5 | Jump+：一般閱讀 | trace：每個 Page 都是整個 anchor，`crop` 沒有 `sub`（Jump+ 不用切） |
+| C6 | 跨頁兩頁都翻完 | 使用者回報：兩頁的覆蓋層各自落在自己那一頁，中縫附近沒有錯位 |
+
+### D. 翻頁自動翻譯
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| D1 | 連續往後翻 6 頁以上，每頁停到譯文出現 | trace：每次翻頁都有 `pageTurn`（看 `reasons`）→ `scan` → `capture` → `crop`；每個新 Page 有 `cache:miss` → `analyze:done` → `translate:done` → `overlay:show` |
+| D2 | 快速連翻 3 頁再停下 | trace：翻走的 Page 在 `job` 裡是 `drop`（沒開始就丟掉）或做完但不顯示，最後停下的頁優先 `start` |
+| D3 | 連續快速觸發（例如一直捲動） | trace：`capture` 記錄的 `at` 間隔，每秒不超過 2 次 |
+| D4 | 全程 | trace：沒有 `analyze:error`、`translate:error`（有就記下 `error`）；沒有 `console-error`、`exception` |
+| D5 | 全程 | trace：`translate:done` 的 `ms`、`usage`；Claude 整理平均每頁秒數與 token 用量 |
+
+### E. 覆蓋位置與字級
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| E1 | Jump+ 預設縮放閱讀 | trace：`overlay:show` 的 `screenScale` 約 0.49（Jump+ 的 canvas 764×1200 縮在畫面上的比例） |
+| E2 | 同上 | trace：`overlay:show` 的 `fits` 裡沒有 truncated、`skipped` 裡沒有不該跳過的 Balloon |
+| E3 | 看 3 頁以上 | **使用者回報**：譯文都落在對應的 Balloon 內、沒有蓋到別的 Balloon 或圖 |
+| E4 | 同上 | **使用者回報**：字級讀得清楚、在同一頁裡大小一致；直排／橫排符合原本的方向 |
+| E5 | Kindle 跨頁與單頁各看一次 | **使用者回報**：同 E3、E4 |
+| E6 | 滑鼠移到譯文上 | **使用者回報**：tooltip 與 highlight 出現在滑鼠指的那句，side panel 對應的 Line 同步標示 |
+| E7 | 在 Jump+ 用網站的「拡大」 | trace：`overlay:show` 重新排版（新的 `screenScale`）或 `overlay:reattach`。使用者回報：放大後位置仍對 |
+
+### F. 快取
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| F1 | D 翻過的頁往回翻 | trace：回到已翻過的 Page 是 `cache:hit`（或同一個 tab 內直接認得、沒有新的 `analyze`），沒有新的 `translate:request` |
+| F2 | 重新整理 tab、再點圖示、回到同一頁 | trace：`cache:hit`，`cachedHash` 與這次 `pageHash` 接近（同一頁）。使用者回報：狀態列顯示「快取」 |
+| F3 | Kindle：同一跨頁，換 3 種視窗大小（橫長、更寬、直式單頁），每次停到譯文出現 | trace：每種大小切出的 Page 都 `cache:hit`；`crop` 的 `pageHash` 跟第一次相近（#35 量測：同頁距離 ≤ 4，不同頁 ≥ 98） |
+| F4 | 同上 | **使用者回報**：換視窗大小後覆蓋層位置仍對（快取的座標是相對 Page 的比例） |
+| F5 | Jump+：換視窗大小 | trace：`cache:hit`（Jump+ 的 canvas 固定大小，距離應該是 0） |
+| F6 | 全程 | trace：沒有 `cache:noSeries`（有就代表那次啟動沒有 Series） |
+
+### G. Series 預選
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| G1 | 新作品第一次啟動 | eval：`series` store 多一個 Provisional Series；trace：`cache:*` 的 `seriesId` 就是它 |
+| G2 | side panel 把它命名（或選既有的 Series） | eval：`urlPatterns` store 有這個網址的 origin＋path 對到該 Series |
+| G3 | 關掉這個 tab，開新 tab 到同一話的網址，點圖示（同一個 tab 重新整理會沿用原本的 Series，測不到預選） | trace：這次 `cache:*` 的 `seriesId` 是 G2 的 Series（預選成功），沒有新的 Provisional Series。使用者回報：side panel 已選好那個 Series |
+| G4 | 同一作品下一話（不同網址）啟動 | 記錄結果即可：網址模式只認 origin＋path，下一話不同 path 時會是新的 Provisional Series，要在 side panel 選或合併 |
+| G5 | 把 G4 的 Provisional Series 合併進 G2 的 Series | eval：Provisional Series 從 `series` 消失，它的 `pageTranslations`／`seriesNotes`／`urlPatterns` 移到目標 Series |
+
+### H. Series Notes
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| H1 | 翻 6 頁以上有角色名的頁面 | trace：`translate:request` 的 `input.seriesNotes` 隨頁數累積；`translate:response` 的 `output.notes_changes` 有新增條目 |
+| H2 | 同上 | trace＋eval：`notes_changes` 裡新增的條目，只有原文出現在那頁某個 Balloon 原文（`analyze` 的 `balloons[].原文`）的，才會出現在 `seriesNotes` store |
+| H3 | 跨頁的兩頁 | trace：同一個 Spread 的兩頁 `translate:request` 帶的 `seriesNotes` 相同（同一份快照） |
+| H4 | 在 side panel 修改一個條目的譯文 | eval：該條目 `locked: true`。使用者回報：條目顯示 🔒 |
+| H5 | 繼續翻到用到那個條目的頁 | trace：之後的 `translate:request` 帶的是改過的譯文；`notes_changes` 對它只能出現在 `suggestions`，eval 確認條目本身沒被 LLM 改 |
+| H6 | 有建議修改時，在 side panel 接受一個、忽略一個 | eval：接受的條目改成建議譯文且 locked；忽略的建議 `ignored: true`，之後不再出現在 side panel |
+| H7 | H4 改過之後，回到之前用過那個條目的已翻譯頁 | 使用者回報：該頁提示過時；按「重新翻譯」才重翻（trace：按之前沒有新的 `translate:request`） |
+| H8 | 匯出 | eval 或直接打開匯出檔：`format: "manga-translator-backup"`，有 series／urlPatterns／seriesNotes／notesSuggestions／pageTranslations 五個陣列，**沒有 API key**（搜尋檔案內容找不到 key 的前綴 `sk-ant-`） |
+| H9 | 改一個條目後匯入 H8 的檔案 | eval：本機優先，衝突的譯文變成建議修改（來源 `imported`）。使用者回報：side panel 顯示建議 |
+
+匯出檔含真實頁面的原文與譯文，跟截圖一樣不要放進 repo，驗收完刪掉。
+
+### I. 停止與還原
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| I1 | 在 side panel 停止（或再按停止的方式） | trace：`status`（`active: false`）。eval：`content` 執行 `document.querySelectorAll('[data-manga-translator-overlay]').length` 是 0、`globalThis.__mangaTranslator` 是 undefined |
+| I2 | 停止後翻頁 | trace：沒有新的 `pageTurn`／`scan`／`capture` |
+| I3 | 同上 | **使用者回報**：頁面跟沒裝外掛時一樣，網站功能正常 |
+| I4 | 啟動中換到別的 origin | trace：`status`（`active: false`） |
+
+### J. 截圖閃爍
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| J1 | 一般閱讀速度翻 10 頁以上 | trace：每次 `capture` 前後的 `overlay:restore` 的 `hiddenMs`；Claude 整理平均與最大值 |
+| J2 | 同上 | **使用者回報**：覆蓋層在截圖時消失又出現，是否干擾閱讀（不干擾／可接受／干擾） |
+
+### K. 覆蓋層重掛（網站重建 DOM）
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| K1 | 正常閱讀全程 | trace：`overlay:detach`／`overlay:reattach`／`overlay:removeLayers` 的次數與 `reason`；`overlaid:mismatch` 的次數 |
+| K2 | 有 `reattach` 的時間點 | **使用者回報**：覆蓋層沒有消失或殘留在錯的頁 |
+
+### L. 結尾
+
+| # | 使用者操作 | 判斷 |
+|---|---|---|
+| L1 | 全程 | trace：`npm run debug:summary` 的 event counts 沒有 `console-error`、`exception` |
+| L2 | — | 發現的問題：小的直接修，大的另開 ticket，記在 #40 |
+
+## 結果記錄
+
+使用者每個網站填一份，貼回給 Claude：
+
+```
+網站：Jump+ / Kindle
+session：<YYYYMMDD-HHmmss>
+時間段：A–B 約 hh:mm、D 約 hh:mm、……
+使用者回報：
+- E3：
+- E4：
+- E5：
+- E6：
+- E7：
+- F4：
+- H7：
+- I3：
+- J2：
+- K2：
+其他觀察：
+```
+
+## 待補 instrumentation
+
+目前 trace 缺下面這些事件；清單先用 eval 讀 IndexedDB 或使用者回報代替。
+
+1. **啟動與 Series 選擇**：`status` 只有 `tabId`、`active`。沒有記錄這次啟動用的 `seriesId`、是預選（URL Pattern 命中）還是新建 Provisional Series。G1、G3 目前靠 `cache:*` 的 `seriesId` 與 eval 推斷。
+2. **Notes 套用結果**：`translate:response` 有 LLM 的 `notes_changes`，但 `ledger.commit` 實際採用了哪些、哪些被「原文須出現在 Balloon 內」擋掉、新增了哪些建議，沒有記錄。H2、H5 目前要比對 trace 與 eval。
+3. **過時判斷**：`cache:hit` 沒帶 `stale`（`notes`／`version`）。H7 目前靠使用者看 side panel。
+4. **side panel 的操作**：修改條目、接受／忽略建議、選擇／合併 Series、匯出、匯入都沒有 trace。H4–H9、G2、G5 目前靠操作前後用 eval 比對 IndexedDB。
+5. **停止**：content script 收到 `content:stop` 後清掉覆蓋層沒有 trace。I1 目前靠 eval。
