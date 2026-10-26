@@ -2,6 +2,9 @@
  * 每個 tab 的啟動狀態（ADR 0003、spec #27 第 3.1 節）。
  * Chrome API 都從 deps 注入，SW 的 index.ts 負責接上真的 chrome.*。
  */
+import { createTrace } from '../shared/trace.ts';
+
+const trace = createTrace('sw');
 
 export interface TabState {
   /** 啟動當下的 origin；換 origin 就停止。 */
@@ -39,7 +42,10 @@ export function createActivation(deps: ActivationDeps) {
     if (url === undefined) return;
     if (!(await tryInject(tabId))) return;
     // 已啟動的 tab 再點一次圖示不算新的啟動，沿用同一個 Series。
-    const seriesId = (await deps.store.get(tabId))?.seriesId ?? (await deps.seriesForUrl(url));
+    const reused = (await deps.store.get(tabId))?.seriesId;
+    const seriesId = reused ?? (await deps.seriesForUrl(url));
+    // 新的啟動是預選還是新建 Provisional Series 記在 series:forUrl
+    trace('activate', { tabId, seriesId, reused: reused !== undefined });
     await deps.store.set(tabId, { origin: new URL(url).origin, seriesId });
     deps.onStatusChanged(tabId, true);
   }

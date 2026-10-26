@@ -379,6 +379,7 @@ export function createTranscriber(deps: TranscriberDeps) {
             if (!cached || record.transcript.state !== 'done') return;
             const stale = await pageTranslation.staleOf(cached);
             if (stale === record.transcript.stale) return;
+            trace('stale:changed', { seriesId, pageHash: record.pageHash, stale });
             record.transcript = { ...record.transcript, stale };
             changed = true;
           }),

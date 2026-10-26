@@ -25,7 +25,7 @@ import { acceptSuggestion, editEntry, ignoreSuggestion, pendingSuggestions, type
 import { createTrace } from '../shared/trace.ts';
 import type { TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
-import { createBackup } from './backup.ts';
+import { BACKUP_KEYS, createBackup } from './backup.ts';
 import { indexedDbPageCache } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
@@ -216,10 +216,12 @@ async function notesResponse(tabId: number): Promise<NotesResponse> {
   return { seriesId, entries: notes.entries, suggestions: pendingSuggestions(notes) };
 }
 
-/** side panel 改這個 tab 目前 Series 的 Notes（#38）。沒啟動就不動。 */
-async function changeNotes(tabId: number, change: (notes: SeriesNotes) => SeriesNotes): Promise<void> {
+/** side panel 改這個 tab 目前 Series 的 Notes（#38）。沒啟動就不動。action＋detail 記進 trace（#40 驗收）。 */
+async function changeNotes(tabId: number, action: string, detail: Record<string, unknown>, change: (notes: SeriesNotes) => SeriesNotes): Promise<void> {
   const seriesId = await activation.getSeriesId(tabId);
-  if (seriesId !== undefined) await transcriber.updateNotes(seriesId, change);
+  if (seriesId === undefined) return;
+  await transcriber.updateNotes(seriesId, change);
+  trace(action, { tabId, seriesId, ...detail });
 }
 
 const seriesCatalog = createSeriesCatalog({ repo: indexedDbSeriesRepo(), now: () => new Date(), newId: () => crypto.randomUUID() });
@@ -230,10 +232,16 @@ async function seriesResponse(tabId: number): Promise<SeriesResponse> {
 }
 
 /** 這個 tab 的 Series 操作（#36）共用的部分：算出新的 Series ID、記下來、通知 panel。回傳新的 ID；沒變（或沒啟動）是 undefined。 */
-async function applySeriesChange(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<string | undefined> {
+async function applySeriesChange(
+  tabId: number,
+  action: string,
+  change: (url: string, current: string) => Promise<string>,
+): Promise<string | undefined> {
   const [url, current] = await Promise.all([chrome.tabs.get(tabId).then((t) => t.url), activation.getSeriesId(tabId)]);
   if (url === undefined || current === undefined) return undefined;
   const next = await change(url, current);
+  // 記住了哪個網址模式記在 series:remember，合併搬了什麼記在 series:merge
+  trace(action, { tabId, from: current, seriesId: next });
   await activation.setSeriesId(tabId, next);
   notifyPanel({ type: 'series:changed', tabId });
   return next === current ? undefined : next;
@@ -243,15 +251,15 @@ async function applySeriesChange(tabId: number, change: (url: string, current: s
  * 選一部（或新增）Series：換成另一個 ID 就重新擷取，快取查詢與翻譯改用新的 ID。
  * #34 的 transcriber 以 pageHash 記住看過的 Page；不先忘掉的話重新擷取會沿用舊 ID 的結果。
  */
-async function switchSeries(tabId: number, choose: (url: string) => Promise<string>): Promise<void> {
-  if ((await applySeriesChange(tabId, choose)) === undefined) return;
+async function switchSeries(tabId: number, action: string, choose: (url: string) => Promise<string>): Promise<void> {
+  if ((await applySeriesChange(tabId, action, choose)) === undefined) return;
   transcriber.resetPages(tabId);
   scan(tabId);
 }
 
 /** 改名（ID 不變）或合併（快取已改到目標 ID、不自動重翻）：不重新擷取，畫面上的 Page 改記在新的 ID 下。 */
-async function updateSeries(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<void> {
-  const next = await applySeriesChange(tabId, change);
+async function updateSeries(tabId: number, action: string, change: (url: string, current: string) => Promise<string>): Promise<void> {
+  const next = await applySeriesChange(tabId, action, change);
   if (next !== undefined) transcriber.reassignSeries(tabId, next);
 }
 
@@ -366,34 +374,53 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       return true;
     case 'panel:editNote': {
       const { 原文, fields } = message;
-      changeNotes(message.tabId, (notes) => ({ ...notes, entries: editEntry(notes.entries, 原文, fields) })).then(() => sendResponse());
+      changeNotes(message.tabId, 'panel:editNote', { 原文, fields }, (notes) => ({ ...notes, entries: editEntry(notes.entries, 原文, fields) })).then(() =>
+        sendResponse(),
+      );
       return true;
     }
     case 'panel:acceptSuggestion':
     case 'panel:ignoreSuggestion': {
       const { suggestion } = message;
       const apply = message.type === 'panel:acceptSuggestion' ? acceptSuggestion : ignoreSuggestion;
-      changeNotes(message.tabId, (notes) => apply(notes, suggestion)).then(() => sendResponse());
+      const { 原文, 建議譯文 } = suggestion;
+      changeNotes(message.tabId, message.type, { 原文, 建議譯文 }, (notes) => apply(notes, suggestion)).then(() => sendResponse());
       return true;
     }
     case 'panel:clearCache':
       // 畫面上已經顯示的頁不動；之後翻回來就重新翻譯
       activation
         .getSeriesId(message.tabId)
-        .then((seriesId) => (seriesId === undefined ? undefined : backupRepo.clearTranslations(seriesId)))
+        .then(async (seriesId) => {
+          if (seriesId === undefined) return;
+          await backupRepo.clearTranslations(seriesId);
+          trace('panel:clearCache', { tabId: message.tabId, seriesId });
+        })
         .then(() => sendResponse());
       return true;
     case 'panel:export':
-      backup.exportAll().then(sendResponse);
+      backup
+        .exportAll()
+        .then((file) => {
+          // 筆數就夠核對；檔案內容（含真實頁面的原文、譯文）不進 trace
+          const counts = Object.fromEntries(BACKUP_KEYS.map((k) => [k, file[k].length]));
+          trace('panel:export', { format: file.format, counts, hasApiKeyPrefix: JSON.stringify(file).includes('sk-ant-') });
+          return file;
+        })
+        .then(sendResponse);
       return true;
     case 'panel:import':
       backup
         .importAll(message.data)
         .then((seriesIds): ImportResponse => {
           for (const seriesId of seriesIds) notifyPanel({ type: 'notes:changed', seriesId });
+          trace('panel:import', { ok: true, notesSeriesIds: seriesIds });
           return { ok: true };
         })
-        .catch((e: unknown): ImportResponse => ({ ok: false, error: e instanceof Error ? e.message : String(e) }))
+        .catch((e: unknown): ImportResponse => {
+          trace('panel:import', { ok: false, error: e });
+          return { ok: false, error: e instanceof Error ? e.message : String(e) };
+        })
         .then(sendResponse);
       return true;
     case 'panel:testConnection':
@@ -407,24 +434,26 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       return true;
     case 'panel:selectSeries': {
       const { seriesId } = message;
-      switchSeries(message.tabId, (url) => seriesCatalog.select(seriesId, url).then(() => seriesId)).then(() => sendResponse());
+      switchSeries(message.tabId, 'panel:selectSeries', (url) => seriesCatalog.select(seriesId, url).then(() => seriesId)).then(() => sendResponse());
       return true;
     }
     case 'panel:createSeries': {
       const { name } = message;
-      switchSeries(message.tabId, async (url) => (await seriesCatalog.create(name, url)).id).then(() => sendResponse());
+      switchSeries(message.tabId, 'panel:createSeries', async (url) => (await seriesCatalog.create(name, url)).id).then(() => sendResponse());
       return true;
     }
     case 'panel:renameSeries': {
       const { name } = message;
-      updateSeries(message.tabId, (url, current) => seriesCatalog.rename(current, name, url).then(() => current)).then(() => sendResponse());
+      updateSeries(message.tabId, 'panel:renameSeries', (url, current) => seriesCatalog.rename(current, name, url).then(() => current)).then(() =>
+        sendResponse(),
+      );
       return true;
     }
     case 'panel:mergeSeries': {
       const { targetId } = message;
       // 來源不是 Provisional Series（或目標不在）時 merge 不動，這個 tab 留在原本的 Series
-      updateSeries(message.tabId, async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current)).then(() =>
-        sendResponse(),
+      updateSeries(message.tabId, 'panel:mergeSeries', async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current)).then(
+        () => sendResponse(),
       );
       return true;
     }

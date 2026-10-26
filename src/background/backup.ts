@@ -39,12 +39,13 @@ export interface BackupRepo {
   putTranslations(translations: PageTranslation[]): Promise<void>;
 }
 
-const KEYS = ['series', 'urlPatterns', 'seriesNotes', 'notesSuggestions', 'pageTranslations'] as const;
+/** 匯出檔裡的五個陣列（BackupData 的欄位）。 */
+export const BACKUP_KEYS = ['series', 'urlPatterns', 'seriesNotes', 'notesSuggestions', 'pageTranslations'] as const;
 
 /** 不是這個外掛的匯出檔就丟錯（訊息直接顯示在 side panel）。 */
 function parse(data: unknown): BackupFile {
   const file = data as Partial<BackupFile> | null;
-  if (file?.format !== FORMAT || file.version !== 1 || !KEYS.every((key) => Array.isArray(file[key])))
+  if (file?.format !== FORMAT || file.version !== 1 || !BACKUP_KEYS.every((key) => Array.isArray(file[key])))
     throw new Error('不是漫畫翻譯的匯出檔');
   return file as BackupFile;
 }

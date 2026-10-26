@@ -32,7 +32,7 @@
 |---|---|---|
 | A1 | 在漫畫 tab 點工具列圖示 | trace：出現 `status`（`active: true`）、`scan`，接著 `candidates`。使用者回報：side panel 自動打開 |
 | A2 | 啟動前先捲動、翻幾頁再點圖示 | trace：點圖示之前沒有任何 `ctx: content` 的記錄（content script 只在點圖示後才注入） |
-| A3 | 已啟動時再點一次圖示 | trace：沒有第二輪新的 Series（後續 `cache:*` 的 `seriesId` 不變） |
+| A3 | 已啟動時再點一次圖示 | trace：第二次的 `activate` 是 `reused: true`、`seriesId` 跟第一次相同；沒有新的 `series:forUrl` |
 | A4 | 在沒有漫畫的普通網頁點圖示 | trace：`scan:noCandidates`；沒有 `console-error`／`exception`。使用者回報：side panel 顯示沒有 Page，不當掉 |
 | A5 | 啟動中重新整理 tab，**不點圖示**，等 10 秒 | 記錄結果即可：同 origin 會重新注入、繼續啟動（`src/background/index.ts` 的 `tabs.onUpdated`），但 Chrome 換頁時會收回 `activeTab`。trace：看有沒有新的 `capture`，或 `console-warn`／`console-error` 出現截圖失敗。使用者回報：有沒有繼續翻譯 |
 
@@ -95,25 +95,25 @@
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
-| G1 | 新作品第一次啟動 | eval：`series` store 多一個 Provisional Series；trace：`cache:*` 的 `seriesId` 就是它 |
-| G2 | side panel 把它命名（或選既有的 Series） | eval：`urlPatterns` store 有這個網址的 origin＋path 對到該 Series |
-| G3 | 關掉這個 tab，開新 tab 到同一話的網址，點圖示（同一個 tab 重新整理會沿用原本的 Series，測不到預選） | trace：這次 `cache:*` 的 `seriesId` 是 G2 的 Series（預選成功），沒有新的 Provisional Series。使用者回報：side panel 已選好那個 Series |
+| G1 | 新作品第一次啟動 | trace：`series:forUrl` 是 `preselected: false`（新建 Provisional Series），`activate` 與之後 `cache:*` 的 `seriesId` 就是它 |
+| G2 | side panel 把它命名（或選既有的 Series） | trace：`panel:renameSeries`（或 `panel:selectSeries`／`panel:createSeries`）之後有 `series:remember`，`pattern` 是這個網址的 origin＋path、`seriesId` 是該 Series |
+| G3 | 關掉這個 tab，開新 tab 到同一話的網址，點圖示（同一個 tab 重新整理會沿用原本的 Series，測不到預選） | trace：`series:forUrl` 是 `preselected: true`、`seriesId` 是 G2 的 Series（預選成功）。使用者回報：side panel 已選好那個 Series |
 | G4 | 同一作品下一話（不同網址）啟動 | 記錄結果即可：網址模式只認 origin＋path，下一話不同 path 時會是新的 Provisional Series，要在 side panel 選或合併 |
-| G5 | 把 G4 的 Provisional Series 合併進 G2 的 Series | eval：Provisional Series 從 `series` 消失，它的 `pageTranslations`／`seriesNotes`／`urlPatterns` 移到目標 Series |
+| G5 | 把 G4 的 Provisional Series 合併進 G2 的 Series | trace：`series:merge`（`sourceId`＝Provisional Series、`targetId`＝G2 的 Series，帶搬過去的快取／Notes 筆數）與 `panel:mergeSeries`（`from`→`seriesId`）；沒有 `series:merge` 就是沒合併（來源不是 Provisional Series） |
 
 ### H. Series Notes
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
 | H1 | 翻 6 頁以上有角色名的頁面 | trace：`translate:request` 的 `input.seriesNotes` 隨頁數累積；`translate:response` 的 `output.notes_changes` 有新增條目 |
-| H2 | 同上 | trace＋eval：`notes_changes` 裡新增的條目，只有原文出現在那頁某個 Balloon 原文（`analyze` 的 `balloons[].原文`）的，才會出現在 `seriesNotes` store |
-| H3 | 跨頁的兩頁 | trace：同一個 Spread 的兩頁 `translate:request` 帶的 `seriesNotes` 相同（同一份快照） |
-| H4 | 在 side panel 修改一個條目的譯文 | eval：該條目 `locked: true`。使用者回報：條目顯示 🔒 |
-| H5 | 繼續翻到用到那個條目的頁 | trace：之後的 `translate:request` 帶的是改過的譯文；`notes_changes` 對它只能出現在 `suggestions`，eval 確認條目本身沒被 LLM 改 |
-| H6 | 有建議修改時，在 side panel 接受一個、忽略一個 | eval：接受的條目改成建議譯文且 locked；忽略的建議 `ignored: true`，之後不再出現在 side panel |
-| H7 | H4 改過之後，回到之前用過那個條目的已翻譯頁 | 使用者回報：該頁提示過時；按「重新翻譯」才重翻（trace：按之前沒有新的 `translate:request`） |
-| H8 | 匯出 | eval 或直接打開匯出檔：`format: "manga-translator-backup"`，有 series／urlPatterns／seriesNotes／notesSuggestions／pageTranslations 五個陣列，**沒有 API key**（搜尋檔案內容找不到 key 的前綴 `sk-ant-`） |
-| H9 | 改一個條目後匯入 H8 的檔案 | eval：本機優先，衝突的譯文變成建議修改（來源 `imported`）。使用者回報：side panel 顯示建議 |
+| H2 | 同上 | trace：`notes:apply` 的 `added` 是實際採用的新條目；`rejected` 是原文不在那頁任何 Balloon（`analyze` 的 `balloons[].原文`）而沒採用的 |
+| H3 | 跨頁的兩頁 | trace：同一個 Spread 的兩頁 `translate:request` 帶的 `seriesNotes` 相同（同一份快照）；左頁的 `notes:apply` 對右頁剛新增的條目給不同譯名時出現在 `dropped`，不出現在 `suggestions` |
+| H4 | 在 side panel 修改一個條目的譯文 | trace：`panel:editNote`（`原文`、`fields`；改過的條目一律 locked）。使用者回報：條目顯示 🔒 |
+| H5 | 繼續翻到用到那個條目的頁 | trace：之後的 `translate:request` 帶的是改過的譯文；那頁的 `notes:apply` 裡這個原文不在 `added`／`filled`，LLM 想改的話只出現在 `suggestions` |
+| H6 | 有建議修改時，在 side panel 接受一個、忽略一個 | trace：`panel:acceptSuggestion`、`panel:ignoreSuggestion` 各一筆（`原文`、`建議譯文`）。使用者回報：兩個建議都從 side panel 消失 |
+| H7 | H4 改過之後，回到之前用過那個條目的已翻譯頁 | trace：翻回來的頁 `cache:hit` 帶 `stale: "notes"`（還在畫面上的頁則是 `stale:changed`）；按「重新翻譯」之前沒有新的 `translate:request`。使用者回報：該頁提示過時 |
+| H8 | 匯出 | trace：`panel:export` 的 `format` 是 `manga-translator-backup`、`counts` 有五個陣列的筆數、`hasApiKeyPrefix: false`（檔案內容找不到 key 的前綴 `sk-ant-`） |
+| H9 | 改一個條目後匯入 H8 的檔案 | trace：`panel:import` 是 `ok: true`、`notesSeriesIds` 有這部 Series。eval：衝突的譯文變成建議修改（來源 `imported`）。使用者回報：side panel 顯示建議 |
 
 匯出檔含真實頁面的原文與譯文，跟截圖一樣不要放進 repo，驗收完刪掉。
 
@@ -121,7 +121,7 @@
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
-| I1 | 在 side panel 停止（或再按停止的方式） | trace：`status`（`active: false`）。eval：`content` 執行 `document.querySelectorAll('[data-manga-translator-overlay]').length` 是 0、`globalThis.__mangaTranslator` 是 undefined |
+| I1 | 在 side panel 停止（或再按停止的方式） | trace：`status`（`active: false`），接著 `ctx: content` 的 `content:stop` 是 `overlaysLeft: 0` |
 | I2 | 停止後翻頁 | trace：沒有新的 `pageTurn`／`scan`／`capture` |
 | I3 | 同上 | **使用者回報**：頁面跟沒裝外掛時一樣，網站功能正常 |
 | I4 | 啟動中換到別的 origin | trace：`status`（`active: false`） |
@@ -168,13 +168,3 @@ session：<YYYYMMDD-HHmmss>
 - K2：
 其他觀察：
 ```
-
-## 待補 instrumentation
-
-目前 trace 缺下面這些事件；清單先用 eval 讀 IndexedDB 或使用者回報代替。
-
-1. **啟動與 Series 選擇**：`status` 只有 `tabId`、`active`。沒有記錄這次啟動用的 `seriesId`、是預選（URL Pattern 命中）還是新建 Provisional Series。G1、G3 目前靠 `cache:*` 的 `seriesId` 與 eval 推斷。
-2. **Notes 套用結果**：`translate:response` 有 LLM 的 `notes_changes`，但 `ledger.commit` 實際採用了哪些、哪些被「原文須出現在 Balloon 內」擋掉、新增了哪些建議，沒有記錄。H2、H5 目前要比對 trace 與 eval。
-3. **過時判斷**：`cache:hit` 沒帶 `stale`（`notes`／`version`）。H7 目前靠使用者看 side panel。
-4. **side panel 的操作**：修改條目、接受／忽略建議、選擇／合併 Series、匯出、匯入都沒有 trace。H4–H9、G2、G5 目前靠操作前後用 eval 比對 IndexedDB。
-5. **停止**：content script 收到 `content:stop` 後清掉覆蓋層沒有 trace。I1 目前靠 eval。

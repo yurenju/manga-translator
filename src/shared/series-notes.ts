@@ -104,13 +104,21 @@ export function usedNotes(entries: readonly NotesEntry[], texts: readonly string
   return entries.filter((e) => appearsIn(texts, e.原文)).map(({ 原文, 譯文 }) => ({ 原文, 譯文 }));
 }
 
+/** 套用 notes_changes 的結果，加上沒採用的新增（trace 用，#40 驗收）。 */
+export interface AppliedNotes extends MergedNotes {
+  /** 原文不在這頁任何 Balloon 裡、沒採用的新增（OCR 錯字防護）。 */
+  rejected: string[];
+  /** 同一個 Spread 先套用的頁剛新增、這頁看不到而給了不同譯名：丟掉的譯名（其他空欄位照補）。 */
+  dropped: UsedNote[];
+}
+
 /**
  * 依只能新增規則套用 LLM 翻某一頁時回傳的 notes_changes（#37）。規則由這裡執行，不交給 LLM 判斷。
  * OCR 錯字防護：新條目的原文必須出現在這頁某個 Balloon 的原文裡才採用。封面、扉頁的設計字與署名多半是
  * Loose Text 而且常被 OCR 讀錯，照先到先贏規則，錯的版本一旦進來就會卡住之後正確的版本（#37、#48 的觀察）。
  */
-export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesChanges, page: NotesPage): MergedNotes {
-  const known = new Set(notes.map((e) => e.原文));
+export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesChanges, page: NotesPage): AppliedNotes {
+  const known = new Map(notes.map((e) => [e.原文, e]));
   const asEntry = (e: Partial<NotesEntry> & { 原文: string }): NotesEntry => ({
     讀音: '',
     譯文: '',
@@ -119,11 +127,22 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
     seriesId: page.seriesId,
     locked: false,
   });
-  const unseen = (原文: string) => page.unseen?.has(原文) ?? false;
+  const rejected: string[] = [];
+  const dropped: UsedNote[] = [];
+  const adopted = changes.added.filter((a) => {
+    const ok = known.has(a.原文) || appearsIn(page.balloonTexts, a.原文);
+    if (!ok) rejected.push(a.原文);
+    return ok;
+  });
+  /** 這頁看不到的條目已有不同的譯名：丟掉這頁的譯名。 */
+  const withoutUnseenConflict = (a: (typeof adopted)[number]) => {
+    const existing = known.get(a.原文)?.譯文;
+    if (!page.unseen?.has(a.原文) || !existing || !a.譯文 || a.譯文 === existing) return a;
+    dropped.push({ 原文: a.原文, 譯文: a.譯文 });
+    return { ...a, 譯文: '' };
+  };
   const incoming = [
-    ...changes.added
-      .filter((a) => known.has(a.原文) || appearsIn(page.balloonTexts, a.原文))
-      .map((a) => asEntry(unseen(a.原文) ? { ...a, 譯文: '' } : a)),
+    ...adopted.map(withoutUnseenConflict).map(asEntry),
     // 補空欄位只對既有條目有意義
     ...changes.filled.filter((f) => known.has(f.原文)).map((f) => asEntry({ ...f.fields, 原文: f.原文 })),
   ];
@@ -135,7 +154,7 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
     if (!existing || !建議譯文 || 建議譯文 === existing.譯文) continue;
     merged.suggestions.push({ seriesId: page.seriesId, 原文, 建議譯文, ...(理由 ? { 理由 } : {}), 來源 });
   }
-  return merged;
+  return { ...merged, rejected, dropped };
 }
 
 /** 人在 side panel 可以改的欄位（原文是 key，不能改）。 */

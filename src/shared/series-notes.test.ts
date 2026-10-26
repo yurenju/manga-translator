@@ -141,6 +141,18 @@ describe('applyNotesChanges（套用 LLM 的 notes_changes）', () => {
     expect(result.entries).toEqual([locked]);
   });
 
+  it('回報沒採用的新增：原文不在 Balloon 裡（rejected）、同一個 Spread 先套用的頁剛新增而這頁看不到、譯名不同（dropped）', () => {
+    const result = applyNotesChanges(
+      [entry('s', 'ミナ', '美娜')],
+      { ...none, added: [added('ミナ', '米娜'), added('潮見坂', '潮見坡'), added('魔法少女ミチ', '魔法少女美琪')] },
+      { ...page, unseen: new Set(['ミナ']) },
+    );
+
+    expect(result.rejected).toEqual(['魔法少女ミチ']);
+    expect(result.dropped).toEqual([{ 原文: 'ミナ', 譯文: '米娜' }]);
+    expect(result.suggestions).toEqual([]);
+  });
+
   it('原文是空字串的條目不採用', () => {
     const result = applyNotesChanges([], { ...none, added: [added('', '某人')] }, page);
 

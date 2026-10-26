@@ -7,7 +7,27 @@
  * 跟套用 LLM 的變更不會互相蓋掉；但不排進送出順序，不必等還在翻的頁回來。
  */
 import { addSuggestions, applyNotesChanges, type NotesPage, type SeriesNotes } from '../shared/series-notes.ts';
+import { createTrace } from '../shared/trace.ts';
 import type { NotesChanges, NotesEntry } from '../shared/translator.ts';
+
+const trace = createTrace('sw');
+
+/** 套用前後的條目比一比：新增了哪些原文、哪些既有條目補了哪些欄位（trace 用）。 */
+function describeChanges(before: readonly NotesEntry[], after: readonly NotesEntry[]) {
+  const byOriginal = new Map(before.map((e) => [e.原文, e]));
+  const added: string[] = [];
+  const filled: { 原文: string; fields: string[] }[] = [];
+  for (const entry of after) {
+    const old = byOriginal.get(entry.原文);
+    if (!old) {
+      added.push(entry.原文);
+      continue;
+    }
+    const fields = (Object.keys(entry) as (keyof NotesEntry)[]).filter((key) => entry[key] !== old[key]);
+    if (fields.length > 0) filled.push({ 原文: entry.原文, fields });
+  }
+  return { added, filled };
+}
 
 export interface NotesStore {
   /** 這個 Series 的全部條目，每次呼叫順序相同（prompt cache 要逐字一致）。 */
@@ -100,12 +120,18 @@ export function createNotesLedger({ store }: NotesLedgerDeps) {
         async commit(changes, page) {
           try {
             await previous;
+            let report: Record<string, unknown> = {};
             const next = await exclusive(seriesId, (current) => {
               const merged = applyNotesChanges(current.entries, changes, { ...page, seriesId, unseen: new Set(shared.added) });
-              const before = new Set(current.entries.map((e) => e.原文));
-              for (const e of merged.entries) if (!before.has(e.原文)) shared.added.add(e.原文);
-              return { entries: merged.entries, suggestions: addSuggestions(current.suggestions, merged.suggestions) };
+              const { added, filled } = describeChanges(current.entries, merged.entries);
+              for (const 原文 of added) shared.added.add(原文);
+              const suggestions = addSuggestions(current.suggestions, merged.suggestions);
+              const newSuggestions = suggestions.slice(current.suggestions.length).map(({ 原文, 建議譯文 }) => ({ 原文, 建議譯文 }));
+              report = { added, filled, rejected: merged.rejected, dropped: merged.dropped, suggestions: newSuggestions };
+              return { entries: merged.entries, suggestions };
             });
+            // 實際採用了什麼（#40 驗收 H2、H5）：LLM 想改的是 translate:response 的 notes_changes
+            trace('notes:apply', { seriesId, pageHash: page.pageHash, ...report });
             return next.entries;
           } catch (e) {
             console.warn('notes save failed', e);

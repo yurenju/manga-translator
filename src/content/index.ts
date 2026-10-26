@@ -145,6 +145,8 @@ if (!globalThis.__mangaTranslator) {
         overlay.clear();
         anchors.clear();
         globalThis.__mangaTranslator = undefined;
+        // 停止後頁面要跟沒裝外掛時一樣（#40 驗收 I1）
+        trace('content:stop', { overlaysLeft: document.querySelectorAll(`[${HOST_ATTRIBUTE}]`).length });
         return false;
     }
     return false;
