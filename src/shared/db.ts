@@ -25,6 +25,24 @@ export const STORES = {
 /** pageTranslations、urlPatterns、seriesNotes、notesSuggestions 依 Series 查詢的 index。 */
 export const BY_SERIES = 'seriesId';
 
+/** 在一個 store 上開一個 transaction 跑一個 request，transaction 完成時 resolve 它的結果。 */
+export function storeRequest<T>(
+  db: Promise<IDBDatabase>,
+  store: string,
+  mode: IDBTransactionMode,
+  op: (store: IDBObjectStore) => IDBRequest<T>,
+): Promise<T> {
+  return db.then(
+    (db) =>
+      new Promise<T>((resolve, reject) => {
+        const tx = db.transaction(store, mode);
+        const req = op(tx.objectStore(store));
+        tx.oncomplete = () => resolve(req.result);
+        tx.onerror = () => reject(tx.error);
+      }),
+  );
+}
+
 export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);

@@ -19,11 +19,12 @@ import type {
 } from '../shared/messages.ts';
 import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
-import { indexedDbPageCache, indexedDbSeriesRepo } from './cache-store.ts';
+import { indexedDbPageCache } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
 import { createSeriesCatalog } from './series-catalog.ts';
+import { indexedDbSeriesRepo } from './series-store.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber, type JobEvent } from './transcribe.ts';
 
