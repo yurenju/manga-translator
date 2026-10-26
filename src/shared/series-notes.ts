@@ -1,7 +1,7 @@
 /**
  * Series Notes 的「只能新增」規則（spec #27 第 4.2 節、ADR 0002）。
- * 合併 Series（#36）與套用 LLM 的 notes_changes（#37）共用：新條目直接加、既有條目只補空欄位，
- * 想改既有的譯文一律變成 NotesSuggestion，由人在 side panel 接受或忽略。
+ * 合併 Series（#36）與套用 LLM 的 notes_changes（#37）共用：新條目直接加、既有條目只補空欄位（含空的譯文），
+ * 想改既有（非空）的譯文一律變成 NotesSuggestion，由人在 side panel 接受或忽略。
  */
 import type { NotesEntry } from './translator.ts';
 
@@ -15,8 +15,8 @@ export interface NotesSuggestion {
   來源Page: string;
 }
 
-/** 空字串＝沒有值，可以補。 */
-const FILLABLE = ['讀音', '類別', '備註', '自稱', '語氣', '稱呼'] as const;
+/** 空字串＝沒有值，可以補。譯文也算：目標的譯文是空的就直接補上，有值且不同才變成建議。 */
+const FILLABLE = ['讀音', '譯文', '類別', '備註', '自稱', '語氣', '稱呼'] as const;
 
 export interface MergedNotes {
   /** 目標 Series 合併後的全部條目（既有的在前，順序不變）。 */
@@ -45,7 +45,8 @@ export function mergeNotes(
       byOriginal.set(added.原文, added);
       continue;
     }
-    if (next.譯文 && next.譯文 !== existing.譯文) {
+    const fillsTranslation = !existing.譯文 && !existing.locked;
+    if (next.譯文 && next.譯文 !== existing.譯文 && !fillsTranslation) {
       suggestions.push({ seriesId: into.seriesId, 原文: next.原文, 建議譯文: next.譯文, 來源Page: into.來源Page });
     }
     if (existing.locked) continue;

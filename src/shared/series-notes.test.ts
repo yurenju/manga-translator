@@ -46,6 +46,16 @@ describe('mergeNotes（只能新增）', () => {
     expect(result.entries).toEqual([entry('t', '兄ちゃん', '哥', { 讀音: 'にいちゃん', 備註: '湊叫哥哥' })]);
   });
 
+  it('既有條目的譯文是空的：直接補上，不變成建議', () => {
+    const result = mergeNotes([entry('t', '潮見坂', '', { 類別: '地名' })], [entry('p', '潮見坂', '潮見坂', { 類別: '地名' })], {
+      seriesId: 't',
+      來源Page: 'series:p',
+    });
+
+    expect(result.entries).toEqual([entry('t', '潮見坂', '潮見坂', { 類別: '地名' })]);
+    expect(result.suggestions).toEqual([]);
+  });
+
   it('人改過（locked）的條目不補欄位，譯文不同仍然變成建議', () => {
     const locked = entry('t', 'ミオ', '美緒', { locked: true });
     const result = mergeNotes([locked], [entry('p', 'ミオ', '米歐', { 讀音: 'みお' })], { seriesId: 't', 來源Page: 'series:p' });
