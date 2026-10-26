@@ -44,6 +44,7 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
       const src = toImageRect(candidate.rect, viewport, bitmap);
       const gray = grayOf(bitmap, src);
       const pages = splitSpread(gray);
+      if (pages.length === 0) trace('spread:unsplittable', { anchorId: candidate.anchorId, rect: candidate.rect });
       return pages.map((page): PageThumb => {
         const whole = page.width === src.width && page.height === src.height;
         const size = thumbnailSize(page, THUMBNAIL_WIDTH);

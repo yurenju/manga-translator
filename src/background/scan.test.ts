@@ -10,11 +10,14 @@ const WINDOW_ID = 7;
 function fakeDeps(candidates: PageCandidate[] = [P1]) {
   const captures: number[] = [];
   const published: [number, PageThumb[]][] = [];
+  const occluded: [number, boolean][] = [];
   /** 覆蓋層與截圖的先後順序。 */
   const events: string[] = [];
   const env = {
     viewport: VIEWPORT,
     candidates,
+    /** 被其他元素擋住、不算候選的 img／canvas 數量。 */
+    occluded: 0,
     visible: true,
     /** 每次量 rect 花的時間（ms），依序取用；用完就是 0。 */
     findDelays: [] as number[],
@@ -32,8 +35,9 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
     findPageCandidates: async () => {
       const delay = env.findDelays.shift() ?? 0;
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      return { viewport: env.viewport, candidates: env.candidates };
+      return { viewport: env.viewport, candidates: env.candidates, ...(env.occluded > 0 ? { occluded: env.occluded } : {}) };
     },
+    setOccluded: (tabId, value) => void occluded.push([tabId, value]),
     getVisibleWindowId: async () => (env.visible ? WINDOW_ID : undefined),
     captureWindow: async (windowId) => {
       expect(windowId).toBe(WINDOW_ID);
@@ -59,7 +63,7 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
       events.push(`restore ${tabId}`);
     },
   };
-  return { deps, captures, published, events, env };
+  return { deps, captures, published, events, env, occluded };
 }
 
 beforeEach(() => {
@@ -197,6 +201,44 @@ describe('scan', () => {
     expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
   });
 
+  describe('Page 被其他元素擋住（#55）', () => {
+    it('沒有可截的 Page、但有被擋住的：不截圖，通知 side panel 提示收起', async () => {
+      const chrome = fakeDeps([]);
+      chrome.env.occluded = 1;
+      const scanner = createScanner(chrome.deps);
+
+      await settle(scanner.scan(1));
+
+      expect(chrome.captures).toHaveLength(0);
+      expect(chrome.occluded).toEqual([[1, true]]);
+    });
+
+    it('擋住的東西收起後截到 Page：提示消失', async () => {
+      const chrome = fakeDeps([]);
+      chrome.env.occluded = 1;
+      const scanner = createScanner(chrome.deps);
+      await settle(scanner.scan(1));
+      chrome.env.occluded = 0;
+      chrome.env.candidates = [P1];
+
+      await settle(scanner.scan(1));
+
+      expect(chrome.captures).toHaveLength(1);
+      expect(chrome.occluded.at(-1)).toEqual([1, false]);
+    });
+
+    it('另一個 Page 完整可見（例如縱向捲動時隔壁頁被浮動標題蓋住）：照常截，不提示', async () => {
+      const chrome = fakeDeps([P1]);
+      chrome.env.occluded = 1;
+      const scanner = createScanner(chrome.deps);
+
+      await settle(scanner.scan(1));
+
+      expect(chrome.captures).toHaveLength(1);
+      expect(chrome.occluded.filter(([, value]) => value)).toEqual([]);
+    });
+  });
+
   describe('翻回已翻譯的 Page（#27 除錯：真實 Chrome 截一次圖要 1–2 秒，藏覆蓋層會讓中文閃回日文）', () => {
     const CLEAN = '0'.repeat(64);
     const WITH_OVERLAY = 'f'.repeat(64);
@@ -232,6 +274,16 @@ describe('scan', () => {
 
       expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
       expect(publishedHashes(chrome)).toEqual([RIGHT, LEFT]);
+    });
+
+    it('Spread 兩頁都顯示著覆蓋層：截圖前一定藏起來（#55：沒藏時截到自己的譯文，hash 對不上）', async () => {
+      const LEFT = '0f'.repeat(32);
+      const chrome = fakeDeps([{ ...P1, overlaid: [CLEAN, LEFT] }]);
+      const scanner = createScanner(chrome.deps);
+
+      await settle(scanner.scan(1));
+
+      expect(chrome.events.slice(0, 3)).toEqual(['hide 1', 'capture', 'restore 1']);
     });
 
     it('覆蓋層畫好後不藏覆蓋層截一次，記下「帶覆蓋層的樣子」，而且不公布', async () => {

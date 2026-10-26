@@ -22,6 +22,10 @@ export type Message =
   | { type: 'panel:getPages'; tabId: number }
   /** SW → side panel：某個 tab 的 Page（縮圖＋逐字稿）更新了。 */
   | { type: 'pages:updated'; tabId: number; pages: PageView[] }
+  /** side panel → SW：這個 tab 的 Page 是不是被擋住了（#55）。回應 OcclusionResponse。 */
+  | { type: 'panel:getOcclusion'; tabId: number }
+  /** SW → side panel：畫面上沒有能截的 Page、只有被其他元素（工具列）擋住的，或擋住的東西收起了。 */
+  | { type: 'occlusion:changed'; tabId: number; occluded: boolean }
   /** SW → content script：量畫面上完整可見的 Page 候選。回應 PageCandidatesResponse。 */
   | { type: 'content:findPageCandidates' }
   /** SW → offscreen：依候選裁切截圖並做縮圖。回應 CropResponse。 */
@@ -143,6 +147,10 @@ export interface StatusResponse {
   active: boolean;
 }
 
+export interface OcclusionResponse {
+  occluded: boolean;
+}
+
 export interface SeriesResponse {
   /** 這個 tab 目前的 Series；沒啟動是 undefined。 */
   current: string | undefined;
@@ -199,6 +207,8 @@ export interface PageCandidatesResponse {
   /** 量 rect 當下的 viewport（CSS px），裁切時用來換算截圖倍率。 */
   viewport: Size;
   candidates: PageCandidate[];
+  /** 夠大、在可視範圍裡，但被其他元素（閱讀器的工具列）擋住而不算候選的 img／canvas 數量（#55）；沒有時省略。 */
+  occluded?: number;
 }
 
 export interface CropRequest extends PageCandidatesResponse {

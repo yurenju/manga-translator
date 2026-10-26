@@ -14,6 +14,7 @@ import type {
   PagesResponse,
   PageView,
   SeriesResponse,
+  OcclusionResponse,
   StatusResponse,
   TestConnectionResponse,
   TranslationInfo,
@@ -456,6 +457,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [hasKey, setHasKey] = useState(true);
   const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
   const [hovered, setHovered] = useState<LearningProps['hovered']>(undefined);
+  const [occluded, setOccluded] = useState(false);
 
   useEffect(() => {
     if (tabId === undefined) return;
@@ -464,11 +466,13 @@ function App({ tabId }: { tabId: number | undefined }) {
         setHovered(message.line ?? undefined);
       if (message.type === 'status:changed' && message.tabId === tabId) setActive(message.active);
       if (message.type === 'pages:updated' && message.tabId === tabId) setPages(message.pages);
+      if (message.type === 'occlusion:changed' && message.tabId === tabId) setOccluded(message.occluded);
       if (message.type === 'models:status') setModelStatus(message.status);
     };
     chrome.runtime.onMessage.addListener(onMessage);
     void send<StatusResponse>({ type: 'panel:getStatus', tabId }).then((r) => setActive(r.active));
     void send<PagesResponse>({ type: 'panel:getPages', tabId }).then((r) => setPages(r.pages));
+    void send<OcclusionResponse>({ type: 'panel:getOcclusion', tabId }).then((r) => setOccluded(r.occluded));
     void send<ModelStatusResponse>({ type: 'panel:getModelStatus' }).then((r) => setModelStatus(r.status));
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, [tabId]);
@@ -510,6 +514,8 @@ function App({ tabId }: { tabId: number | undefined }) {
         {settings}
         <SeriesNotesSection tabId={tabId} />
         <ModelStatusLine status={modelStatus} onRetry={scan} />
+        {/* 工具列之類蓋住了 Page（#55）：不截，等使用者收起；各家閱讀器收起的方式不同，不寫死操作 */}
+        {occluded && <p class="hint">頁面被其他東西擋住（例如閱讀器的工具列），收起後才會翻譯。</p>}
         {untranslated && !hasKey && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</p>}
         {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
         <ul aria-label="Page">
