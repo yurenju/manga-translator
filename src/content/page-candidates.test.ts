@@ -26,6 +26,14 @@ describe('isPageCandidate', () => {
     expect(isPageCandidate({ x: 10, y: 10, width: 600, height: 90 }, VIEWPORT)).toBe(false);
   });
 
+  it('被 overflow 裁切的祖先擋住的不是（仿 Jump+ 翻頁：隔壁頁在 viewer 外面）', () => {
+    const viewer = { x: 425, y: 57, width: 430, height: 625 };
+    expect(isPageCandidate(page(425, 57), VIEWPORT, [viewer])).toBe(true);
+    expect(isPageCandidate(page(-5, 57), VIEWPORT, [viewer])).toBe(false);
+    // 翻頁動畫中途：一半在 viewer 裡
+    expect(isPageCandidate(page(640, 57), VIEWPORT, [viewer])).toBe(false);
+  });
+
   it('不顯示的元素（rect 為 0）不是', () => {
     expect(isPageCandidate({ x: 0, y: 0, width: 0, height: 0 }, VIEWPORT)).toBe(false);
   });

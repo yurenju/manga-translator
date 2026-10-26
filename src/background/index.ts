@@ -1,6 +1,7 @@
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import type {
   AnalyzeResponse,
+  AutoTranslateResponse,
   CropResponse,
   FakeTranslatorConfig,
   Message,
@@ -23,7 +24,7 @@ import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
 import { provisionalSeries } from './series.ts';
 import { indexedDbTabStore } from './tab-store.ts';
-import { createTranscriber } from './transcribe.ts';
+import { createTranscriber, type JobEvent } from './transcribe.ts';
 
 declare global {
   /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
@@ -34,6 +35,8 @@ declare global {
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
   var __translateCalls: number | undefined;
+  /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
+  var __jobLog: { tabId: number; event: JobEvent; pageHash: string; at: number }[] | undefined;
 }
 
 const store = indexedDbTabStore();
@@ -74,8 +77,8 @@ const scanner = createScanner({
     return response.pages;
   },
   publish(tabId, pages, capture) {
-    if (capture) void transcriber.update(tabId, pages, capture);
-    else transcriber.clear(tabId);
+    // 沒有 capture＝畫面上沒有完整可見的 Page（或停止）；停止時的清理在 onStatusChanged
+    void transcriber.update(tabId, pages, capture);
   },
 });
 
@@ -128,6 +131,9 @@ const transcriber = createTranscriber({
     notifyPanel({ type: 'pages:updated', tabId, pages });
     overlaySync.publish(tabId, pages);
   },
+  onJobEvent(tabId, event, pageHash) {
+    if (__E2E__) (globalThis.__jobLog ??= []).push({ tabId, event, pageHash, at: Date.now() });
+  },
 });
 
 /** side panel 的覆蓋開關（每個 tab；預設開，停止後回到預設）。 */
@@ -146,6 +152,7 @@ if (__E2E__) {
   globalThis.__configureForTest = (config) => {
     pipelineConfig = config.pipeline;
     globalThis.__translateCalls = 0;
+    globalThis.__jobLog = [];
     fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
   };
@@ -185,6 +192,7 @@ const activation = createActivation({
     if (active) scan(tabId);
     else {
       scanner.clear(tabId);
+      transcriber.clear(tabId);
       overlayEnabled.delete(tabId);
     }
   },
@@ -199,15 +207,18 @@ chrome.commands.onCommand.addListener((command, tab) => {
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  // 重新整理或換頁：anchor 都換了，重新查快取（同 origin 會重新注入、繼續啟動）
+  if (changeInfo.status === 'loading') transcriber.resetPages(tabId);
   void activation.handleTabUpdated(tabId, changeInfo);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void activation.handleTabRemoved(tabId);
   scanner.clear(tabId);
+  transcriber.clear(tabId);
 });
 
-chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
   // __E2E__ 是 build 時的常數，正式 build 裡這段會被整段移除。
   if (__E2E__ && message.type === 'test:activate') {
     activation.activate(message.tabId).then(() => sendResponse());
@@ -232,6 +243,21 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
     case 'panel:setOverlay':
       overlayEnabled.set(message.tabId, message.enabled);
       chrome.tabs.sendMessage(message.tabId, { type: 'content:setOverlayEnabled', enabled: message.enabled } satisfies Message).catch(() => {});
+      sendResponse();
+      return false;
+    case 'content:pageTurn': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined)
+        void activation.isActive(tabId).then((active) => {
+          if (active) scan(tabId);
+        });
+      return false;
+    }
+    case 'panel:getAutoTranslate':
+      sendResponse({ enabled: transcriber.isAutoTranslate(message.tabId) } satisfies AutoTranslateResponse);
+      return false;
+    case 'panel:setAutoTranslate':
+      void transcriber.setAutoTranslate(message.tabId, message.enabled);
       sendResponse();
       return false;
     case 'panel:getPages':

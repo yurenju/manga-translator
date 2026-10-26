@@ -55,6 +55,12 @@ export type Message =
   | { type: 'panel:setOverlay'; tabId: number; enabled: boolean }
   /** side panel → SW：覆蓋開關目前的狀態。回應 OverlayResponse。 */
   | { type: 'panel:getOverlay'; tabId: number }
+  /** content script → SW：翻頁訊號 debounce 後（#34）。SW 截圖比對 hash，變了才算翻頁。 */
+  | { type: 'content:pageTurn' }
+  /** side panel → SW：「自動翻譯」開關（#34）。 */
+  | { type: 'panel:setAutoTranslate'; tabId: number; enabled: boolean }
+  /** side panel → SW：自動翻譯開關目前的狀態。回應 AutoTranslateResponse。 */
+  | { type: 'panel:getAutoTranslate'; tabId: number }
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
   | { type: 'test:activate'; tabId: number };
 
@@ -85,6 +91,10 @@ export interface StatusResponse {
 }
 
 export interface OverlayResponse {
+  enabled: boolean;
+}
+
+export interface AutoTranslateResponse {
   enabled: boolean;
 }
 
@@ -136,7 +146,10 @@ export type TranslationInfo = Pick<TranslateOutput, 'model' | 'latencyMs' | 'usa
 /** side panel 顯示的一個 Page：縮圖＋逐字稿的狀態。 */
 export interface PageView extends PageThumb {
   transcript:
+    /** 排在佇列裡或正在本機流水線／LLM。 */
     | { state: 'analyzing' }
+    /** 自動翻譯關著（#34）：等使用者按「翻譯此頁」。 */
+    | { state: 'pending' }
     /**
      * translated=false：沒有 Translator（沒有 API key）或翻譯失敗（translateError），讀音是 kuromoji、沒有譯文。
      * translating：按了「翻譯此頁」，正在等 Translator；text 仍是上一份。

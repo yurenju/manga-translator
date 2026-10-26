@@ -302,7 +302,12 @@ export function createOverlay({ loadFont }: { loadFont: LoadFont }) {
     changedParents.clear();
   }
 
-  return { show, setEnabled, hideForCapture, restoreAfterCapture, clear };
+  /** 這個元素的 style 被我們改過（static → relative）。 */
+  function ownsStyleOf(element: Element): boolean {
+    return changedParents.has(element as HTMLElement);
+  }
+
+  return { show, setEnabled, hideForCapture, restoreAfterCapture, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;
