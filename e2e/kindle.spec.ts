@@ -1,0 +1,196 @@
+/**
+ * #35：仿 Kindle（整個 viewport 一張 blob img，Spread＋黑邊，翻頁換 src）。偵測＋OCR 是真的（wasm），
+ * 譯文來自 FakeTranslator。外掛要去黑邊、從中縫切成兩個 Page，兩頁共用同一個 anchor 與 shadow host。
+ */
+import type { Page, Worker } from '@playwright/test';
+import { hammingDistance, pageHash, SAME_PAGE_MAX_DISTANCE } from '../src/shared/page-hash.ts';
+import { cropGray, readGray, readGroundTruth, type GtText } from '../src/testing/synthetic.ts';
+import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
+
+test.use({ viewport: null, fakeTranslator: true });
+
+/** 第一次載入模型＋兩頁 OCR。 */
+const FIRST_SPREAD_TIMEOUT = 90_000;
+/** 模型已載入後的一個 Spread。 */
+const SPREAD_TIMEOUT = 60_000;
+/** 偵測框與 ground truth 框的差距（畫面 px）。 */
+const TOLERANCE = 4;
+
+const normalize = (s: string) => s.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '');
+
+interface KindleOverlay {
+  texts: { text: string; rect: ScreenRect }[];
+  /** img 的畫面 rect（含祖先 transform）與合成圖的像素尺寸。 */
+  img: ScreenRect & { naturalWidth: number; naturalHeight: number };
+}
+
+function kindleOverlay(page: Page): Promise<KindleOverlay> {
+  return page.evaluate(() => {
+    const rectOf = (el: Element) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    };
+    const img = document.querySelector<HTMLImageElement>('#page')!;
+    const texts = [...document.querySelectorAll('[data-manga-translator-overlay]')].flatMap((host) =>
+      [...host.shadowRoot!.querySelectorAll('[data-balloon-id]')].map((el) => ({ text: el.textContent ?? '', rect: rectOf(el) })),
+    );
+    return { texts, img: { ...rectOf(img), naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight } };
+  });
+}
+
+/** 這個合成頁（ground truth）的哪些句子有譯文蓋在畫面上；回傳每句在第幾頁（0＝右頁）。 */
+async function overlaidTexts(page: Page, id: string): Promise<{ gt: GtText; rect: ScreenRect; img: KindleOverlay['img'] }[]> {
+  const { texts, img } = await kindleOverlay(page);
+  const gt = readGroundTruth(id);
+  return texts.flatMap((t) => {
+    const target = gt.texts.find((g) => normalize(g.zh) === normalize(t.text));
+    return target ? [{ gt: target, rect: t.rect, img }] : [];
+  });
+}
+
+/** ground truth 的 Balloon（Spread 原圖像素）換成畫面座標：合成圖是等比例縮放置中、周圍黑邊（e2e/mock-site/kindle.ts）。 */
+function balloonOnScreen(id: string, bbox: GtText['bbox'], img: KindleOverlay['img']): ScreenRect {
+  const gt = readGroundTruth(id);
+  const s = Math.min(img.naturalWidth / gt.width, img.naturalHeight / gt.height);
+  const ox = Math.floor((img.naturalWidth - Math.round(gt.width * s)) / 2);
+  const oy = Math.floor((img.naturalHeight - Math.round(gt.height * s)) / 2);
+  const toScreen = img.width / img.naturalWidth;
+  const [x, y, w, h] = bbox;
+  return { x: img.x + (ox + x * s) * toScreen, y: img.y + (oy + y * s) * toScreen, width: w * s * toScreen, height: h * s * toScreen };
+}
+
+/** 要原地覆蓋的種類（其他是 Loose Text，不覆蓋）。 */
+const OVERLAY_KINDS = new Set<GtText['kind']>(['balloon', 'thought', 'narration']);
+
+/** 這張合成頁有要覆蓋的句子的 Page（p08 的右頁只有狀聲詞與框外文字，沒有東西可蓋）。 */
+const overlayPages = (id: string) => [...new Set(readGroundTruth(id).texts.filter((t) => OVERLAY_KINDS.has(t.kind)).map((t) => t.page))].sort();
+
+/** 有東西可蓋的每一頁都至少有一句譯文蓋上了。 */
+async function waitForOverlay(page: Page, id: string, timeout: number): Promise<void> {
+  await expect
+    .poll(async () => [...new Set((await overlaidTexts(page, id)).map((t) => t.gt.page))].sort(), { timeout })
+    .toEqual(overlayPages(id));
+}
+
+/** 每個譯文元素都落在 ground truth 裡同一句的 Balloon 內（右頁的句子在右半、左頁的在左半），有東西可蓋的頁都有。 */
+async function expectAligned(page: Page, id: string, label: string): Promise<void> {
+  const texts = await overlaidTexts(page, id);
+  for (const { gt, rect, img } of texts) {
+    const balloon = balloonOnScreen(id, gt.bbox, img);
+    const where = `${label} ${id} ${gt.id}（第 ${gt.page} 頁）「${gt.zh}」`;
+    expect.soft(rect.x, `${where} 左`).toBeGreaterThanOrEqual(balloon.x - TOLERANCE);
+    expect.soft(rect.y, `${where} 上`).toBeGreaterThanOrEqual(balloon.y - TOLERANCE);
+    expect.soft(rect.x + rect.width, `${where} 右`).toBeLessThanOrEqual(balloon.x + balloon.width + TOLERANCE);
+    expect.soft(rect.y + rect.height, `${where} 下`).toBeLessThanOrEqual(balloon.y + balloon.height + TOLERANCE);
+  }
+  console.log(`${label}：${texts.length} 個譯文對到 ${id} 的 ground truth`);
+  expect([...new Set(texts.map((t) => t.gt.page))].sort(), label).toEqual(overlayPages(id));
+}
+
+const jobLog = (sw: Worker) => sw.evaluate(() => globalThis.__jobLog ?? []);
+
+/** ground truth 單頁（原圖裁切）的 hash，依閱讀順序（0＝右頁）。 */
+function groundTruthHashes(id: string): string[] {
+  const image = readGray(id);
+  return readGroundTruth(id).pages.map((p) => pageHash(cropGray(image, p.bbox)));
+}
+
+async function turnTo(page: Page, key: 'ArrowLeft' | 'ArrowRight', index: number): Promise<void> {
+  await page.keyboard.press(key);
+  await page.locator(`body[data-ready="true"][data-page-index="${index}"]`).waitFor();
+}
+
+test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先送出 LLM；祖先 transform 後仍對齊', async ({ context, sw, extensionId, mockSite }, testInfo) => {
+  test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
+  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await expectAligned(page, 'p07-spread', '剛覆蓋');
+  // 兩頁共用同一個 anchor 的 shadow host
+  expect(await overlayHostCount(page)).toBe(1);
+  const shot = testInfo.outputPath('kindle-spread.png');
+  await page.screenshot({ path: shot });
+  await testInfo.attach('kindle-spread', { path: shot, contentType: 'image/png' });
+
+  // 送出 LLM 的順序：先右頁再左頁（hash 對 ground truth 的單頁）
+  const [right, left] = groundTruthHashes('p07-spread');
+  const llm = (await jobLog(sw)).filter((e) => e.event === 'llm').map((e) => e.pageHash);
+  const order = llm.map((h) => (hammingDistance(h, right!) <= SAME_PAGE_MAX_DISTANCE ? 'right' : hammingDistance(h, left!) <= SAME_PAGE_MAX_DISTANCE ? 'left' : 'other'));
+  expect(order).toEqual(['right', 'left']);
+
+  // 仿 Kindle 縮放／拖曳：祖先元素的 transform（縮小，img 仍完整在畫面內）
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>('#zoom')!.style.transform = 'translate(40px, 30px) scale(0.85)';
+  });
+  await expectAligned(page, 'p07-spread', '縮放後');
+});
+
+test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中快取；重繪後 host 自動掛回', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(FIRST_SPREAD_TIMEOUT + 2 * SPREAD_TIMEOUT);
+  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+
+  await turnTo(page, 'ArrowLeft', 1);
+  // 舊的 p07 譯文不能留在新的圖上
+  await expect.poll(async () => (await overlaidTexts(page, 'p07-spread')).length).toBe(0);
+  await waitForOverlay(page, 'p08-action', SPREAD_TIMEOUT);
+  await expectAligned(page, 'p08-action', '翻頁後');
+  // p08 的兩頁都翻了（右頁沒有 Balloon，但一樣送出 LLM）
+  await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(4);
+  const translateCalls = 4;
+
+  // 翻回來：同一個 img 又換 src，p07 從記住的結果重新覆蓋，不重翻
+  await turnTo(page, 'ArrowRight', 0);
+  await waitForOverlay(page, 'p07-spread', SPREAD_TIMEOUT);
+  expect((await overlaidTexts(page, 'p08-action')).length).toBe(0);
+  expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(translateCalls);
+
+  // 框架重繪：#zoom 只留下 img，我們的 host 被丟掉
+  await page.evaluate(() => {
+    const zoom = document.querySelector('#zoom')!;
+    zoom.replaceChildren(zoom.querySelector('#page')!);
+  });
+  await expect.poll(() => overlayHostCount(page)).toBe(1);
+  await expectAligned(page, 'p07-spread', '重掛後');
+});
+
+const OCCLUDED_HINT = '頁面被其他東西擋住（例如閱讀器的工具列），收起後才會翻譯。';
+
+/** 點畫面中間（仿 Kindle 的感應層）切換工具列。 */
+async function toggleToolbar(page: Page): Promise<void> {
+  const size = page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
+  await page.mouse.click(size.width / 2, size.height / 2);
+}
+
+for (const bg of ['black', 'white'] as const) {
+  test(`#55 工具列蓋住頁面（${bg === 'black' ? '黑底' : '白底'}）：開著時不截、不翻，side panel 提示；收起後才翻，譯文落在 Balloon 內`, async ({ context, sw, extensionId, mockSite }) => {
+    test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
+    const url = `${mockSite.kindleUrl}?toolbar=shown&bg=${bg}`;
+    const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url });
+
+    await expect(panel.getByText(OCCLUDED_HINT)).toBeVisible();
+    // 透明的感應層不算遮擋，但工具列算：被擋住的 Page 不送本機流水線、也不送 LLM
+    expect(await jobLog(sw)).toEqual([]);
+    expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(0);
+
+    await toggleToolbar(page);
+    await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+    await expectAligned(page, 'p07-spread', `收起工具列後（${bg}）`);
+    await expect(panel.getByText(OCCLUDED_HINT)).toBeHidden();
+  });
+}
+
+test('#55 工具列開了又收起：同一頁命中快取、不重翻', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(FIRST_SPREAD_TIMEOUT + SPREAD_TIMEOUT);
+  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
+
+  await toggleToolbar(page);
+  await expect(panel.getByText(OCCLUDED_HINT)).toBeVisible();
+  await toggleToolbar(page);
+  await expect(panel.getByText(OCCLUDED_HINT)).toBeHidden();
+  await waitForOverlay(page, 'p07-spread', SPREAD_TIMEOUT);
+  await expectAligned(page, 'p07-spread', '工具列收起後');
+  expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
+});

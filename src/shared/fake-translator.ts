@@ -2,7 +2,11 @@
  * e2e 用的 Translator（spec #27 第 12 節）：回傳合成頁 ground truth 的讀音與譯文，不花錢、結果固定、不需要 API key。
  * TranslateInput 沒有座標，所以用原文相似度（1 − 字元編輯距離 / 長度）把 OCR 結果對回 ground truth。
  */
-import type { TranslateInput, TranslateOutput, Translator } from './translator.ts';
+import { normalizeText } from './series-notes.ts';
+import type { NotesChanges, TranslateInput, TranslateOutput, Translator } from './translator.ts';
+
+/** FakeTranslator 的模型與 prompt 版本（寫進快取、過時提示比對用）。 */
+export const FAKE_VERSION = { model: 'fake', promptVersion: 'fake' };
 
 /** 找不到對應的 ground truth 時的譯文。 */
 export const NO_MATCH = '（FakeTranslator：找不到對應的原文）';
@@ -15,8 +19,6 @@ export interface GroundTruthText {
   reading: string;
   zh: string;
 }
-
-const normalize = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
 
 function levenshtein(a: string[], b: string[]): number {
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -31,19 +33,41 @@ function levenshtein(a: string[], b: string[]): number {
 }
 
 function similarity(a: string, b: string): number {
-  const x = [...normalize(a)];
-  const y = [...normalize(b)];
+  const x = [...normalizeText(a)];
+  const y = [...normalizeText(b)];
   return 1 - levenshtein(x, y) / Math.max(x.length, y.length, 1);
 }
 
 export interface FakeTranslatorOptions {
   /** 這些 ground truth 原文回傳 unreadable（模擬 Claude 判定 OCR 亂碼）。 */
   unreadableTexts?: readonly string[];
+  /** 這些條目在某頁的 Balloon 原文裡出現、而且送來的 Notes 還沒有時，當成那頁新增的條目回傳（#37 的 e2e）。 */
+  notes?: NotesChanges['added'];
+}
+
+/**
+ * 設定的條目出現在這頁的 Balloon 裡時：Notes 還沒有就新增；已經有了就把空欄位補上（filled），
+ * 譯文不同就提建議（#38：模擬 LLM 想改人改過的條目）。
+ */
+function notesChanges(notes: NotesChanges['added'], input: TranslateInput): NotesChanges {
+  const changes: NotesChanges = { added: [], filled: [], suggestions: [] };
+  for (const n of notes) {
+    if (!input.items.some((i) => i.kind === 'balloon' && normalizeText(i.原文).includes(normalizeText(n.原文)))) continue;
+    const existing = input.seriesNotes.find((e) => e.原文 === n.原文);
+    if (!existing) {
+      changes.added.push(n);
+      continue;
+    }
+    const fields = Object.fromEntries(Object.entries(n).filter(([key, value]) => key !== '原文' && key !== '譯文' && value && !existing[key as keyof typeof n]));
+    if (Object.keys(fields).length > 0) changes.filled.push({ 原文: n.原文, fields });
+    if (existing.譯文 && existing.譯文 !== n.譯文) changes.suggestions.push({ 原文: n.原文, 建議譯文: n.譯文 });
+  }
+  return changes;
 }
 
 export function createFakeTranslator(
   pages: readonly { texts: readonly GroundTruthText[] }[],
-  { unreadableTexts = [] }: FakeTranslatorOptions = {},
+  { unreadableTexts = [], notes = [] }: FakeTranslatorOptions = {},
 ): Translator {
   const texts = pages.flatMap((p) => p.texts);
   const unreadable = new Set(unreadableTexts);
@@ -65,9 +89,9 @@ export function createFakeTranslator(
             ? { id: item.id, 讀音: best.reading, 譯文: best.zh, unreadable: false }
             : { id: item.id, 讀音: '', 譯文: NO_MATCH, unreadable: false };
         }),
-        notes_changes: { added: [], filled: [], suggestions: [] },
+        notes_changes: notesChanges(notes, input),
         usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
-        model: 'fake',
+        model: FAKE_VERSION.model,
         latencyMs: 0,
       };
     },

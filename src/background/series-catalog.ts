@@ -5,6 +5,7 @@
 import type { PageTranslation } from '../shared/page-text.ts';
 import { mergeNotes, type NotesSuggestion } from '../shared/series-notes.ts';
 import type { Series, SeriesOption, UrlPattern } from '../shared/series.ts';
+import { createTrace } from '../shared/trace.ts';
 import type { NotesEntry } from '../shared/translator.ts';
 import { mergeTranslations, provisionalSeries, seriesMenu, urlPattern } from './series.ts';
 
@@ -40,13 +41,17 @@ export interface SeriesCatalogDeps {
   newId(): string;
 }
 
+const trace = createTrace('sw');
+
 export function createSeriesCatalog(deps: SeriesCatalogDeps) {
   const { repo } = deps;
   /** 歸類後才記住網址模式；Provisional Series 不記。 */
   async function remember(seriesId: string, url: string): Promise<void> {
     const series = await repo.getSeries(seriesId);
     if (!series || series.provisional) return;
-    await repo.putPattern({ pattern: urlPattern(url), seriesId, lastUsedAt: deps.now().getTime() });
+    const pattern = urlPattern(url);
+    await repo.putPattern({ pattern, seriesId, lastUsedAt: deps.now().getTime() });
+    trace('series:remember', { pattern, seriesId });
   }
 
   return {
@@ -55,10 +60,12 @@ export function createSeriesCatalog(deps: SeriesCatalogDeps) {
       const pattern = await repo.getPattern(urlPattern(url));
       if (pattern && (await repo.getSeries(pattern.seriesId))) {
         await repo.putPattern({ ...pattern, lastUsedAt: deps.now().getTime() });
+        trace('series:forUrl', { pattern: pattern.pattern, seriesId: pattern.seriesId, preselected: true });
         return pattern.seriesId;
       }
       const series = provisionalSeries(url, deps.now(), deps.newId());
       await repo.putSeries(series);
+      trace('series:forUrl', { pattern: urlPattern(url), seriesId: series.id, preselected: false });
       return series.id;
     },
 
@@ -110,6 +117,7 @@ export function createSeriesCatalog(deps: SeriesCatalogDeps) {
         notes: notes.entries,
         suggestions: [...sourceSuggestions.map((s) => ({ ...s, seriesId: targetId })), ...notes.suggestions],
       });
+      trace('series:merge', { sourceId, targetId, translations: sourceCache.length, notes: sourceNotes.length, suggestions: notes.suggestions.length });
       await remember(targetId, url);
       return true;
     },

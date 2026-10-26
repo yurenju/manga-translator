@@ -1,31 +1,38 @@
+import { CLAUDE_MODEL, PROMPT_VERSION } from '../offscreen/claude-translator.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
+import { FAKE_VERSION } from '../shared/fake-translator.ts';
 import type {
   AnalyzeResponse,
   AutoTranslateResponse,
   CropResponse,
   FakeTranslatorConfig,
+  ImportResponse,
   Message,
   ModelStatus,
   ModelStatusResponse,
+  NotesResponse,
   OverlayResponse,
   PageCandidatesResponse,
   PagesResponse,
   PipelineConfig,
   SeriesResponse,
+  OcclusionResponse,
   StatusResponse,
   TestConfig,
   TestConnectionResponse,
   TranslateResponse,
 } from '../shared/messages.ts';
+import { acceptSuggestion, editEntry, ignoreSuggestion, pendingSuggestions, type SeriesNotes, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { Translator } from '../shared/translator.ts';
+import type { TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
+import { BACKUP_KEYS, createBackup } from './backup.ts';
 import { indexedDbPageCache } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
 import { createSeriesCatalog } from './series-catalog.ts';
-import { indexedDbSeriesRepo } from './series-store.ts';
+import { indexedDbBackupRepo, indexedDbNotesStore, indexedDbSeriesRepo } from './series-store.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber, type JobEvent } from './transcribe.ts';
 
@@ -38,6 +45,8 @@ declare global {
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
   var __translateCalls: number | undefined;
+  /** e2e build 才有：每次送給 FakeTranslator 的內容（#37：確認前一頁新增的條目有送出）。 */
+  var __translateInputs: TranslateInput[] | undefined;
   /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
   var __jobLog: (JobEvent & { at: number })[] | undefined;
   /** e2e build 才有：記下過幾個 Page「帶覆蓋層的樣子」（scan.ts），給測試等它做完。 */
@@ -56,6 +65,9 @@ chrome.runtime.onStartup.addListener(() => {
 function notifyPanel(message: Message): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
+
+/** 每個 tab 的 Page 是不是被擋住了（side panel 提示收起，#55）。 */
+const occludedTabs = new Set<number>();
 
 const scanner = createScanner({
   findPageCandidates: (tabId) =>
@@ -86,8 +98,16 @@ const scanner = createScanner({
     trace('crop', { ms: Date.now() - startedAt, pages: response.pages });
     return response.pages;
   },
+  setOccluded(tabId, occluded) {
+    if (occludedTabs.has(tabId) === occluded) return;
+    if (occluded) occludedTabs.add(tabId);
+    else occludedTabs.delete(tabId);
+    notifyPanel({ type: 'occlusion:changed', tabId, occluded });
+  },
   publish(tabId, pages, capture) {
     // 沒有 capture＝畫面上沒有完整可見的 Page（或停止）；停止時的清理在 onStatusChanged
+    // 先讓 overlaySync 知道哪些覆蓋已經不在了（換 src），transcriber 接著 publish 時才會重送
+    overlaySync.captured(tabId, pages);
     void transcriber.update(tabId, pages, capture);
   },
 });
@@ -105,7 +125,10 @@ const apiKeys = indexedDbApiKeyStore();
 const offscreenTranslator: Translator = {
   async translatePage(input) {
     // e2e：FakeTranslator 在 offscreen，這裡記呼叫次數（確認命中快取時沒有翻譯，#33）
-    if (__E2E__ && fakeTranslator) globalThis.__translateCalls = (globalThis.__translateCalls ?? 0) + 1;
+    if (__E2E__ && fakeTranslator) {
+      globalThis.__translateCalls = (globalThis.__translateCalls ?? 0) + 1;
+      (globalThis.__translateInputs ??= []).push(input);
+    }
     await ensureOffscreenDocument();
     const response = await chrome.runtime.sendMessage<Message, TranslateResponse>({
       type: 'offscreen:translate',
@@ -123,6 +146,14 @@ async function getTranslator(): Promise<Translator | undefined> {
   return (await apiKeys.has()) ? offscreenTranslator : undefined;
 }
 
+/** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 key 時不比。 */
+async function translatorVersion(): Promise<TranslatorVersion | undefined> {
+  if (!(await getTranslator())) return undefined;
+  return __E2E__ && fakeTranslator ? FAKE_VERSION : { model: CLAUDE_MODEL, promptVersion: PROMPT_VERSION };
+}
+
+const notesStore = indexedDbNotesStore();
+
 const transcriber = createTranscriber({
   async analyze(request) {
     await ensureOffscreenDocument();
@@ -135,8 +166,17 @@ const transcriber = createTranscriber({
     return response.text;
   },
   getTranslator,
+  translatorVersion,
   getSeriesId: (tabId) => activation.getSeriesId(tabId),
   cache: indexedDbPageCache(),
+  notes: {
+    ...notesStore,
+    // 翻譯時套用 notes_changes 或人改了：side panel 的 Series Notes 區塊重新讀
+    async save(seriesId, notes) {
+      await notesStore.save(seriesId, notes);
+      notifyPanel({ type: 'notes:changed', seriesId });
+    },
+  },
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
     overlaySync.publish(tabId, pages);
@@ -151,8 +191,8 @@ const transcriber = createTranscriber({
 const overlayEnabled = new Map<number, boolean>();
 
 const overlaySync = createOverlaySync({
-  show({ tabId, anchorId, pageHash, text }) {
-    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, text, enabled: overlayEnabled.get(tabId) ?? true };
+  show({ tabId, anchorId, pageHash, subRect, text }) {
+    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, subRect, text, enabled: overlayEnabled.get(tabId) ?? true };
     chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });
@@ -163,8 +203,9 @@ if (__E2E__) {
   globalThis.__configureForTest = (config) => {
     pipelineConfig = config.pipeline;
     globalThis.__translateCalls = 0;
+    globalThis.__translateInputs = [];
     globalThis.__jobLog = [];
-    fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [] } : undefined;
+    fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [], notes: config.fakeNotes ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
   };
 }
@@ -175,6 +216,24 @@ function scan(tabId: number): void {
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
 }
 
+const backupRepo = indexedDbBackupRepo();
+const backup = createBackup({ repo: backupRepo, updateNotes: (seriesId, change) => transcriber.updateNotes(seriesId, change), now: () => Date.now() });
+
+async function notesResponse(tabId: number): Promise<NotesResponse> {
+  const seriesId = await activation.getSeriesId(tabId);
+  if (seriesId === undefined) return { seriesId, entries: [], suggestions: [] };
+  const notes = await notesStore.load(seriesId);
+  return { seriesId, entries: notes.entries, suggestions: pendingSuggestions(notes) };
+}
+
+/** side panel 改這個 tab 目前 Series 的 Notes（#38）。沒啟動就不動。action＋detail 記進 trace（#40 驗收）。 */
+async function changeNotes(tabId: number, action: string, detail: Record<string, unknown>, change: (notes: SeriesNotes) => SeriesNotes): Promise<void> {
+  const seriesId = await activation.getSeriesId(tabId);
+  if (seriesId === undefined) return;
+  await transcriber.updateNotes(seriesId, change);
+  trace(action, { tabId, seriesId, ...detail });
+}
+
 const seriesCatalog = createSeriesCatalog({ repo: indexedDbSeriesRepo(), now: () => new Date(), newId: () => crypto.randomUUID() });
 
 async function seriesResponse(tabId: number): Promise<SeriesResponse> {
@@ -183,10 +242,16 @@ async function seriesResponse(tabId: number): Promise<SeriesResponse> {
 }
 
 /** 這個 tab 的 Series 操作（#36）共用的部分：算出新的 Series ID、記下來、通知 panel。回傳新的 ID；沒變（或沒啟動）是 undefined。 */
-async function applySeriesChange(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<string | undefined> {
+async function applySeriesChange(
+  tabId: number,
+  action: string,
+  change: (url: string, current: string) => Promise<string>,
+): Promise<string | undefined> {
   const [url, current] = await Promise.all([chrome.tabs.get(tabId).then((t) => t.url), activation.getSeriesId(tabId)]);
   if (url === undefined || current === undefined) return undefined;
   const next = await change(url, current);
+  // 記住了哪個網址模式記在 series:remember，合併搬了什麼記在 series:merge
+  trace(action, { tabId, from: current, seriesId: next });
   await activation.setSeriesId(tabId, next);
   notifyPanel({ type: 'series:changed', tabId });
   return next === current ? undefined : next;
@@ -196,15 +261,15 @@ async function applySeriesChange(tabId: number, change: (url: string, current: s
  * 選一部（或新增）Series：換成另一個 ID 就重新擷取，快取查詢與翻譯改用新的 ID。
  * #34 的 transcriber 以 pageHash 記住看過的 Page；不先忘掉的話重新擷取會沿用舊 ID 的結果。
  */
-async function switchSeries(tabId: number, choose: (url: string) => Promise<string>): Promise<void> {
-  if ((await applySeriesChange(tabId, choose)) === undefined) return;
+async function switchSeries(tabId: number, action: string, choose: (url: string) => Promise<string>): Promise<void> {
+  if ((await applySeriesChange(tabId, action, choose)) === undefined) return;
   transcriber.resetPages(tabId);
   scan(tabId);
 }
 
 /** 改名（ID 不變）或合併（快取已改到目標 ID、不自動重翻）：不重新擷取，畫面上的 Page 改記在新的 ID 下。 */
-async function updateSeries(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<void> {
-  const next = await applySeriesChange(tabId, change);
+async function updateSeries(tabId: number, action: string, change: (url: string, current: string) => Promise<string>): Promise<void> {
+  const next = await applySeriesChange(tabId, action, change);
   if (next !== undefined) transcriber.reassignSeries(tabId, next);
 }
 
@@ -308,11 +373,68 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       void transcriber.setAutoTranslate(message.tabId, message.enabled);
       sendResponse();
       return false;
+    case 'panel:getOcclusion':
+      sendResponse({ occluded: occludedTabs.has(message.tabId) } satisfies OcclusionResponse);
+      return false;
     case 'panel:getPages':
       sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);
       return false;
     case 'panel:translate':
-      void transcriber.translate(message.tabId).finally(() => sendResponse());
+      void transcriber.translate(message.tabId, message.pageHash).finally(() => sendResponse());
+      return true;
+    case 'panel:getNotes':
+      notesResponse(message.tabId).then(sendResponse);
+      return true;
+    case 'panel:editNote': {
+      const { 原文, fields } = message;
+      changeNotes(message.tabId, 'panel:editNote', { 原文, fields }, (notes) => ({ ...notes, entries: editEntry(notes.entries, 原文, fields) })).then(() =>
+        sendResponse(),
+      );
+      return true;
+    }
+    case 'panel:acceptSuggestion':
+    case 'panel:ignoreSuggestion': {
+      const { suggestion } = message;
+      const apply = message.type === 'panel:acceptSuggestion' ? acceptSuggestion : ignoreSuggestion;
+      const { 原文, 建議譯文 } = suggestion;
+      changeNotes(message.tabId, message.type, { 原文, 建議譯文 }, (notes) => apply(notes, suggestion)).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:clearCache':
+      // 畫面上已經顯示的頁不動；之後翻回來就重新翻譯
+      activation
+        .getSeriesId(message.tabId)
+        .then(async (seriesId) => {
+          if (seriesId === undefined) return;
+          await backupRepo.clearTranslations(seriesId);
+          trace('panel:clearCache', { tabId: message.tabId, seriesId });
+        })
+        .then(() => sendResponse());
+      return true;
+    case 'panel:export':
+      backup
+        .exportAll()
+        .then((file) => {
+          // 筆數就夠核對；檔案內容（含真實頁面的原文、譯文）不進 trace
+          const counts = Object.fromEntries(BACKUP_KEYS.map((k) => [k, file[k].length]));
+          trace('panel:export', { format: file.format, counts, hasApiKeyPrefix: JSON.stringify(file).includes('sk-ant-') });
+          return file;
+        })
+        .then(sendResponse);
+      return true;
+    case 'panel:import':
+      backup
+        .importAll(message.data)
+        .then((seriesIds): ImportResponse => {
+          for (const seriesId of seriesIds) notifyPanel({ type: 'notes:changed', seriesId });
+          trace('panel:import', { ok: true, notesSeriesIds: seriesIds });
+          return { ok: true };
+        })
+        .catch((e: unknown): ImportResponse => {
+          trace('panel:import', { ok: false, error: e });
+          return { ok: false, error: e instanceof Error ? e.message : String(e) };
+        })
+        .then(sendResponse);
       return true;
     case 'panel:testConnection':
       ensureOffscreenDocument()
@@ -325,24 +447,26 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       return true;
     case 'panel:selectSeries': {
       const { seriesId } = message;
-      switchSeries(message.tabId, (url) => seriesCatalog.select(seriesId, url).then(() => seriesId)).then(() => sendResponse());
+      switchSeries(message.tabId, 'panel:selectSeries', (url) => seriesCatalog.select(seriesId, url).then(() => seriesId)).then(() => sendResponse());
       return true;
     }
     case 'panel:createSeries': {
       const { name } = message;
-      switchSeries(message.tabId, async (url) => (await seriesCatalog.create(name, url)).id).then(() => sendResponse());
+      switchSeries(message.tabId, 'panel:createSeries', async (url) => (await seriesCatalog.create(name, url)).id).then(() => sendResponse());
       return true;
     }
     case 'panel:renameSeries': {
       const { name } = message;
-      updateSeries(message.tabId, (url, current) => seriesCatalog.rename(current, name, url).then(() => current)).then(() => sendResponse());
+      updateSeries(message.tabId, 'panel:renameSeries', (url, current) => seriesCatalog.rename(current, name, url).then(() => current)).then(() =>
+        sendResponse(),
+      );
       return true;
     }
     case 'panel:mergeSeries': {
       const { targetId } = message;
       // 來源不是 Provisional Series（或目標不在）時 merge 不動，這個 tab 留在原本的 Series
-      updateSeries(message.tabId, async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current)).then(() =>
-        sendResponse(),
+      updateSeries(message.tabId, 'panel:mergeSeries', async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current)).then(
+        () => sendResponse(),
       );
       return true;
     }

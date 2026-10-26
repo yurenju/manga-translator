@@ -1,0 +1,134 @@
+/**
+ * 一個 Page 的翻譯與快取（spec #27 第 3、4.3 節）：送出 LLM 時帶 Notes 快照、回來後依送出順序套用 notes_changes
+ * （順序在 notes-ledger.ts）、翻譯成功才寫快取（#33）；查快取時判斷過時（#38）。
+ * 排程與每個 tab 的畫面狀態在 transcribe.ts。
+ */
+import type { PageView } from '../shared/messages.ts';
+import type { PageText, PageTranslation } from '../shared/page-text.ts';
+import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
+import { createTrace } from '../shared/trace.ts';
+import type { NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import type { NotesLedger, SnapshotGroup } from './notes-ledger.ts';
+
+export interface PageCache {
+  /** 同一個 Series 裡 hash 在門檻內最接近的一筆。 */
+  find(seriesId: string, pageHash: string): Promise<PageTranslation | undefined>;
+  save(translation: PageTranslation): Promise<void>;
+}
+
+export type Transcript = PageView['transcript'];
+
+export interface PageTranslationDeps {
+  cache: PageCache;
+  ledger: NotesLedger;
+  /** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 Translator 時 undefined，就不比版本。 */
+  translatorVersion?(): TranslatorVersion | undefined | Promise<TranslatorVersion | undefined>;
+}
+
+/** 要翻的一頁。 */
+export interface TranslateRequest {
+  /** 本機流水線的結果（kuromoji 讀音）；翻譯失敗時就顯示它。 */
+  text: PageText;
+  /** 沒有 API key 時 undefined。 */
+  translator: Translator | undefined;
+  /** 沒有 Series 時不帶 Notes、不套用、不寫快取。 */
+  seriesId: string | undefined;
+  pageHash: string;
+  /** 同一組的頁共用 Notes 快照。 */
+  group: SnapshotGroup;
+}
+
+const trace = createTrace('sw');
+
+function toTranslateInput(text: PageText, seriesNotes: NotesEntry[]): TranslateInput {
+  const items = [
+    ...text.balloons.map((b) => ({ order: b.order, item: { id: b.id, kind: 'balloon' as const, 原文: b.原文, orientation: b.orientation } })),
+    ...text.looseText.map((l) => ({ order: l.order, item: { id: l.id, kind: 'loose' as const, 原文: l.原文, orientation: l.orientation } })),
+  ];
+  return { seriesNotes, items: items.sort((a, b) => a.order - b.order).map((i) => i.item) };
+}
+
+function applyTranslation(text: PageText, output: TranslateOutput): PageText {
+  const byId = new Map(output.items.map((item) => [item.id, item]));
+  const merge = <T extends { id: string; 讀音: string; 讀音來源: 'llm' | 'kuromoji'; 譯文: string; unreadable: boolean }>(entry: T): T => {
+    const item = byId.get(entry.id);
+    return item ? { ...entry, 讀音: item.讀音, 讀音來源: 'llm', 譯文: item.譯文, unreadable: item.unreadable } : entry;
+  };
+  return { balloons: text.balloons.map(merge), looseText: text.looseText.map(merge) };
+}
+
+export function createPageTranslation({ cache, ledger, translatorVersion }: PageTranslationDeps) {
+  /** 翻譯一頁；只有翻譯成功才寫快取。 */
+  async function translate({ text, translator, seriesId, pageHash, group }: TranslateRequest): Promise<Transcript> {
+    if (!translator) return { state: 'done', text, translated: false };
+    // 送出的這一刻拿號碼牌：notes_changes 依送出順序套用
+    const turn = seriesId === undefined ? undefined : ledger.checkout(seriesId, group);
+    const seriesNotes = (await turn?.notes) ?? [];
+    let output: TranslateOutput;
+    const startedAt = Date.now();
+    try {
+      output = await translator.translatePage(toTranslateInput(text, seriesNotes));
+      trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage });
+    } catch (e) {
+      // 429／5xx 的重試在 Translator 裡（claude-translator.ts）；這裡是重試後仍失敗
+      console.warn('translate failed', e);
+      trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });
+      turn?.release();
+      return { state: 'done', text, translated: false, translateError: e instanceof Error ? e.message : String(e) };
+    }
+    const translated = applyTranslation(text, output);
+    const { model, latencyMs, usage } = output;
+    // 套用後的條目：這頁剛新增或補上譯文的也算這頁用到的
+    const notes = turn ? await turn.commit(output.notes_changes, { pageHash, balloonTexts: text.balloons.map((b) => b.原文) }) : seriesNotes;
+    if (seriesId !== undefined) {
+      // 過時提示（#38）拿它跟目前的版本比，所以兩個欄位都記送出時的版本（同一個來源）。API 回報的模型 ID 可能跟送出的
+      // 不同（例如帶日期），用它比對會讓每頁都過時；沒有版本資訊時才退回 API 回報的。
+      const version = await translatorVersion?.();
+      const entry: PageTranslation = {
+        ...translated,
+        seriesId,
+        pageHash,
+        usedNotes: usedNotes(notes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
+        model: version?.model ?? model,
+        promptVersion: version?.promptVersion ?? '',
+        usage,
+        latencyMs,
+        translatedAt: Date.now(),
+      };
+      // 寫不進去只是下次要重翻，這次的結果照樣顯示。
+      await cache.save(entry).catch((e: unknown) => console.warn('cache save failed', e));
+    }
+    return { state: 'done', text: translated, translated: true, translation: { source: 'translated', model, latencyMs, usage } };
+  }
+
+  /** 快取的這頁過時了沒（#38）。讀不到 Notes 就當沒過時：只是少一個提示。 */
+  async function staleOf(cached: PageTranslation): Promise<StaleReason | undefined> {
+    const [entries, version] = await Promise.all([ledger.list(cached.seriesId), translatorVersion?.()]);
+    return staleReason(cached, entries, version);
+  }
+
+  /** 查快取；命中就回傳要顯示的逐字稿（含過時提示）。 */
+  async function lookup(seriesId: string | undefined, pageHash: string): Promise<Transcript | undefined> {
+    if (seriesId === undefined) {
+      trace('cache:noSeries', { pageHash });
+      return undefined;
+    }
+    const cached = await cache.find(seriesId, pageHash).catch((e: unknown) => {
+      console.warn('cache lookup failed', e);
+      return undefined;
+    });
+    if (!cached) {
+      trace('cache:miss', { seriesId, pageHash });
+      return undefined;
+    }
+    const { balloons, looseText, model, latencyMs, usage } = cached;
+    const stale = await staleOf(cached);
+    trace('cache:hit', { seriesId, pageHash, cachedHash: cached.pageHash, stale });
+    // 命中快取時沒有本機流水線的結果（text），「翻譯此頁／重新翻譯」不會重翻這頁。
+    return { state: 'done', text: { balloons, looseText }, translated: true, translation: { source: 'cache', model, latencyMs, usage }, stale };
+  }
+
+  return { translate, lookup, staleOf };
+}
+
+export type PageTranslator = ReturnType<typeof createPageTranslation>;

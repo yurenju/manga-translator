@@ -2,6 +2,7 @@ import type { Message, PageCandidate, PageCandidatesResponse, Rect } from '../sh
 import { createTrace } from '../shared/trace.ts';
 import { createOverlay, HOST_ATTRIBUTE } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
+import { occludersOf } from './occlusion.ts';
 import { pageCandidateRejection } from './page-candidates.ts';
 import { watchPageTurns } from './page-turn.ts';
 
@@ -46,12 +47,24 @@ if (!globalThis.__mangaTranslator) {
     /** 除錯記錄用：夠大但不算候選的元素（太小的只算數量，圖示太多）。 */
     const rejected: { tag: string; rect: Rect; reason: string; clips: Rect[] }[] = [];
     let small = 0;
+    let occluded = 0;
     anchors.clear();
     for (const element of document.querySelectorAll('img, canvas')) {
-      const { x, y, width, height } = element.getBoundingClientRect();
+      const box = element.getBoundingClientRect();
+      const { x, y, width, height } = box;
       const rect = { x, y, width, height };
       const clips = clipRects(element);
-      const reason = pageCandidateRejection(rect, visible, clips);
+      let reason: string | undefined = pageCandidateRejection(rect, visible, clips);
+      // 被工具列之類蓋住的不算完整可見，等它收起再截（#55、ADR 0004）。工具列收起時也會再掃：
+      // 沒有任何 anchor 時 relatesToPage 一律回 true，工具列本身的變動（淡出後 display: none）就會觸發。
+      if (reason === undefined) {
+        const occluders = occludersOf(element, box, (el) => el.closest(`[${HOST_ATTRIBUTE}]`) !== null);
+        if (occluders.length > 0) {
+          reason = 'occluded';
+          occluded++;
+          if (__DEBUG__) trace('occluded', { tag: element.tagName.toLowerCase(), rect, occluders: occluders.slice(0, 5).map(describe) });
+        }
+      }
       if (reason === undefined) {
         const overlaid = overlay.shownPages(element);
         candidates.push({ anchorId: anchorIdOf(element), rect, ...(overlaid.length > 0 ? { overlaid } : {}) });
@@ -60,8 +73,14 @@ if (!globalThis.__mangaTranslator) {
       else if (__DEBUG__) rejected.push({ tag: element.tagName.toLowerCase(), rect, reason, clips });
     }
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    if (__DEBUG__) trace('candidates', { url: location.href, viewport, visible, dpr: devicePixelRatio, candidates, rejected, small });
-    return { viewport, candidates };
+    if (__DEBUG__) trace('candidates', { url: location.href, viewport, visible, dpr: devicePixelRatio, candidates, rejected, small, occluded });
+    return { viewport, candidates, ...(occluded > 0 ? { occluded } : {}) };
+  }
+
+  /** trace 用：tag#id.class。 */
+  function describe(element: Element): string {
+    const cls = typeof element.className === 'string' ? element.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
+    return `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${cls ? `.${cls}` : ''}`;
   }
 
   /** 會裁切內容的祖先（overflow 不是 visible）：翻頁式 viewer 的隔壁頁在它外面。 */
@@ -76,15 +95,27 @@ if (!globalThis.__mangaTranslator) {
     return clips;
   }
 
+  /**
+   * 送訊息給 SW；SW 停止或重新載入時送不到，忽略。外掛重新載入或更新後這個 content script 就斷線了
+   * （chrome.runtime.id 變 undefined），sendMessage 會同步丟錯、.catch 接不到 → 自己收掉（#40）。
+   */
+  function send(message: Message): Promise<unknown> {
+    if (!chrome.runtime?.id) {
+      stop();
+      return Promise.resolve();
+    }
+    return chrome.runtime.sendMessage(message).catch(() => {});
+  }
+
   const overlay = createOverlay({
     loadFont: createOverlayFontLoader(),
     // 頁面 hover → side panel 高亮那行（panel 用 sender.tab 分辨是哪個 tab）
     onHover(line) {
-      chrome.runtime.sendMessage({ type: 'content:hover', line } satisfies Message).catch(() => {});
+      void send({ type: 'content:hover', line });
     },
   });
 
-  // 翻頁訊號 → SW 截圖比對 hash（#34）。SW 停止或重新載入時送不到，忽略。
+  // 翻頁訊號 → SW 截圖比對 hash（#34）。
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
   const isOwn = (node: Node, attribute?: string) =>
     node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
@@ -97,7 +128,7 @@ if (!globalThis.__mangaTranslator) {
   const stopWatching = watchPageTurns({
     notify(reasons) {
       trace('pageTurn', { reasons });
-      chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
+      void send({ type: 'content:pageTurn' });
     },
     isOwn,
     relatesToPage,
@@ -117,8 +148,8 @@ if (!globalThis.__mangaTranslator) {
         overlay.setEnabled(message.enabled);
         if (anchor instanceof HTMLElement)
           overlay
-            .show(anchor, message.sub, message.text, message.pageHash)
-            .then(() => chrome.runtime.sendMessage({ type: 'content:overlayShown' } satisfies Message))
+            .show(anchor, message.subRect, message.text, message.pageHash)
+            .then(() => send({ type: 'content:overlayShown' }))
             .catch((e: unknown) => console.warn('overlay failed', e));
         else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });
         return false;
@@ -140,14 +171,20 @@ if (!globalThis.__mangaTranslator) {
         overlay.setEnabled(message.enabled);
         return false;
       case 'content:stop':
-        chrome.runtime.onMessage.removeListener(onMessage);
-        stopWatching();
-        overlay.clear();
-        anchors.clear();
-        globalThis.__mangaTranslator = undefined;
+        stop();
         return false;
     }
     return false;
   };
   chrome.runtime.onMessage.addListener(onMessage);
+
+  /** 停止後頁面要跟沒裝外掛時一樣（#40 驗收 I1）。 */
+  function stop() {
+    chrome.runtime.onMessage.removeListener(onMessage);
+    stopWatching();
+    overlay.clear();
+    anchors.clear();
+    globalThis.__mangaTranslator = undefined;
+    trace('content:stop', { overlaysLeft: document.querySelectorAll(`[${HOST_ATTRIBUTE}]`).length });
+  }
 }

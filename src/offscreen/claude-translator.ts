@@ -10,7 +10,7 @@ import type { NotesEntry, TranslateInput, TranslateOutput, Translator } from '..
 
 export const CLAUDE_MODEL = 'claude-haiku-5-5';
 /** 寫進快取判斷過時用（#33）；改 prompt 或 schema 就要改這個。 */
-export const PROMPT_VERSION = 'claude-text-v1';
+export const PROMPT_VERSION = 'claude-text-v2';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const API_VERSION = '2026-10-21';
@@ -68,7 +68,7 @@ const SYSTEM_TEXT = `你是日文漫畫翻譯助手，幫助讀者一邊看漫�
 閱讀順序已經由程式決定，請照輸入的順序回答，不要重排。
 
 另外請整理這部作品的 Series Notes 變更（notes_changes），用來讓之後的 Page 譯名一致：
-- added：這頁出現、但 Series Notes 裡還沒有的人名、地名、專有名詞或固定用語。ja 是原文，reading 是讀音，zh 是你這次用的譯名，category 例如「人名」「地名」「用語」。人名可以填 selfRef（自稱，例如 僕、俺）、tone（說話語氣）、address（怎麼稱呼別人）；不知道的欄位填空字串。
+- added：這頁出現、但 Series Notes 裡還沒有的人名、地名、專有名詞或固定用語。ja 是原文，reading 是讀音，zh 是你這次用的譯名，category 例如「人名」「地名」「用語」。人名可以填 selfRef（自稱，例如 僕、俺）、tone（說話語氣）、address（怎麼稱呼別人）；不知道的欄位填空字串。ja 要原樣出現在某個 balloon 的原文裡；只出現在 loose 的、或看起來是 OCR 誤讀的不要加。
 - filled：Series Notes 已有的條目，如果某個欄位是空的、而這頁讓你知道了答案，就補上；其他欄位填空字串。
 - suggestions：如果你認為 Series Notes 裡既有的譯名不對，不要直接改，提出建議譯名 zh 與理由 reason。
 - 一般情況下譯文要遵守 Series Notes 的譯名。沒有變更就回傳空陣列。不要記劇情進展。
@@ -112,11 +112,17 @@ const SCHEMA = obj({
   }),
 });
 
-/** Notes 原樣依傳入的順序序列化：每頁逐字相同，prompt cache 才會命中。 */
-function systemText(notes: NotesEntry[]): string {
-  if (notes.length === 0) return SYSTEM_TEXT;
+const CACHED = { cache_control: { type: 'ephemeral' } } as const;
+
+/**
+ * system 分兩段、各標 cache_control：固定的指示在前，Series Notes 在後。前一頁新增了條目時 Notes 那段會變，
+ * 指示那段仍逐字相同，第 2 頁起照樣吃得到快取（#37）。Notes 原樣依傳入的順序序列化。
+ */
+function systemBlocks(notes: NotesEntry[]) {
+  const blocks = [{ type: 'text', text: SYSTEM_TEXT, ...CACHED }];
+  if (notes.length === 0) return blocks;
   const entries = notes.map(({ seriesId: _seriesId, locked: _locked, ...entry }) => entry);
-  return `${SYSTEM_TEXT}\n\n以下是這部作品的 Series Notes，翻譯時請遵守：\n${JSON.stringify(entries)}`;
+  return [...blocks, { type: 'text', text: `以下是這部作品的 Series Notes，翻譯時請遵守：\n${JSON.stringify(entries)}`, ...CACHED }];
 }
 
 const HEADERS = (apiKey: string) => ({
@@ -220,7 +226,7 @@ export function createClaudeTranslator(deps: ClaudeDeps): Translator & { testCon
         {
           model: CLAUDE_MODEL,
           max_tokens: MAX_TOKENS,
-          system: [{ type: 'text', text: systemText(input.seriesNotes), cache_control: { type: 'ephemeral' } }],
+          system: systemBlocks(input.seriesNotes),
           messages: [
             {
               role: 'user',

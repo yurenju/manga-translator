@@ -1,6 +1,7 @@
 import type { PageText, RatioRect } from './page-text.ts';
+import type { EditableFields, NotesSuggestion, StaleReason, SuggestionRef } from './series-notes.ts';
 import type { SeriesOption } from './series.ts';
-import type { TranslateInput, TranslateOutput } from './translator.ts';
+import type { NotesChanges, NotesEntry, TranslateInput, TranslateOutput } from './translator.ts';
 
 /** onnxruntime-web 的執行環境。 */
 export type ExecutionProvider = 'webgpu' | 'wasm';
@@ -21,6 +22,10 @@ export type Message =
   | { type: 'panel:getPages'; tabId: number }
   /** SW → side panel：某個 tab 的 Page（縮圖＋逐字稿）更新了。 */
   | { type: 'pages:updated'; tabId: number; pages: PageView[] }
+  /** side panel → SW：這個 tab 的 Page 是不是被擋住了（#55）。回應 OcclusionResponse。 */
+  | { type: 'panel:getOcclusion'; tabId: number }
+  /** SW → side panel：畫面上沒有能截的 Page、只有被其他元素（工具列）擋住的，或擋住的東西收起了。 */
+  | { type: 'occlusion:changed'; tabId: number; occluded: boolean }
   /** SW → content script：量畫面上完整可見的 Page 候選。回應 PageCandidatesResponse。 */
   | { type: 'content:findPageCandidates' }
   /** SW → offscreen：依候選裁切截圖並做縮圖。回應 CropResponse。 */
@@ -31,8 +36,11 @@ export type Message =
   | { type: 'models:status'; status: ModelStatus }
   /** side panel → SW：目前的模型狀態。回應 ModelStatusResponse。 */
   | { type: 'panel:getModelStatus' }
-  /** side panel → SW：「翻譯此頁／重新翻譯」：用已經辨識好的原文重新呼叫 Translator。 */
-  | { type: 'panel:translate'; tabId: number }
+  /**
+   * side panel → SW：「翻譯此頁／重新翻譯」：用已經辨識好的原文重新呼叫 Translator。
+   * pageHash：只翻這一頁（過時提示的「重新翻譯」，#38）。
+   */
+  | { type: 'panel:translate'; tabId: number; pageHash?: string }
   /**
    * SW → offscreen：翻譯一個 Page。回應 TranslateResponse。
    * API key 不在訊息裡：offscreen 自己從 IndexedDB 讀（spec 第 5 節：key 永遠不經過 messaging）。
@@ -42,11 +50,11 @@ export type Message =
   | { type: 'panel:testConnection' }
   | { type: 'offscreen:testConnection' }
   /**
-   * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。sub＝Page 在 anchor 裡的範圍
-   * （沒給＝整個 anchor；Spread 在 #35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
+   * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。subRect＝Page 在 anchor 裡的範圍
+   * （沒給＝整個 anchor；Spread 的一頁或去掉黑邊，#35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
    * enabled＝side panel 的覆蓋開關。
    */
-  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; sub?: RatioRect; text: PageText; enabled: boolean }
+  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; subRect?: RatioRect; text: PageText; enabled: boolean }
   /** SW → content script：截圖前隱藏覆蓋層，等兩個 rAF（已重繪）才回應。 */
   | { type: 'content:hideOverlay' }
   /** SW → content script：截完還原覆蓋層。 */
@@ -77,6 +85,20 @@ export type Message =
   | { type: 'panel:mergeSeries'; tabId: number; targetId: string }
   /** SW → side panel：這個 tab 的 Series 或 Series 清單變了，重新 panel:getSeries。 */
   | { type: 'series:changed'; tabId: number }
+  /** side panel → SW：這個 tab 目前 Series 的 Notes 條目與要列出的建議修改（#38）。回應 NotesResponse。 */
+  | { type: 'panel:getNotes'; tabId: number }
+  /** side panel → SW：修正一個條目（之後 locked）。 */
+  | { type: 'panel:editNote'; tabId: number; 原文: string; fields: EditableFields }
+  /** side panel → SW：接受／忽略一個建議修改。 */
+  | { type: 'panel:acceptSuggestion' | 'panel:ignoreSuggestion'; tabId: number; suggestion: SuggestionRef }
+  /** side panel → SW：清除這個 tab 目前 Series 的翻譯快取。 */
+  | { type: 'panel:clearCache'; tabId: number }
+  /** SW → side panel：某部 Series 的 Notes 變了（人改的或翻譯時套用的），重新 panel:getNotes。 */
+  | { type: 'notes:changed'; seriesId: string }
+  /** side panel → SW：匯出全部 Series、網址模式、Notes、快取（不含 API key）。回應 BackupFile。 */
+  | { type: 'panel:export' }
+  /** side panel → SW：匯入匯出檔（合併，本機優先）。回應 ImportResponse。 */
+  | { type: 'panel:import'; data: unknown }
   /**
    * content script → side panel（runtime 廣播，panel 用 sender.tab 分辨）：滑鼠在頁面上的哪一句上；
    * null＝離開（#39）。
@@ -107,11 +129,14 @@ export interface TestConfig {
   requireApiKey?: boolean;
   /** FakeTranslator 把這些 ground truth 原文當成無法辨識（模擬 Claude 回 unreadable）。 */
   unreadableTexts?: string[];
+  /** FakeTranslator 在 Balloon 原文裡看到這些條目、而 Notes 還沒有時，回傳成新增的條目（#37）。 */
+  fakeNotes?: NotesChanges['added'];
 }
 
 /** e2e build 才有：offscreen 用 FakeTranslator 取代 Claude。 */
 export interface FakeTranslatorConfig {
   unreadableTexts: string[];
+  notes: NotesChanges['added'];
 }
 
 export type TranslateResponse = { output: TranslateOutput } | { error: string; noApiKey?: true };
@@ -122,12 +147,26 @@ export interface StatusResponse {
   active: boolean;
 }
 
+export interface OcclusionResponse {
+  occluded: boolean;
+}
+
 export interface SeriesResponse {
   /** 這個 tab 目前的 Series；沒啟動是 undefined。 */
   current: string | undefined;
   /** 已排好：最近用過的在最上面。 */
   options: SeriesOption[];
 }
+
+/** 沒啟動（沒有 Series）時 seriesId 是 undefined、列表是空的。 */
+export interface NotesResponse {
+  seriesId: string | undefined;
+  entries: NotesEntry[];
+  /** 已去重、沒忽略、跟目前譯文不同的建議修改。 */
+  suggestions: NotesSuggestion[];
+}
+
+export type ImportResponse = { ok: true } | { ok: false; error: string };
 
 export interface OverlayResponse {
   enabled: boolean;
@@ -150,6 +189,12 @@ export interface Size {
   height: number;
 }
 
+/** 哪個 anchor 上的哪一個 Page（Spread 的兩頁在同一個 anchor 上，要靠 pageHash 分）。 */
+export interface PageOnAnchor {
+  anchorId: string;
+  pageHash: string;
+}
+
 /** 一個 Page 候選。anchorId 對應 content script 記在記憶體裡的元素（anchor）。 */
 export interface PageCandidate {
   anchorId: string;
@@ -162,6 +207,8 @@ export interface PageCandidatesResponse {
   /** 量 rect 當下的 viewport（CSS px），裁切時用來換算截圖倍率。 */
   viewport: Size;
   candidates: PageCandidate[];
+  /** 夠大、在可視範圍裡，但被其他元素（閱讀器的工具列）擋住而不算候選的 img／canvas 數量（#55）；沒有時省略。 */
+  occluded?: number;
 }
 
 export interface CropRequest extends PageCandidatesResponse {
@@ -170,6 +217,8 @@ export interface CropRequest extends PageCandidatesResponse {
 }
 
 export interface PageThumb extends PageCandidate {
+  /** Page 在 anchor 裡的範圍（Spread 切開的一頁，或去掉黑邊）；整個 anchor 就是一個 Page 時省略。 */
+  subRect?: RatioRect;
   /** 裁切後縮小的 data URL。 */
   thumbnail: string;
   /** Page 的身分（shared/page-hash.ts），從全解析度的裁切算出來；翻譯快取的 key。 */
@@ -202,6 +251,8 @@ export interface PageView extends PageThumb {
         translating?: boolean;
         translation?: TranslationInfo;
         translateError?: string;
+        /** 快取的這頁過時了（#38）：只提示，按「重新翻譯」才重翻。 */
+        stale?: StaleReason;
       }
     | { state: 'error'; message: string };
 }
@@ -223,6 +274,8 @@ export interface AnalyzeRequest {
   screenshot: string;
   viewport: Size;
   candidate: PageCandidate;
+  /** Page 在候選裡的範圍（PageThumb.subRect）；省略＝整個候選。 */
+  subRect?: RatioRect;
   /** e2e build 才會帶。 */
   pipeline?: PipelineConfig;
 }

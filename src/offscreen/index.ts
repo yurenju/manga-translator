@@ -22,30 +22,44 @@ import type { PageText } from '../shared/page-text.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
-import { thumbnailSize, toImageRect } from './crop.ts';
+import { subImageRect, thumbnailSize, toImageRect, toSubRect } from './crop.ts';
 import { eraseLuminance } from './erase-color.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { createPageImage } from './page-image.ts';
+import { cropImage, splitSpread } from './spread.ts';
 
 const trace = createTrace('offscreen');
 
 /** side panel 縮圖的寬度（截圖像素）。 */
 const THUMBNAIL_WIDTH = 240;
 
+/**
+ * 每個候選去黑邊、Spread 切成兩頁（spread.ts），每頁各自縮圖、算 hash。回傳依閱讀順序：同一個候選的
+ * Spread 先右後左，side panel 與翻譯佇列都照這個順序。
+ */
 async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<PageThumb[]> {
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
-    return await Promise.all(
-      candidates.map(async (candidate) => {
-        const src = toImageRect(candidate.rect, viewport, bitmap);
-        const size = thumbnailSize(src, THUMBNAIL_WIDTH);
+    return candidates.flatMap((candidate) => {
+      const src = toImageRect(candidate.rect, viewport, bitmap);
+      const gray = grayOf(bitmap, src);
+      const pages = splitSpread(gray);
+      if (pages.length === 0) trace('spread:unsplittable', { anchorId: candidate.anchorId, rect: candidate.rect });
+      return pages.map((page): PageThumb => {
+        const whole = page.width === src.width && page.height === src.height;
+        const size = thumbnailSize(page, THUMBNAIL_WIDTH);
         const thumbnail = pngDataUrl(size, (ctx) => {
           ctx.imageSmoothingQuality = 'high';
-          ctx.drawImage(bitmap, src.x, src.y, src.width, src.height, 0, 0, size.width, size.height);
+          ctx.drawImage(bitmap, src.x + page.x, src.y + page.y, page.width, page.height, 0, 0, size.width, size.height);
         });
-        return { ...candidate, thumbnail, pageHash: pageHash(grayOf(bitmap, src)) };
-      }),
-    );
+        return {
+          ...candidate,
+          ...(whole ? {} : { subRect: toSubRect(page, src) }),
+          thumbnail,
+          pageHash: pageHash(cropImage(gray, page)),
+        };
+      });
+    });
   } finally {
     bitmap.close();
   }
@@ -88,19 +102,21 @@ const pipeline = createLocalPipeline({
 });
 
 /**
- * 從截圖裁出全解析度的 Page 跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
+ * 從截圖裁出全解析度的 Page（Spread 的一頁用 subRect）跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
  * （原地覆蓋用，Jump+ 是 tainted canvas，content script 讀不到像素）。
  */
-async function analyze({ screenshot, viewport, candidate, pipeline: config }: AnalyzeRequest): Promise<PageText> {
+async function analyze({ screenshot, viewport, candidate, subRect, pipeline: config }: AnalyzeRequest): Promise<PageText> {
   if (__E2E__ && config) pipeline.configure(config);
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
-    const rect = toImageRect(candidate.rect, viewport, bitmap);
+    const candidateRect = toImageRect(candidate.rect, viewport, bitmap);
+    const rect = subRect ? subImageRect(candidateRect, subRect) : candidateRect;
     const startedAt = performance.now();
     const text = await pipeline.analyze(bitmap, rect);
     if (__DEBUG__) {
       trace('analyze', {
         anchorId: candidate.anchorId,
+        subRect,
         imageRect: rect,
         ms: Math.round(performance.now() - startedAt),
         balloons: text.balloons.map(({ id, order, orientation, 原文, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, balloonBbox, textBbox })),

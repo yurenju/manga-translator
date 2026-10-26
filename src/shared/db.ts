@@ -43,6 +43,17 @@ export function storeRequest<T>(
   );
 }
 
+/** 在幾個 store 上開一個讀寫 transaction，write 排好所有 request；transaction 完成時 resolve，中途失敗就整個不算。 */
+export async function writeTransaction(db: Promise<IDBDatabase>, stores: string | string[], write: (tx: IDBTransaction) => void): Promise<void> {
+  const conn = await db;
+  await new Promise<void>((resolve, reject) => {
+    const tx = conn.transaction(stores, 'readwrite');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    write(tx);
+  });
+}
+
 export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);

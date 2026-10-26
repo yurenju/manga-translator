@@ -1,7 +1,10 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
+import type { StaleReason } from '../shared/series-notes.ts';
+import type { BackupFile } from '../background/backup.ts';
 import type {
+  ImportResponse,
   LineRef,
   Message,
   ModelStatus,
@@ -11,10 +14,12 @@ import type {
   PagesResponse,
   PageView,
   SeriesResponse,
+  OcclusionResponse,
   StatusResponse,
   TestConnectionResponse,
   TranslationInfo,
 } from '../shared/messages.ts';
+import { SeriesNotesSection } from './series-notes.tsx';
 import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
 
 /**
@@ -74,7 +79,36 @@ interface LearningProps {
   onLineHover: (line: LineRef | null) => void;
 }
 
-function PageItem({ page, index, onRetry, learning }: { page: PageView; index: number; onRetry: () => void; learning: LearningProps }) {
+const STALE_TEXT: Record<StaleReason, string> = {
+  notes: 'Series Notes 已更新，這頁是用舊筆記翻的',
+  version: '翻譯模型或 prompt 已更新，這頁是用舊版翻的',
+};
+
+/** 過時只提示、不自動重翻（spec #27 第 4.3 節）；按「重新翻譯」只重翻這一頁。 */
+function StaleHint({ reason, onRetranslate }: { reason: StaleReason; onRetranslate: () => void }) {
+  return (
+    <div role="group" aria-label="過時提示" class="stale">
+      <span>{STALE_TEXT[reason]}</span>
+      <button type="button" onClick={onRetranslate}>
+        重新翻譯
+      </button>
+    </div>
+  );
+}
+
+function PageItem({
+  page,
+  index,
+  onRetry,
+  onRetranslate,
+  learning,
+}: {
+  page: PageView;
+  index: number;
+  onRetry: () => void;
+  onRetranslate: () => void;
+  learning: LearningProps;
+}) {
   const { transcript } = page;
   const { level, hovered, onLineHover } = learning;
   return (
@@ -85,6 +119,9 @@ function PageItem({ page, index, onRetry, learning }: { page: PageView; index: n
       {transcript.state === 'error' && <p class="error">辨識失敗：{transcript.message}</p>}
       {transcript.state === 'done' && transcript.translation && !transcript.translating && !transcript.translateError && (
         <TranslationStatusLine status={transcript.translation} />
+      )}
+      {transcript.state === 'done' && transcript.stale && !transcript.translating && (
+        <StaleHint reason={transcript.stale} onRetranslate={onRetranslate} />
       )}
       {transcript.state === 'done' && transcript.translating && <p>翻譯中…</p>}
       {transcript.state === 'done' && transcript.translateError && (
@@ -109,6 +146,57 @@ function PageItem({ page, index, onRetry, learning }: { page: PageView; index: n
 }
 
 const apiKeys = indexedDbApiKeyStore();
+
+/**
+ * 匯出／匯入 JSON（#38）：全部 Series、網址模式、Series Notes、翻譯快取，給兩台電腦之間搬資料；不含 API key。
+ * 匯入是合併、本機優先。
+ */
+function Backup() {
+  const [result, setResult] = useState<string | undefined>(undefined);
+
+  async function exportFile() {
+    const data = await send<BackupFile>({ type: 'panel:export' });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `manga-translator-${new Date(data.exportedAt).toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importFile(file: File) {
+    let data: unknown;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      setResult('匯入失敗：不是 JSON 檔');
+      return;
+    }
+    const r = await send<ImportResponse>({ type: 'panel:import', data });
+    setResult(r.ok ? '匯入完成' : `匯入失敗：${r.error}`);
+  }
+
+  return (
+    <div class="backup">
+      <button type="button" onClick={() => void exportFile()}>
+        匯出 JSON
+      </button>
+      <label>
+        匯入 JSON
+        <input
+          type="file"
+          accept="application/json,.json"
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            if (file) void importFile(file);
+            e.currentTarget.value = '';
+          }}
+        />
+      </label>
+      {result && <p role="status">{result}</p>}
+    </div>
+  );
+}
 
 /**
  * 設定區（spec #27 第 5 節）：API key 存在外掛 origin 的 IndexedDB，只顯示末四碼。
@@ -189,6 +277,7 @@ function Settings({ onKeyChanged }: { onKeyChanged: (hasKey: boolean) => void })
             </form>
           )}
           {connection && <p class="connection">{connection}</p>}
+          <Backup />
           <p class="hint">
             建議在 Anthropic Console 為這個外掛建立專用的 API key，並為它的 workspace 設定花費上限。key 只存在這台電腦的外掛裡，不會交給網頁，也不會出現在匯出檔。
           </p>
@@ -207,12 +296,14 @@ function StatusText({ pages }: { pages: PageView[] }) {
   if (done.some((t) => t.translating)) return <span>翻譯中…</span>;
   const infos = done.flatMap((t) => (t.translated && t.translation ? [t.translation] : []));
   if (infos.length === 0) return null;
+  // 這頁的提示在逐字稿上方；狀態列只說有更新（#38）
+  const notesUpdated = done.some((t) => t.stale === 'notes');
   const models = [...new Set(infos.map((i) => i.model))].join('、');
   const latency = infos.reduce((sum, i) => sum + i.latencyMs, 0);
   const cost = infos.reduce((sum, i) => sum + i.usage.costUsd, 0);
   return (
     <span>
-      已翻譯 {infos.length} 頁 · {models} · {seconds(latency)} · {dollars(cost)}
+      {notesUpdated && 'Series Notes 已更新 · '}已翻譯 {infos.length} 頁 · {models} · {seconds(latency)} · {dollars(cost)}
     </span>
   );
 }
@@ -366,6 +457,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [hasKey, setHasKey] = useState(true);
   const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
   const [hovered, setHovered] = useState<LearningProps['hovered']>(undefined);
+  const [occluded, setOccluded] = useState(false);
 
   useEffect(() => {
     if (tabId === undefined) return;
@@ -374,11 +466,13 @@ function App({ tabId }: { tabId: number | undefined }) {
         setHovered(message.line ?? undefined);
       if (message.type === 'status:changed' && message.tabId === tabId) setActive(message.active);
       if (message.type === 'pages:updated' && message.tabId === tabId) setPages(message.pages);
+      if (message.type === 'occlusion:changed' && message.tabId === tabId) setOccluded(message.occluded);
       if (message.type === 'models:status') setModelStatus(message.status);
     };
     chrome.runtime.onMessage.addListener(onMessage);
     void send<StatusResponse>({ type: 'panel:getStatus', tabId }).then((r) => setActive(r.active));
     void send<PagesResponse>({ type: 'panel:getPages', tabId }).then((r) => setPages(r.pages));
+    void send<OcclusionResponse>({ type: 'panel:getOcclusion', tabId }).then((r) => setOccluded(r.occluded));
     void send<ModelStatusResponse>({ type: 'panel:getModelStatus' }).then((r) => setModelStatus(r.status));
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, [tabId]);
@@ -418,13 +512,23 @@ function App({ tabId }: { tabId: number | undefined }) {
         <OverlayToggle tabId={tabId} />
         <AutoTranslateToggle tabId={tabId} />
         {settings}
+        <SeriesNotesSection tabId={tabId} />
         <ModelStatusLine status={modelStatus} onRetry={scan} />
+        {/* 工具列之類蓋住了 Page（#55）：不截，等使用者收起；各家閱讀器收起的方式不同，不寫死操作 */}
+        {occluded && <p class="hint">頁面被其他東西擋住（例如閱讀器的工具列），收起後才會翻譯。</p>}
         {untranslated && !hasKey && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</p>}
         {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
         <ul aria-label="Page">
           {pages.map((page, i) => (
             // 同一個 anchor 可能有兩個 Page（Spread），key 要帶 Page 身分
-            <PageItem key={`${page.anchorId}/${page.pageHash}`} page={page} index={i} onRetry={translate} learning={learning} />
+            <PageItem
+              key={`${page.anchorId}/${page.pageHash}`}
+              page={page}
+              index={i}
+              onRetry={translate}
+              onRetranslate={() => void send({ type: 'panel:translate', tabId, pageHash: page.pageHash })}
+              learning={learning}
+            />
           ))}
         </ul>
       </main>
