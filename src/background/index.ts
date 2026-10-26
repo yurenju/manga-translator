@@ -172,22 +172,30 @@ async function seriesResponse(tabId: number): Promise<SeriesResponse> {
   return { current, options };
 }
 
-/**
- * side panel 的 Series 操作（#36）。rescan：切換到另一部 Series 時重新擷取，快取查詢與翻譯改用新的 ID；
- * 改名（ID 不變）與合併（不自動重翻）不重新擷取。
- */
-async function changeSeries(tabId: number, change: (url: string, current: string) => Promise<string>, rescan: boolean): Promise<void> {
+/** 這個 tab 的 Series 操作（#36）共用的部分：算出新的 Series ID、記下來、通知 panel。回傳新的 ID；沒變（或沒啟動）是 undefined。 */
+async function applySeriesChange(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<string | undefined> {
   const [url, current] = await Promise.all([chrome.tabs.get(tabId).then((t) => t.url), activation.getSeriesId(tabId)]);
-  if (url === undefined || current === undefined) return;
+  if (url === undefined || current === undefined) return undefined;
   const next = await change(url, current);
   await activation.setSeriesId(tabId, next);
   notifyPanel({ type: 'series:changed', tabId });
-  if (next === current) return;
-  if (rescan) {
-    // #34 的 transcriber 以 pageHash 記住看過的 Page；不忘掉的話重新擷取會沿用舊 ID 的結果
-    transcriber.resetPages(tabId);
-    scan(tabId);
-  } else transcriber.reassignSeries(tabId, next);
+  return next === current ? undefined : next;
+}
+
+/**
+ * 選一部（或新增）Series：換成另一個 ID 就重新擷取，快取查詢與翻譯改用新的 ID。
+ * #34 的 transcriber 以 pageHash 記住看過的 Page；不先忘掉的話重新擷取會沿用舊 ID 的結果。
+ */
+async function switchSeries(tabId: number, choose: (url: string) => Promise<string>): Promise<void> {
+  if ((await applySeriesChange(tabId, choose)) === undefined) return;
+  transcriber.resetPages(tabId);
+  scan(tabId);
+}
+
+/** 改名（ID 不變）或合併（快取已改到目標 ID、不自動重翻）：不重新擷取，畫面上的 Page 改記在新的 ID 下。 */
+async function updateSeries(tabId: number, change: (url: string, current: string) => Promise<string>): Promise<void> {
+  const next = await applySeriesChange(tabId, change);
+  if (next !== undefined) transcriber.reassignSeries(tabId, next);
 }
 
 const activation = createActivation({
@@ -298,23 +306,23 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       return true;
     case 'panel:selectSeries': {
       const { seriesId } = message;
-      changeSeries(message.tabId, (url) => seriesCatalog.select(seriesId, url).then(() => seriesId), true).then(() => sendResponse());
+      switchSeries(message.tabId, (url) => seriesCatalog.select(seriesId, url).then(() => seriesId)).then(() => sendResponse());
       return true;
     }
     case 'panel:createSeries': {
       const { name } = message;
-      changeSeries(message.tabId, async (url) => (await seriesCatalog.create(name, url)).id, true).then(() => sendResponse());
+      switchSeries(message.tabId, async (url) => (await seriesCatalog.create(name, url)).id).then(() => sendResponse());
       return true;
     }
     case 'panel:renameSeries': {
       const { name } = message;
-      changeSeries(message.tabId, (url, current) => seriesCatalog.rename(current, name, url).then(() => current), false).then(() => sendResponse());
+      updateSeries(message.tabId, (url, current) => seriesCatalog.rename(current, name, url).then(() => current)).then(() => sendResponse());
       return true;
     }
     case 'panel:mergeSeries': {
       const { targetId } = message;
       // 來源不是 Provisional Series（或目標不在）時 merge 不動，這個 tab 留在原本的 Series
-      changeSeries(message.tabId, async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current), false).then(() =>
+      updateSeries(message.tabId, async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current)).then(() =>
         sendResponse(),
       );
       return true;
