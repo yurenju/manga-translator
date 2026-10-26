@@ -6,6 +6,7 @@
  * pinch-zoom（visualViewport）還沒處理。
  */
 import type { Rect, Size } from '../shared/messages.ts';
+import type { RatioRect } from '../shared/page-text.ts';
 
 /** CSS rect → 截圖上的整數像素 rect，夾在截圖範圍內。 */
 export function toImageRect(rect: Rect, viewport: Size, image: Size): Rect {
@@ -24,4 +25,18 @@ export function toImageRect(rect: Rect, viewport: Size, image: Size): Rect {
 export function thumbnailSize(size: Size, maxWidth: number): Size {
   if (size.width <= maxWidth) return size;
   return { width: maxWidth, height: Math.round((size.height * maxWidth) / size.width) };
+}
+
+/** 切頁結果（候選裁切裡的像素）→ 相對候選（anchor）的比例座標，覆蓋層與本機流水線共用。 */
+export function toSubRect(page: Rect, candidate: Size): RatioRect {
+  return { x: page.x / candidate.width, y: page.y / candidate.height, w: page.width / candidate.width, h: page.height / candidate.height };
+}
+
+/** 候選在截圖上的像素 rect 裡，sub 那一塊的像素 rect（各邊四捨五入，跟切頁時的整數像素一致）。 */
+export function subImageRect(candidate: Rect, sub: RatioRect): Rect {
+  const left = Math.round(sub.x * candidate.width);
+  const top = Math.round(sub.y * candidate.height);
+  const right = Math.round((sub.x + sub.w) * candidate.width);
+  const bottom = Math.round((sub.y + sub.h) * candidate.height);
+  return { x: candidate.x + left, y: candidate.y + top, width: right - left, height: bottom - top };
 }

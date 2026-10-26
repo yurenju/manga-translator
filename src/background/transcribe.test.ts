@@ -686,3 +686,57 @@ describe('自動翻譯開關', () => {
     expect(transcriber.isAutoTranslate(1)).toBe(true);
   });
 });
+
+describe('Spread（#35）', () => {
+  const RIGHT = { x: 0.5, y: 0, w: 0.5, h: 1 };
+  const LEFT = { x: 0, y: 0, w: 0.5, h: 1 };
+  /** 同一個 anchor 切出來的兩個 Page，依閱讀順序先右後左。 */
+  const spread = (): PageThumb[] => [
+    { ...thumb('a1', HASHES.a1), sub: RIGHT },
+    { ...thumb('a1', HASHES.a2), sub: LEFT },
+  ];
+
+  it('兩個 Page 各自帶 subRect 給本機流水線（同一個 anchor）', async () => {
+    const { transcriber, deps } = setup();
+
+    await transcriber.update(1, spread(), capture);
+
+    expect(vi.mocked(deps.analyze).mock.calls.map(([request]) => [request.candidate.anchorId, request.sub])).toEqual([
+      ['a1', RIGHT],
+      ['a1', LEFT],
+    ]);
+  });
+
+  it('右頁先送出 LLM，即使左頁的快取查詢先回來', async () => {
+    const calls: TranslateInput[] = [];
+    const cache = memoryCache();
+    let releaseRight!: () => void;
+    const rightLookup = new Promise<void>((resolve) => (releaseRight = resolve));
+    const { transcriber } = setup({
+      cache: {
+        ...cache,
+        async find(seriesId, pageHash) {
+          if (pageHash === HASHES.a1) await rightLookup;
+          return cache.find(seriesId, pageHash);
+        },
+      },
+      // 原文標上是哪一頁，看送出 LLM 的順序
+      analyze: async (request) => {
+        const text = structuredClone(pageText);
+        text.balloons[0]!.原文 = request.sub === RIGHT ? '右' : '左';
+        return text;
+      },
+      getTranslator: () => {
+        const translator = translatorReturning('譯');
+        return { translatePage: (input) => (calls.push(input), translator.translatePage(input)) };
+      },
+    });
+
+    const running = transcriber.update(1, spread(), capture);
+    await flush();
+    releaseRight();
+    await running;
+
+    expect(calls.map((input) => input.items[0]!.原文)).toEqual(['右', '左']);
+  });
+});

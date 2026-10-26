@@ -156,7 +156,9 @@ export function createScanner(deps: ScannerDeps) {
       const page = shownPage(c);
       // 已經記過同一頁（例如翻回來命中快取、覆蓋層重畫）就不必再截
       if (page === undefined || recorded?.get(c.anchorId)?.pageHash === page) return false;
-      return seen.some((p) => p.anchorId === c.anchorId && findSamePage([p], page));
+      // 樣子以 anchor 為單位記；切成兩頁的 Spread 分不出截到的是哪一頁，不記（截圖時照舊藏覆蓋層）
+      const onAnchor = seen.filter((p) => p.anchorId === c.anchorId);
+      return onAnchor.length === 1 && findSamePage(onAnchor, page) !== undefined;
     });
     if (shown.length === 0) return;
     const windowId = await deps.getVisibleWindowId(tabId);

@@ -4,7 +4,8 @@
  * 每個 anchor 後面插一個 shadow host 當兄弟節點（position:absolute、pointer-events:none），同一個 anchor 上的
  * 多個 Page（Spread 的 subRect）共用一個 host、各自一個 Page 層。Page 層用 Page 原始像素排版，整層
  * translate＋scale 對到 anchor 的 offset*×subRect，捲動、祖先 transform、overflow 裁切都由瀏覽器自然套用。
- * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛。
+ * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛；
+ * img 換了 src（Kindle 翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
  */
 import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
@@ -127,10 +128,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       if (entry) place(entry);
     }
   });
-  const mutationObserver = new MutationObserver(() => {
+  const mutationObserver = new MutationObserver((records) => {
+    // img 換了 src（Kindle 翻頁、視窗大小變了重新產生合成圖）：上面已經不是那些 Page，舊覆蓋先拿掉，
+    // 等 SW 重新擷取後送新的（同一頁就從記住的結果重送，overlay-sync.ts）
+    for (const record of records) {
+      const entry = record.type === 'attributes' ? entries.get(record.target as HTMLElement) : undefined;
+      if (entry && entry.layers.size > 0) removeLayers(entry, 'anchor 的 src 換了');
+    }
     for (const entry of entries.values()) reattach(entry);
   });
-  mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
+  mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
   const onResize = () => entries.forEach(place);
   window.addEventListener('resize', onResize);
   /** 滑鼠目前在哪一句上（頁面 hover）。 */
@@ -172,6 +179,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     trace('overlay:reattach', { pageHashes: pageHashes(), reason: entry.host.isConnected ? 'host 被移到別處' : 'host 被移除' });
     attach(entry);
     place(entry);
+  }
+
+  function removeLayers(entry: Entry, reason: string): void {
+    trace('overlay:removeLayers', { pageHashes: [...entry.layers.values()].map((layer) => layer.pageHash), reason });
+    if (hovered && [...entry.layers.values()].includes(hovered.layer)) setHovered(undefined);
+    for (const layer of entry.layers.values()) layer.element.remove();
+    entry.layers.clear();
   }
 
   function place(entry: Entry): void {

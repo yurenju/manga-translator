@@ -25,8 +25,8 @@ export interface PageCache {
   save(translation: PageTranslation): Promise<void>;
 }
 
-/** 給 e2e 量排程用：enqueue＝排進本機段、start＝本機段開始、drop＝沒開始就丟掉、done＝做完（含 LLM）。 */
-export type JobEventKind = 'enqueue' | 'start' | 'drop' | 'done';
+/** 給 e2e 量排程用：enqueue＝排進本機段、start＝本機段開始、drop＝沒開始就丟掉、llm＝送出 LLM、done＝做完（含 LLM）。 */
+export type JobEventKind = 'enqueue' | 'start' | 'drop' | 'llm' | 'done';
 
 export interface JobEvent {
   tabId: number;
@@ -242,6 +242,7 @@ export function createTranscriber(deps: TranscriberDeps) {
 
   async function runLlm(job: Job): Promise<void> {
     const { record } = job;
+    report(job, 'llm');
     complete(job, await translateText(record.text!, job.translator, deps.cache, { seriesId: record.seriesId, pageHash: record.pageHash }));
   }
 
@@ -290,7 +291,12 @@ export function createTranscriber(deps: TranscriberDeps) {
       const record: PageRecord = {
         pageHash: page.pageHash,
         seriesId: undefined,
-        request: { screenshot: capture!.screenshot, viewport: capture!.viewport, candidate: { anchorId: page.anchorId, rect: page.rect } },
+        request: {
+          screenshot: capture!.screenshot,
+          viewport: capture!.viewport,
+          candidate: { anchorId: page.anchorId, rect: page.rect },
+          ...(page.sub ? { sub: page.sub } : {}),
+        },
         transcript: { state: 'analyzing' },
         settled: Promise.resolve(),
       };
@@ -302,22 +308,24 @@ export function createTranscriber(deps: TranscriberDeps) {
     publish(tab);
 
     const seriesId = await deps.getSeriesId(tabId);
-    await Promise.all(
-      newPages.map(async ({ record, index }) => {
-        record.seriesId = seriesId;
-        // 查快取期間佔住這頁，同一頁又出現時不會重複排
-        const job = newJob(tab, record, batch, index);
-        const cached = await lookupCache(seriesId, record.pageHash);
-        if (!isCurrent(tab)) return finish(job, undefined);
-        if (cached) return finish(job, cached);
-        if (!isVisible(tab, record)) {
-          tab.records = tab.records.filter((r) => r !== record);
-          return finish(job, undefined);
-        }
-        if (autoTranslate.get(tabId) === false) return finish(job, { state: 'pending' });
-        enqueueLocal(job);
-      }),
-    );
+    // 查快取期間佔住這頁，同一頁又出現時不會重複排
+    const jobs = newPages.map(({ record, index }) => {
+      record.seriesId = seriesId;
+      return newJob(tab, record, batch, index);
+    });
+    const lookups = await Promise.all(jobs.map((job) => lookupCache(seriesId, job.record.pageHash)));
+    // 快取都查完才依閱讀順序排：佇列一有工作就開始跑，Spread 的左頁先查完也不能比右頁先送出 LLM（spec 第 3.4 節）
+    for (const [i, job] of jobs.entries()) {
+      const { record } = job;
+      const cached = lookups[i];
+      if (!isCurrent(tab)) finish(job, undefined);
+      else if (cached) finish(job, cached);
+      else if (!isVisible(tab, record)) {
+        tab.records = tab.records.filter((r) => r !== record);
+        finish(job, undefined);
+      } else if (autoTranslate.get(tabId) === false) finish(job, { state: 'pending' });
+      else enqueueLocal(job);
+    }
     await Promise.all([...visibleRecords].map((r) => r.settled));
   }
 
