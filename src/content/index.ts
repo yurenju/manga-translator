@@ -1,7 +1,8 @@
-import type { Message, PageCandidate, PageCandidatesResponse } from '../shared/messages.ts';
-import { createOverlay } from './overlay.ts';
+import type { Message, PageCandidate, PageCandidatesResponse, Rect } from '../shared/messages.ts';
+import { createOverlay, HOST_ATTRIBUTE } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
 import { isPageCandidate } from './page-candidates.ts';
+import { watchPageTurns } from './page-turn.ts';
 
 /**
  * 由 SW 以 scripting.executeScript 動態注入（沒有靜態 content_scripts）。
@@ -44,12 +45,32 @@ if (!globalThis.__mangaTranslator) {
     for (const element of document.querySelectorAll('img, canvas')) {
       const { x, y, width, height } = element.getBoundingClientRect();
       const rect = { x, y, width, height };
-      if (isPageCandidate(rect, visible)) candidates.push({ anchorId: anchorIdOf(element), rect });
+      if (isPageCandidate(rect, visible, clipRects(element))) candidates.push({ anchorId: anchorIdOf(element), rect });
     }
     return { viewport: { width: window.innerWidth, height: window.innerHeight }, candidates };
   }
 
+  /** 會裁切內容的祖先（overflow 不是 visible）：翻頁式 viewer 的隔壁頁在它外面。 */
+  function clipRects(element: Element): Rect[] {
+    const clips: Rect[] = [];
+    for (let el = element.parentElement; el && el !== document.documentElement && el !== document.body; el = el.parentElement) {
+      const style = getComputedStyle(el);
+      if (style.overflowX === 'visible' && style.overflowY === 'visible') continue;
+      const { x, y, width, height } = el.getBoundingClientRect();
+      clips.push({ x, y, width, height });
+    }
+    return clips;
+  }
+
   const overlay = createOverlay({ loadFont: createOverlayFontLoader() });
+
+  // 翻頁訊號 → SW 截圖比對 hash（#34）。SW 停止或重新載入時送不到，忽略。
+  // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
+  const isOwn = (node: Node, attribute?: string) =>
+    node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
+  const stopWatching = watchPageTurns(() => {
+    chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
+  }, isOwn);
 
   const onMessage = (message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void): boolean => {
     switch (message.type) {
@@ -77,6 +98,7 @@ if (!globalThis.__mangaTranslator) {
         return false;
       case 'content:stop':
         chrome.runtime.onMessage.removeListener(onMessage);
+        stopWatching();
         overlay.clear();
         anchors.clear();
         globalThis.__mangaTranslator = undefined;

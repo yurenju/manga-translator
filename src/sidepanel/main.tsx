@@ -5,6 +5,7 @@ import type {
   Message,
   ModelStatus,
   ModelStatusResponse,
+  AutoTranslateResponse,
   OverlayResponse,
   PagesResponse,
   PageView,
@@ -95,19 +96,25 @@ function TranslationStatusLine({ status }: { status: TranslationInfo }) {
   );
 }
 
-function PageItem({ page, index }: { page: PageView; index: number }) {
+function PageItem({ page, index, onRetry }: { page: PageView; index: number; onRetry: () => void }) {
   const { transcript } = page;
   return (
     <li>
       <img src={page.thumbnail} alt={`Page ${index + 1}`} />
       {transcript.state === 'analyzing' && <p>辨識中…</p>}
+      {transcript.state === 'pending' && <p class="hint">未翻譯（自動翻譯已關閉，按「翻譯此頁」）</p>}
       {transcript.state === 'error' && <p class="error">辨識失敗：{transcript.message}</p>}
       {transcript.state === 'done' && transcript.translation && !transcript.translating && !transcript.translateError && (
         <TranslationStatusLine status={transcript.translation} />
       )}
       {transcript.state === 'done' && transcript.translating && <p>翻譯中…</p>}
       {transcript.state === 'done' && transcript.translateError && (
-        <p class="error">翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
+        <div role="alert">
+          <p class="error">翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
+          <button type="button" onClick={onRetry}>
+            重試
+          </button>
+        </div>
       )}
       {transcript.state === 'done' && <Transcript text={transcript.text} translated={transcript.translated} />}
     </li>
@@ -241,6 +248,24 @@ function OverlayToggle({ tabId }: { tabId: number }) {
   );
 }
 
+/** 自動翻譯開關（spec #27 第 3.4、8 節；預設開）；關掉後翻頁只顯示快取，其他要按「翻譯此頁」。 */
+function AutoTranslateToggle({ tabId }: { tabId: number }) {
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => {
+    void send<AutoTranslateResponse>({ type: 'panel:getAutoTranslate', tabId }).then((r) => setEnabled(r.enabled));
+  }, [tabId]);
+  const toggle = (value: boolean) => {
+    setEnabled(value);
+    void send({ type: 'panel:setAutoTranslate', tabId, enabled: value });
+  };
+  return (
+    <label>
+      <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.currentTarget.checked)} />
+      自動翻譯
+    </label>
+  );
+}
+
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
   const [active, setActive] = useState<boolean | undefined>(tabId === undefined ? false : undefined);
@@ -273,7 +298,8 @@ function App({ tabId }: { tabId: number | undefined }) {
     );
   const scan = () => void send({ type: 'panel:scan', tabId });
   const done = pages.filter((p) => p.transcript.state === 'done');
-  const untranslated = done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
+  const pending = pages.some((p) => p.transcript.state === 'pending');
+  const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
   const translate = () => void send({ type: 'panel:translate', tabId });
   return (
     <>
@@ -282,24 +308,25 @@ function App({ tabId }: { tabId: number | undefined }) {
         <button type="button" onClick={() => void send({ type: 'panel:stop', tabId })}>
           停止
         </button>
-        {/* 翻頁偵測（#34）之前，捲動或翻頁後要手動重新擷取。 */}
+        {/* 翻頁會自動偵測（#34）；這顆給偵測漏掉時手動補一次。 */}
         <button type="button" onClick={scan}>
           重新擷取
         </button>
         <OverlayToggle tabId={tabId} />
+        <AutoTranslateToggle tabId={tabId} />
         {settings}
         <ModelStatusLine status={modelStatus} onRetry={scan} />
         {untranslated && !hasKey && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</p>}
         <ul aria-label="Page">
           {pages.map((page, i) => (
-            <PageItem key={page.anchorId} page={page} index={i} />
+            <PageItem key={page.anchorId} page={page} index={i} onRetry={translate} />
           ))}
         </ul>
       </main>
       {/* 底部固定列；放在 main 外面才是 contentinfo landmark */}
       <footer aria-label="狀態列">
         <StatusText pages={pages} />
-        {done.length > 0 && (
+        {(done.length > 0 || pending) && (
           <button type="button" onClick={translate}>
             {untranslated ? '翻譯此頁' : '重新翻譯'}
           </button>

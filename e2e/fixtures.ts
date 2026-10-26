@@ -98,9 +98,9 @@ export const test = base.extend<{
 export const expect = test.expect;
 
 /** 打開仿 Jump+ 並等全部 canvas 畫完。 */
-export async function openJumpPlus(context: BrowserContext, site: MockSite): Promise<Page> {
+export async function openJumpPlus(context: BrowserContext, site: MockSite, url = site.jumpPlusUrl): Promise<Page> {
   const page = await context.newPage();
-  await page.goto(site.jumpPlusUrl);
+  await page.goto(url);
   await page.locator('body[data-ready="true"]').waitFor();
   return page;
 }
@@ -142,6 +142,7 @@ export async function activateOnJumpPlus(
     extensionId,
     mockSite,
     beforeActivate,
+    url = mockSite.jumpPlusUrl,
   }: {
     context: BrowserContext;
     sw: Worker;
@@ -149,10 +150,12 @@ export async function activateOnJumpPlus(
     mockSite: MockSite;
     /** side panel 打開後、啟動前（例如在 panel 裡掛 listener）。 */
     beforeActivate?: (panel: Page) => Promise<void>;
+    /** 預設是縱向排列的仿 Jump+；翻頁版用 mockSite.jumpPlusPagedUrl。 */
+    url?: string;
   },
 ): Promise<{ page: Page; panel: Page; tabId: number }> {
-  const page = await openJumpPlus(context, mockSite);
-  const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
+  const page = await openJumpPlus(context, mockSite, url);
+  const tabId = await tabIdOf(sw, url);
   const panel = await openSidePanel(context, extensionId, tabId);
   await beforeActivate?.(panel);
   await page.bringToFront();

@@ -14,12 +14,17 @@ export const MIN_PAGE_SIDE = 200;
 /** 超出 viewport 這麼多 CSS px 內仍算完整可見（四捨五入、邊框、捲動停在半像素）。 */
 export const VIEWPORT_TOLERANCE = 4;
 
-export function isPageCandidate(rect: Rect, viewport: Size): boolean {
+const contains = (outer: Rect, inner: Rect) =>
+  inner.x >= outer.x - VIEWPORT_TOLERANCE &&
+  inner.y >= outer.y - VIEWPORT_TOLERANCE &&
+  inner.x + inner.width <= outer.x + outer.width + VIEWPORT_TOLERANCE &&
+  inner.y + inner.height <= outer.y + outer.height + VIEWPORT_TOLERANCE;
+
+/**
+ * clips＝會裁切內容的祖先（overflow 不是 visible）的 rect：翻頁式 viewer 把隔壁頁放在裁切範圍外，
+ * getBoundingClientRect 看不出來，要完整落在每一個裡面才算可見。
+ */
+export function isPageCandidate(rect: Rect, viewport: Size, clips: readonly Rect[] = []): boolean {
   if (rect.width < MIN_PAGE_SIDE || rect.height < MIN_PAGE_SIDE) return false;
-  return (
-    rect.x >= -VIEWPORT_TOLERANCE &&
-    rect.y >= -VIEWPORT_TOLERANCE &&
-    rect.x + rect.width <= viewport.width + VIEWPORT_TOLERANCE &&
-    rect.y + rect.height <= viewport.height + VIEWPORT_TOLERANCE
-  );
+  return contains({ x: 0, y: 0, ...viewport }, rect) && clips.every((clip) => contains(clip, rect));
 }
