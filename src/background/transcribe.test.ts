@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
 import type { TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import { createClaudeTranslator } from '../offscreen/claude-translator.ts';
 import { createTranscriber, type PageCache, type TranscriberDeps } from './transcribe.ts';
 
 const rect = { x: 0, y: 0, w: 1, h: 1 };
@@ -557,6 +558,76 @@ describe('翻譯佇列（#34）', () => {
     llmCalls[2]!();
     await running;
     expect(transcriber.get(1).every((p) => p.transcript.state === 'done' && p.transcript.translated)).toBe(true);
+  });
+
+  it('LLM 段同時最多 2 個，本機段同時最多 1 個', async () => {
+    let localInFlight = 0;
+    let localMax = 0;
+    const analyze = async () => {
+      localMax = Math.max(localMax, ++localInFlight);
+      await flush();
+      localInFlight--;
+      return structuredClone(pageText);
+    };
+    let llmInFlight = 0;
+    let llmMax = 0;
+    const translator: Translator = {
+      async translatePage(input) {
+        llmMax = Math.max(llmMax, ++llmInFlight);
+        await flush();
+        await flush();
+        llmInFlight--;
+        return translatorReturning('x').translatePage(input);
+      },
+    };
+    const { transcriber } = setup({ analyze, getTranslator: () => translator });
+
+    await transcriber.update(1, ['a1', 'a2', 'a3', 'a4', 'a5'].map((a) => thumb(a)), capture);
+
+    expect(localMax).toBe(1);
+    expect(llmMax).toBe(2);
+    expect(transcriber.get(1).every((p) => p.transcript.state === 'done' && p.transcript.translated)).toBe(true);
+  });
+
+  it('429：依 retry-after 等待後重試，最多 3 次；等待期間這頁仍是「辨識中」，之後顯示錯誤', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn(
+        async () =>
+          new Response(JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: 'slow down' } }), {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'retry-after': '7' },
+          }),
+      );
+      const translator = createClaudeTranslator({
+        apiKey: 'sk-ant-test',
+        fetch,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        now: () => Date.now(),
+      });
+      const { transcriber } = setup({ getTranslator: () => translator });
+
+      const running = transcriber.update(1, [thumb('a1')], capture);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetch).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(6999);
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(transcriber.get(1)[0]!.transcript.state).toBe('analyzing');
+      await vi.advanceTimersByTimeAsync(1);
+      expect(fetch).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(14_000);
+      await running;
+      expect(fetch).toHaveBeenCalledTimes(4);
+      const t = transcriber.get(1)[0]!.transcript;
+      expect(t.state === 'done' && t.translateError).toBe('Claude API 429：slow down');
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(fetch).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('429 重試後仍失敗：顯示錯誤；按「重試」只重送 LLM、不重跑本機流水線', async () => {
