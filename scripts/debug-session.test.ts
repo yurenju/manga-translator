@@ -92,4 +92,33 @@ describe('summarize', () => {
 
     expect(lines.map((l) => l.slice(0, 5).trim())).toEqual(['1', '2', '4']);
   });
+
+  it('crop 每頁只列 anchorId:hash 前 8 碼與 ms，不列 rect 與縮圖', () => {
+    const [line] = summarize([
+      { ctx: 'sw', event: 'crop', at: 0, data: { ms: 204, pages: [{ anchorId: 'a1', rect, thumbnail: 'images/00002-crop.png', pageHash: hash }] } },
+    ]);
+
+    expect(line).toContain('sw crop {"ms":204,"pages":["a1:7051856d"]}');
+  });
+
+  it('overlay:show 的 fits 只列數量與有沒有被截斷', () => {
+    const [line] = summarize([
+      { ctx: 'content', event: 'overlay:show', at: 0, data: { pageHash: hash, fits: [{ id: 'b1', truncated: false, region: rect }, { id: 'b2', truncated: true }] } },
+    ]);
+
+    expect(line).toContain('content overlay:show {"pageHash":"7051856d","fits":{"count":2,"truncated":true}}');
+  });
+
+  it('不列圖片路徑', () => {
+    const [line] = summarize([{ ctx: 'sw', event: 'capture', at: 0, data: { windowId: 1, ms: 268, screenshot: 'images/00001-capture.png' } }]);
+
+    expect(line).toContain('sw capture {"windowId":1,"ms":268}');
+  });
+
+  it('since：只列行號大於它的；秒數與去重仍看整個 session', () => {
+    const lines = summarize([candidates(0, 519), { ctx: 'sw', event: 'capture', at: 1000, data: {} }, candidates(2000, 519), candidates(3000, 326)], { since: 2 });
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^ {4}4 {5}3\.0 content candidates/);
+  });
 });
