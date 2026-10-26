@@ -1,4 +1,4 @@
-import type { PageText } from './page-text.ts';
+import type { PageText, RatioRect } from './page-text.ts';
 import type { TranslateInput, TranslateOutput } from './translator.ts';
 
 /** onnxruntime-web 的執行環境。 */
@@ -40,6 +40,21 @@ export type Message =
   /** side panel → SW → offscreen：「測試連線」。回應 TestConnectionResponse。 */
   | { type: 'panel:testConnection' }
   | { type: 'offscreen:testConnection' }
+  /**
+   * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。sub＝Page 在 anchor 裡的範圍
+   * （沒給＝整個 anchor；Spread 在 #35）。enabled＝side panel 的覆蓋開關。
+   */
+  | { type: 'content:showOverlay'; anchorId: string; sub?: RatioRect; text: PageText; enabled: boolean }
+  /** SW → content script：截圖前隱藏覆蓋層，等兩個 rAF（已重繪）才回應。 */
+  | { type: 'content:hideOverlay' }
+  /** SW → content script：截完還原覆蓋層。 */
+  | { type: 'content:restoreOverlay' }
+  /** SW → content script：side panel 的覆蓋開關。 */
+  | { type: 'content:setOverlayEnabled'; enabled: boolean }
+  /** side panel → SW：覆蓋開關。 */
+  | { type: 'panel:setOverlay'; tabId: number; enabled: boolean }
+  /** side panel → SW：覆蓋開關目前的狀態。回應 OverlayResponse。 */
+  | { type: 'panel:getOverlay'; tabId: number }
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
   | { type: 'test:activate'; tabId: number };
 
@@ -67,6 +82,10 @@ export type TestConnectionResponse = { ok: true; model: string } | { ok: false; 
 
 export interface StatusResponse {
   active: boolean;
+}
+
+export interface OverlayResponse {
+  enabled: boolean;
 }
 
 /** 畫面座標（CSS px，相對 viewport 左上角）。 */

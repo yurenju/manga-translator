@@ -1,6 +1,7 @@
 // offscreen document：裁切截圖、Page hash、偵測＋OCR＋閱讀順序、呼叫 LLM（spec #27 第 2 節）。
 // 由 SW 在需要時用 chrome.offscreen.createDocument 建立，manifest 不必宣告。
 import { SYNTHETIC_GROUND_TRUTH } from '../background/synthetic-ground-truth.ts';
+import { ERASE_PADDING } from '../content/overlay-layout.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import { createFakeTranslator } from '../shared/fake-translator.ts';
 import type {
@@ -20,7 +21,9 @@ import type { PageText } from '../shared/page-text.ts';
 import type { TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
 import { thumbnailSize, toImageRect } from './crop.ts';
+import { eraseLuminance } from './erase-color.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
+import { createPageImage } from './page-image.ts';
 
 /** side panel 縮圖的寬度（截圖像素）。 */
 const THUMBNAIL_WIDTH = 240;
@@ -73,12 +76,23 @@ const pipeline = createLocalPipeline({
   },
 });
 
-/** 從截圖裁出全解析度的 Page 跑本機流水線（座標換算與縮圖相同）。 */
+/**
+ * 從截圖裁出全解析度的 Page 跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
+ * （原地覆蓋用，Jump+ 是 tainted canvas，content script 讀不到像素）。
+ */
 async function analyze({ screenshot, viewport, candidate, pipeline: config }: AnalyzeRequest): Promise<PageText> {
   if (__E2E__ && config) pipeline.configure(config);
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
-    return await pipeline.analyze(bitmap, toImageRect(candidate.rect, viewport, bitmap));
+    const rect = toImageRect(candidate.rect, viewport, bitmap);
+    const text = await pipeline.analyze(bitmap, rect);
+    const image = createPageImage(bitmap, rect).gray();
+    const balloons = text.balloons.map((b) => {
+      const box = { x: b.textBbox.x * image.width, y: b.textBbox.y * image.height, w: b.textBbox.w * image.width, h: b.textBbox.h * image.height };
+      const pad = ERASE_PADDING;
+      return { ...b, eraseLuminance: eraseLuminance(image, { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad }) };
+    });
+    return { ...text, balloons };
   } finally {
     bitmap.close();
   }

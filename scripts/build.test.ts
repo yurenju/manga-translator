@@ -54,6 +54,7 @@ describe('正式 build', () => {
     expect(sw).not.toContain('FakeTranslator：找不到對應的原文');
     expect(sw).not.toContain('早安！今天好早喔');
     expect(await exists(prodDir, 'test-pipeline.html')).toBe(false);
+    expect(await exists(prodDir, 'test-overlay.html')).toBe(false);
     // FakeTranslator 在 #31 搬到 offscreen
     const offscreen = await readText(prodDir, 'offscreen.js');
     expect(offscreen).not.toContain('FakeTranslator：找不到對應的原文');
@@ -80,6 +81,19 @@ describe('正式 build', () => {
     expect(files.filter((f) => f.endsWith('.onnx'))).toEqual([]);
   });
 
+  it('打包覆蓋層用的 Noto Sans TC 700 子集與授權，只開放字型檔給網頁讀取', async () => {
+    const manifest = await readJson(prodDir, 'manifest.json');
+    const fonts = await readdir(join(prodDir, 'fonts'));
+
+    // content script 依 700.css 的 url() 找子集，每一個都要在
+    const css = await readFile('node_modules/@fontsource/noto-sans-tc/700.css', 'utf8');
+    const referenced = [...css.matchAll(/url\(\.\/files\/([^)]+\.woff2)\)/g)].map((m) => m[1]);
+    expect(referenced.length).toBeGreaterThan(100);
+    expect(fonts.filter((f) => f.endsWith('.woff2')).sort()).toEqual([...new Set(referenced)].sort());
+    expect(fonts).toContain('LICENSE');
+    expect(manifest.web_accessible_resources).toEqual([{ resources: ['fonts/*'], matches: ['<all_urls>'] }]);
+  });
+
   it('外掛頁面 cross-origin isolated，onnxruntime-web 的 wasm 才能多執行緒', async () => {
     const manifest = await readJson(prodDir, 'manifest.json');
 
@@ -103,7 +117,8 @@ describe('e2e build', () => {
     expect(sw).toContain('test:activate');
   });
 
-  it('多一個量 #7 指標用的流水線測試頁', async () => {
+  it('多一個量 #7 指標用的流水線測試頁與覆蓋渲染測試頁', async () => {
     expect(await readText(e2eDir, 'test-pipeline.html')).toContain('test-pipeline.js');
+    expect(await readText(e2eDir, 'test-overlay.html')).toContain('test-overlay.js');
   });
 });

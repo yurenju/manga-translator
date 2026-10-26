@@ -17,6 +17,10 @@ export interface ScannerDeps {
   findPageCandidates(tabId: number): Promise<PageCandidatesResponse>;
   /** tab 是它視窗裡的作用中 tab 就回傳 windowId；否則 undefined（captureVisibleTab 只截得到作用中 tab）。 */
   getVisibleWindowId(tabId: number): Promise<number | undefined>;
+  /** 截圖前把覆蓋層（shadow host）隱藏，等到瀏覽器重繪完才 resolve（spec #27 第 3.2 節）。 */
+  hideOverlay(tabId: number): Promise<void>;
+  /** 截完立刻還原覆蓋層。 */
+  restoreOverlay(tabId: number): Promise<void>;
   /** 截圖。要在呼叫當下就送出 captureVisibleTab，限速是以呼叫的時間計算。 */
   captureWindow(windowId: number): Promise<string>;
   crop(request: CropRequest): Promise<PageThumb[]>;
@@ -55,8 +59,15 @@ export function createScanner(deps: ScannerDeps) {
       }
       const windowId = await deps.getVisibleWindowId(tabId);
       if (windowId === undefined) return;
-      lastCaptureAt = Date.now();
-      const screenshot = await deps.captureWindow(windowId);
+      // 截圖會截到自己的覆蓋層，hash 就跟原圖對不上；所以截圖期間先藏起來（覆蓋層會消失約 1～2 幀）。
+      await deps.hideOverlay(tabId);
+      let screenshot: string;
+      try {
+        lastCaptureAt = Date.now();
+        screenshot = await deps.captureWindow(windowId);
+      } finally {
+        await deps.restoreOverlay(tabId);
+      }
       // side panel 剛打開造成重排、使用者在截圖時捲動……rect 跟截圖對不上就重來。
       if (!sameLayout(before, await deps.findPageCandidates(tabId))) continue;
       const capture: CropRequest = { screenshot, ...before };

@@ -6,6 +6,7 @@ import type {
   Message,
   ModelStatus,
   ModelStatusResponse,
+  OverlayResponse,
   PageCandidatesResponse,
   PagesResponse,
   PipelineConfig,
@@ -18,6 +19,7 @@ import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { indexedDbPageCache, indexedDbSeriesStore } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
+import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
 import { provisionalSeries } from './series.ts';
 import { indexedDbTabStore } from './tab-store.ts';
@@ -26,6 +28,8 @@ import { createTranscriber } from './transcribe.ts';
 declare global {
   /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
   var __captureLog: number[] | undefined;
+  /** e2e build 才有：最近 3 張截圖（data URL），給測試確認截圖裡沒有覆蓋層。 */
+  var __captures: string[] | undefined;
   /** e2e build 才有：在建立任何 Page 之前呼叫（e2e/fixtures.ts）。 */
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
@@ -51,9 +55,17 @@ const scanner = createScanner({
     const tab = await chrome.tabs.get(tabId);
     return tab.active ? tab.windowId : undefined;
   },
-  captureWindow(windowId) {
+  async hideOverlay(tabId) {
+    await chrome.tabs.sendMessage(tabId, { type: 'content:hideOverlay' } satisfies Message);
+  },
+  async restoreOverlay(tabId) {
+    await chrome.tabs.sendMessage(tabId, { type: 'content:restoreOverlay' } satisfies Message);
+  },
+  async captureWindow(windowId) {
     if (__E2E__) (globalThis.__captureLog ??= []).push(Date.now());
-    return chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+    const screenshot = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+    if (__E2E__) globalThis.__captures = [...(globalThis.__captures ?? []), screenshot].slice(-3);
+    return screenshot;
   },
   async crop(request) {
     await ensureOffscreenDocument();
@@ -114,6 +126,17 @@ const transcriber = createTranscriber({
   cache: indexedDbPageCache(),
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
+    overlaySync.publish(tabId, pages);
+  },
+});
+
+/** side panel 的覆蓋開關（每個 tab；預設開，停止後回到預設）。 */
+const overlayEnabled = new Map<number, boolean>();
+
+const overlaySync = createOverlaySync({
+  show(tabId, anchorId, text) {
+    const message: Message = { type: 'content:showOverlay', anchorId, text, enabled: overlayEnabled.get(tabId) ?? true };
+    chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });
 
@@ -160,7 +183,10 @@ const activation = createActivation({
   onStatusChanged(tabId, active) {
     notifyPanel({ type: 'status:changed', tabId, active });
     if (active) scan(tabId);
-    else scanner.clear(tabId);
+    else {
+      scanner.clear(tabId);
+      overlayEnabled.delete(tabId);
+    }
   },
 });
 
@@ -200,6 +226,14 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
     case 'panel:stop':
       activation.stop(message.tabId).then(() => sendResponse());
       return true;
+    case 'panel:getOverlay':
+      sendResponse({ enabled: overlayEnabled.get(message.tabId) ?? true } satisfies OverlayResponse);
+      return false;
+    case 'panel:setOverlay':
+      overlayEnabled.set(message.tabId, message.enabled);
+      chrome.tabs.sendMessage(message.tabId, { type: 'content:setOverlayEnabled', enabled: message.enabled } satisfies Message).catch(() => {});
+      sendResponse();
+      return false;
     case 'panel:getPages':
       sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);
       return false;
