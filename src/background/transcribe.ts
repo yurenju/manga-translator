@@ -4,7 +4,7 @@
  * 翻譯失敗時也退回 kuromoji 讀音，並帶上錯誤訊息。設定 key 之後按「翻譯此頁」用同一份辨識結果重新翻譯。
  * 翻譯快取（#33）：先查 (Series ID, Page hash)，命中就直接用、不跑本機流水線也不呼叫 Translator；翻譯成功才寫入。
  *
- * 翻譯佇列（#34、spec 第 3.4 節）：
+ * 翻譯佇列（#34、spec 第 3.4 節；排程在 translation-queue.ts）：
  * - 兩段：本機段（偵測／OCR）併發 1、LLM 段併發 2，跨 tab 共用（offscreen 只有一份模型）。
  * - 後進先出：新出現的可見 Page 先做；同一次擷取裡依閱讀順序。工作帶 priority（v1 只有可見頁）。
  * - 翻太快：已不在畫面上、還沒開始的工作丟掉（之後再出現會重新排）；已開始的做完、寫進快取，但不顯示也不覆蓋。
@@ -16,6 +16,7 @@ import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
 import type { TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import { createTranslationQueue, type QueuedJob } from './translation-queue.ts';
 
 export interface PageCache {
   /** 同一個 Series 裡 hash 在門檻內最接近的一筆。 */
@@ -24,7 +25,13 @@ export interface PageCache {
 }
 
 /** 給 e2e 量排程用：enqueue＝排進本機段、start＝本機段開始、drop＝沒開始就丟掉、done＝做完（含 LLM）。 */
-export type JobEvent = 'enqueue' | 'start' | 'drop' | 'done';
+export type JobEventKind = 'enqueue' | 'start' | 'drop' | 'done';
+
+export interface JobEvent {
+  tabId: number;
+  event: JobEventKind;
+  pageHash: string;
+}
 
 export interface TranscriberDeps {
   analyze(request: AnalyzeRequest): Promise<PageText>;
@@ -34,17 +41,13 @@ export interface TranscriberDeps {
   getSeriesId(tabId: number): Promise<string | undefined>;
   cache: PageCache;
   publish(tabId: number, pages: PageView[]): void;
-  onJobEvent?(tabId: number, event: JobEvent, pageHash: string): void;
+  onJobEvent?(event: JobEvent): void;
 }
 
 type Transcript = PageView['transcript'];
 
 // TODO(#38)：Translator 的 prompt 版本（offscreen/claude-translator.ts 的 PROMPT_VERSION）還沒傳到 SW；過時提示要比對它
 const PROMPT_VERSION = '';
-
-/** 本機段與 LLM 段的併發數（spec 第 3.4 節）。 */
-const LOCAL_CONCURRENCY = 1;
-const LLM_CONCURRENCY = 2;
 
 /** 工作的 priority：可見頁 > 預翻頁（v1 只有可見頁，spec 第 10 節）。 */
 export const PRIORITY_VISIBLE = 1;
@@ -126,14 +129,9 @@ interface TabState {
   records: PageRecord[];
 }
 
-interface Job {
+interface Job extends QueuedJob {
   tab: TabState;
   record: PageRecord;
-  priority: number;
-  /** 第幾次排程（越大越新，先做）。 */
-  batch: number;
-  /** 同一批裡的閱讀順序（越小先做）。 */
-  index: number;
   /** 進到 LLM 段才有。 */
   translator?: Translator;
   resolve(): void;
@@ -143,14 +141,22 @@ export function createTranscriber(deps: TranscriberDeps) {
   const tabs = new Map<number, TabState>();
   const views = new Map<number, PageView[]>();
   const autoTranslate = new Map<number, boolean>();
-  const localQueue: Job[] = [];
-  const llmQueue: Job[] = [];
-  let localRunning = 0;
-  let llmRunning = 0;
   let batches = 0;
 
   const isCurrent = (tab: TabState) => tabs.get(tab.tabId) === tab;
   const isVisible = (tab: TabState, record: PageRecord) => isCurrent(tab) && findSamePage(tab.pages, record.pageHash) !== undefined;
+  const report = (job: Job, event: JobEventKind) => deps.onJobEvent?.({ tabId: job.tab.tabId, event, pageHash: job.record.pageHash });
+
+  const queue = createTranslationQueue<Job>({
+    runLocal,
+    runLlm,
+    isWanted: (job) => isVisible(job.tab, job.record),
+    onDrop(job) {
+      job.tab.records = job.tab.records.filter((r) => r !== job.record);
+      report(job, 'drop');
+      finish(job, undefined);
+    },
+  });
 
   function publish(tab: TabState): void {
     if (!isCurrent(tab)) return;
@@ -162,12 +168,6 @@ export function createTranscriber(deps: TranscriberDeps) {
     deps.publish(tab.tabId, current);
   }
 
-  /** 先做的排前面：priority 高 → 比較新的一批 → 同一批裡閱讀順序前面的。 */
-  function takeNext(queue: Job[]): Job | undefined {
-    queue.sort((a, b) => b.priority - a.priority || b.batch - a.batch || a.index - b.index);
-    return queue.shift();
-  }
-
   function newJob(tab: TabState, record: PageRecord, batch: number, index: number): Job {
     let resolve!: () => void;
     record.settled = new Promise<void>((r) => (resolve = r));
@@ -176,6 +176,7 @@ export function createTranscriber(deps: TranscriberDeps) {
     return job;
   }
 
+  /** 工作結束；transcript undefined＝沒做就放掉（已停止、被丟掉，或還沒排就翻走）。 */
   function finish(job: Job, transcript: Transcript | undefined): void {
     const { tab, record } = job;
     if (transcript) record.transcript = transcript;
@@ -183,6 +184,12 @@ export function createTranscriber(deps: TranscriberDeps) {
     job.resolve();
     prune(tab);
     publish(tab);
+  }
+
+  /** 工作跑完（本機段失敗、沒有 Translator，或 LLM 段做完）：回報 done 並更新這頁。 */
+  function complete(job: Job, transcript: Transcript): void {
+    report(job, 'done');
+    finish(job, transcript);
   }
 
   /**
@@ -198,72 +205,35 @@ export function createTranscriber(deps: TranscriberDeps) {
     tab.records = tab.records.filter((r) => r.job !== undefined || r.transcript.state !== 'error');
   }
 
-  /** 已經不在畫面上（或已停止）的本機段工作，沒開始就丟掉；那頁之後再出現會重新排。 */
-  function dropInvisible(): void {
-    for (const job of [...localQueue]) {
-      if (isVisible(job.tab, job.record)) continue;
-      localQueue.splice(localQueue.indexOf(job), 1);
-      job.tab.records = job.tab.records.filter((r) => r !== job.record);
-      deps.onJobEvent?.(job.tab.tabId, 'drop', job.record.pageHash);
-      finish(job, undefined);
-    }
-  }
-
   function enqueueLocal(job: Job): void {
-    localQueue.push(job);
-    deps.onJobEvent?.(job.tab.tabId, 'enqueue', job.record.pageHash);
-    pump();
+    report(job, 'enqueue');
+    queue.enqueueLocal(job);
   }
 
-  function pump(): void {
-    dropInvisible();
-    while (localRunning < LOCAL_CONCURRENCY) {
-      const job = takeNext(localQueue);
-      if (!job) break;
-      localRunning++;
-      void runLocal(job).finally(() => {
-        localRunning--;
-        pump();
-      });
-    }
-    while (llmRunning < LLM_CONCURRENCY) {
-      const job = takeNext(llmQueue);
-      if (!job) break;
-      llmRunning++;
-      void runLlm(job).finally(() => {
-        llmRunning--;
-        pump();
-      });
-    }
-  }
-
-  async function runLocal(job: Job): Promise<void> {
-    const { tab, record } = job;
-    deps.onJobEvent?.(tab.tabId, 'start', record.pageHash);
+  /** 本機段；回傳 true＝接著排進 LLM 段。 */
+  async function runLocal(job: Job): Promise<boolean> {
+    const { record } = job;
+    report(job, 'start');
     let text: PageText;
     try {
       text = await deps.analyze(record.request);
     } catch (e) {
-      deps.onJobEvent?.(tab.tabId, 'done', record.pageHash);
-      finish(job, { state: 'error', message: e instanceof Error ? e.message : String(e) });
-      return;
+      complete(job, { state: 'error', message: e instanceof Error ? e.message : String(e) });
+      return false;
     }
     record.text = text;
     const translator = await deps.getTranslator();
     if (!translator) {
-      deps.onJobEvent?.(tab.tabId, 'done', record.pageHash);
-      finish(job, { state: 'done', text, translated: false });
-      return;
+      complete(job, { state: 'done', text, translated: false });
+      return false;
     }
     job.translator = translator;
-    llmQueue.push(job);
+    return true;
   }
 
   async function runLlm(job: Job): Promise<void> {
     const { record } = job;
-    const transcript = await translateText(record.text!, job.translator, deps.cache, { seriesId: record.seriesId, pageHash: record.pageHash });
-    deps.onJobEvent?.(job.tab.tabId, 'done', record.pageHash);
-    finish(job, transcript);
+    complete(job, await translateText(record.text!, job.translator, deps.cache, { seriesId: record.seriesId, pageHash: record.pageHash }));
   }
 
   async function lookupCache(seriesId: string | undefined, pageHash: string): Promise<Transcript | undefined> {
@@ -294,12 +264,14 @@ export function createTranscriber(deps: TranscriberDeps) {
     prune(tab);
     forgetErrors(tab);
     const batch = ++batches;
-    const seen = new Set<PageRecord>();
-    const fresh: { record: PageRecord; index: number }[] = [];
+    /** 這次擷取畫面上的 Page（已認得的＋新的）；等它們的工作都結束才 resolve。 */
+    const visibleRecords = new Set<PageRecord>();
+    /** 第一次出現的 Page，要查快取或排進佇列。 */
+    const newPages: { record: PageRecord; index: number }[] = [];
     for (const [index, page] of pages.entries()) {
       const existing = findSamePage(tab.records, page.pageHash);
       if (existing) {
-        seen.add(existing);
+        visibleRecords.add(existing);
         continue;
       }
       const record: PageRecord = {
@@ -310,15 +282,15 @@ export function createTranscriber(deps: TranscriberDeps) {
         settled: Promise.resolve(),
       };
       tab.records.push(record);
-      seen.add(record);
-      fresh.push({ record, index });
+      visibleRecords.add(record);
+      newPages.push({ record, index });
     }
-    pump();
+    queue.dropUnwanted();
     publish(tab);
 
     const seriesId = await deps.getSeriesId(tabId);
     await Promise.all(
-      fresh.map(async ({ record, index }) => {
+      newPages.map(async ({ record, index }) => {
         record.seriesId = seriesId;
         // 查快取期間佔住這頁，同一頁又出現時不會重複排
         const job = newJob(tab, record, batch, index);
@@ -333,7 +305,7 @@ export function createTranscriber(deps: TranscriberDeps) {
         enqueueLocal(job);
       }),
     );
-    await Promise.all([...seen].map((r) => r.settled));
+    await Promise.all([...visibleRecords].map((r) => r.settled));
   }
 
   /**
@@ -351,19 +323,17 @@ export function createTranscriber(deps: TranscriberDeps) {
       if (record.job) continue;
       if (record.transcript.state === 'pending') {
         record.transcript = { state: 'analyzing' };
-        localQueue.push(newJob(tab, record, batch, index));
-        deps.onJobEvent?.(tabId, 'enqueue', record.pageHash);
+        enqueueLocal(newJob(tab, record, batch, index));
       } else if (translator && record.transcript.state === 'done' && record.text) {
         record.transcript = { ...record.transcript, translating: true };
         const job = newJob(tab, record, batch, index);
         job.translator = translator;
-        llmQueue.push(job);
+        queue.enqueueLlm(job);
       } else continue;
       started.push(record);
     }
     if (started.length === 0) return;
     publish(tab);
-    pump();
     await Promise.all(started.map((r) => r.settled));
   }
 
@@ -394,7 +364,7 @@ export function createTranscriber(deps: TranscriberDeps) {
   function resetPages(tabId: number): void {
     tabs.delete(tabId);
     views.delete(tabId);
-    dropInvisible();
+    queue.dropUnwanted();
     deps.publish(tabId, []);
   }
 

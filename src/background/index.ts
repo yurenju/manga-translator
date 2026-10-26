@@ -38,7 +38,7 @@ declare global {
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
   var __translateCalls: number | undefined;
   /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
-  var __jobLog: { tabId: number; event: JobEvent; pageHash: string; at: number }[] | undefined;
+  var __jobLog: (JobEvent & { at: number })[] | undefined;
 }
 
 const store = indexedDbTabStore();
@@ -133,8 +133,8 @@ const transcriber = createTranscriber({
     notifyPanel({ type: 'pages:updated', tabId, pages });
     overlaySync.publish(tabId, pages);
   },
-  onJobEvent(tabId, event, pageHash) {
-    if (__E2E__) (globalThis.__jobLog ??= []).push({ tabId, event, pageHash, at: Date.now() });
+  onJobEvent(event) {
+    if (__E2E__) (globalThis.__jobLog ??= []).push({ ...event, at: Date.now() });
   },
 });
 
