@@ -1,4 +1,4 @@
-import { BY_SERIES, openDb, STORES, storeRequest } from '../shared/db.ts';
+import { BY_SERIES, openDb, STORES, storeRequest, writeTransaction } from '../shared/db.ts';
 import type { PageTranslation } from '../shared/page-text.ts';
 import type { NotesSuggestion } from '../shared/series-notes.ts';
 import type { Series, UrlPattern } from '../shared/series.ts';
@@ -38,12 +38,8 @@ export function indexedDbNotesStore(): NotesStore {
       ]);
       return { entries, suggestions };
     },
-    async save(seriesId, { entries, suggestions }) {
-      const conn = await (db ??= openDb());
-      await new Promise<void>((resolve, reject) => {
-        const tx = conn.transaction([STORES.seriesNotes, STORES.notesSuggestions], 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+    save: (seriesId, { entries, suggestions }) =>
+      writeTransaction((db ??= openDb()), [STORES.seriesNotes, STORES.notesSuggestions], (tx) => {
         const notes = tx.objectStore(STORES.seriesNotes);
         for (const entry of entries) notes.put({ ...entry, seriesId });
         // 建議修改整份取代（接受的拿掉、忽略的改了標記）。先拿到舊的 key 再刪：cursor 會看到同一個 transaction 裡新加的。
@@ -53,8 +49,7 @@ export function indexedDbNotesStore(): NotesStore {
           for (const key of old.result) pending.delete(key);
           for (const suggestion of suggestions) pending.add({ ...suggestion, seriesId });
         };
-      });
-    },
+      }),
   };
 }
 
@@ -75,14 +70,10 @@ export function indexedDbSeriesRepo(): SeriesRepo {
     listTranslations: (seriesId) => bySeries<PageTranslation>(STORES.pageTranslations, seriesId),
     listNotes: (seriesId) => bySeries<NotesEntry>(STORES.seriesNotes, seriesId),
     listSuggestions: (seriesId) => bySeries<NotesSuggestion>(STORES.notesSuggestions, seriesId),
-    async commitMerge(merge) {
+    commitMerge(merge) {
       const stores = [STORES.series, STORES.pageTranslations, STORES.seriesNotes, STORES.notesSuggestions, STORES.urlPatterns];
-      const conn = await (db ??= openDb());
-      await new Promise<void>((resolve, reject) => {
-        // 一個 transaction：中途失敗就整個不算，不會留下一半在臨時 Series、一半在目標。
-        const tx = conn.transaction(stores, 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+      // 一個 transaction：中途失敗就整個不算，不會留下一半在臨時 Series、一半在目標。
+      return writeTransaction((db ??= openDb()), stores, (tx) => {
         const { sourceId, targetId } = merge;
         const translations = tx.objectStore(STORES.pageTranslations);
         translations.delete(seriesRange(sourceId));
@@ -123,16 +114,11 @@ export function indexedDbBackupRepo(): BackupRepo & { clearTranslations(seriesId
     getPattern: (pattern) => run(STORES.urlPatterns, 'readonly', (s) => s.get(pattern) as IDBRequest<UrlPattern | undefined>),
     putPattern: (pattern) => run(STORES.urlPatterns, 'readwrite', (s) => s.put(pattern)).then(() => {}),
     listTranslations: (seriesId) => run(STORES.pageTranslations, 'readonly', (s) => s.index(BY_SERIES).getAll(seriesId) as IDBRequest<PageTranslation[]>),
-    async putTranslations(translations) {
-      const conn = await (db ??= openDb());
-      await new Promise<void>((resolve, reject) => {
-        const tx = conn.transaction(STORES.pageTranslations, 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+    putTranslations: (translations) =>
+      writeTransaction((db ??= openDb()), STORES.pageTranslations, (tx) => {
         const store = tx.objectStore(STORES.pageTranslations);
         for (const t of translations) store.put(t);
-      });
-    },
+      }),
     clearTranslations: (seriesId) => run(STORES.pageTranslations, 'readwrite', (s) => s.delete(seriesRange(seriesId))).then(() => {}),
   };
 }

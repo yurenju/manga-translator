@@ -51,11 +51,11 @@
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
-| C1 | Kindle：視窗橫長，顯示跨頁 | trace：一個 `candidates` 候選切成兩個 `crop` Page（同一個 `anchorId`，各有 `sub`），兩頁的 `pageHash` 不同 |
+| C1 | Kindle：視窗橫長，顯示跨頁 | trace：一個 `candidates` 候選切成兩個 `crop` Page（同一個 `anchorId`，各有 `subRect`），兩頁的 `pageHash` 不同 |
 | C2 | 同上 | trace：job 佇列先右頁後左頁：`job` 的 `enqueue`／`start`／`llm` 依序是右頁 `pageHash` 再左頁 |
 | C3 | Kindle：封面或章節首頁（跨頁模式只顯示一頁） | trace：只切出一個 Page，沒切出空白頁（看 `crop` 縮圖） |
 | C4 | Kindle：深色或滿版出血的頁面 | trace：`crop` 縮圖沒有把頁面本身的深色邊當黑邊切掉 |
-| C5 | Jump+：一般閱讀 | trace：每個 Page 都是整個 anchor，`crop` 沒有 `sub`（Jump+ 不用切） |
+| C5 | Jump+：一般閱讀 | trace：每個 Page 都是整個 anchor，`crop` 沒有 `subRect`（Jump+ 不用切） |
 | C6 | 跨頁兩頁都翻完 | 使用者回報：兩頁的覆蓋層各自落在自己那一頁，中縫附近沒有錯位 |
 
 ### D. 翻頁自動翻譯

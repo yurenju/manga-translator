@@ -821,8 +821,8 @@ describe('Spread（#35）', () => {
   const LEFT = { x: 0, y: 0, w: 0.5, h: 1 };
   /** 同一個 anchor 切出來的兩個 Page，依閱讀順序先右後左。 */
   const spread = (): PageThumb[] => [
-    { ...thumb('a1', HASHES.a1), sub: RIGHT },
-    { ...thumb('a1', HASHES.a2), sub: LEFT },
+    { ...thumb('a1', HASHES.a1), subRect: RIGHT },
+    { ...thumb('a1', HASHES.a2), subRect: LEFT },
   ];
 
   it('兩個 Page 各自帶 subRect 給本機流水線（同一個 anchor）', async () => {
@@ -830,7 +830,7 @@ describe('Spread（#35）', () => {
 
     await transcriber.update(1, spread(), capture);
 
-    expect(vi.mocked(deps.analyze).mock.calls.map(([request]) => [request.candidate.anchorId, request.sub])).toEqual([
+    expect(vi.mocked(deps.analyze).mock.calls.map(([request]) => [request.candidate.anchorId, request.subRect])).toEqual([
       ['a1', RIGHT],
       ['a1', LEFT],
     ]);
@@ -852,7 +852,7 @@ describe('Spread（#35）', () => {
       // 原文標上是哪一頁，看送出 LLM 的順序
       analyze: async (request) => {
         const text = structuredClone(pageText);
-        text.balloons[0]!.原文 = request.sub === RIGHT ? '右' : '左';
+        text.balloons[0]!.原文 = request.subRect === RIGHT ? '右' : '左';
         return text;
       },
       getTranslator: () => {
@@ -885,7 +885,7 @@ describe('Spread（#35）', () => {
       notes,
       getTranslator: () => translator,
       analyze: async (request) => {
-        if (request.sub === LEFT) await leftAnalyzed;
+        if (request.subRect === LEFT) await leftAnalyzed;
         return structuredClone(pageText);
       },
     });

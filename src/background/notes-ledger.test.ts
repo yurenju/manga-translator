@@ -41,7 +41,7 @@ const page = { pageHash: 'h1', balloonTexts: ['パンを買いに行く'] };
 describe('notes-ledger：人的編輯與 LLM 的變更', () => {
   it('LLM 還在翻的時候人改了條目：編輯不必等 LLM，之後套用的變更不會蓋掉它，只會變成建議', async () => {
     const store = memoryStore([note('パン', '麵包')]);
-    const ledger = createNotesLedger(store);
+    const ledger = createNotesLedger({ store });
 
     const turn = ledger.checkout('s');
     await turn.notes;
@@ -59,7 +59,7 @@ describe('notes-ledger：人的編輯與 LLM 的變更', () => {
 
   it('同時進行的編輯與套用不會互相蓋掉', async () => {
     const store = memoryStore([note('パン', '麵包'), note('お店', '')]);
-    const ledger = createNotesLedger(store);
+    const ledger = createNotesLedger({ store });
 
     const turn = ledger.checkout('s');
     await Promise.all([
@@ -72,7 +72,7 @@ describe('notes-ledger：人的編輯與 LLM 的變更', () => {
 
   it('同一個建議每頁都再提一次也只存一個', async () => {
     const store = memoryStore([note('パン', '麵包')]);
-    const ledger = createNotesLedger(store);
+    const ledger = createNotesLedger({ store });
     const suggest = { ...noChanges(), suggestions: [{ 原文: 'パン', 建議譯文: '胖' }] };
 
     await ledger.checkout('s').commit(suggest, page);

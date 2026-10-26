@@ -53,7 +53,7 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
         });
         return {
           ...candidate,
-          ...(whole ? {} : { sub: toSubRect(page, src) }),
+          ...(whole ? {} : { subRect: toSubRect(page, src) }),
           thumbnail,
           pageHash: pageHash(cropImage(gray, page)),
         };
@@ -101,21 +101,21 @@ const pipeline = createLocalPipeline({
 });
 
 /**
- * 從截圖裁出全解析度的 Page（Spread 的一頁用 sub）跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
+ * 從截圖裁出全解析度的 Page（Spread 的一頁用 subRect）跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
  * （原地覆蓋用，Jump+ 是 tainted canvas，content script 讀不到像素）。
  */
-async function analyze({ screenshot, viewport, candidate, sub, pipeline: config }: AnalyzeRequest): Promise<PageText> {
+async function analyze({ screenshot, viewport, candidate, subRect, pipeline: config }: AnalyzeRequest): Promise<PageText> {
   if (__E2E__ && config) pipeline.configure(config);
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
     const candidateRect = toImageRect(candidate.rect, viewport, bitmap);
-    const rect = sub ? subImageRect(candidateRect, sub) : candidateRect;
+    const rect = subRect ? subImageRect(candidateRect, subRect) : candidateRect;
     const startedAt = performance.now();
     const text = await pipeline.analyze(bitmap, rect);
     if (__DEBUG__) {
       trace('analyze', {
         anchorId: candidate.anchorId,
-        sub,
+        subRect,
         imageRect: rect,
         ms: Math.round(performance.now() - startedAt),
         balloons: text.balloons.map(({ id, order, orientation, 原文, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, balloonBbox, textBbox })),

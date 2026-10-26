@@ -1,7 +1,7 @@
 /**
  * Series Notes 累積（#37、spec #27 第 3.4 節）：每頁送出 LLM 時拿一份 Notes 快照，回來後依「送出 LLM 的順序」
  * 套用 notes_changes——後送出的先回來也要等前面的套用完（或失敗放掉）。套用規則在 shared/series-notes.ts。
- * 同一個 Spread 的兩頁拿到同一份快照：後送出的那頁不會看到先送出那頁的變更（spec 第 3.4 節）。
+ * 同一個 SnapshotGroup 的頁（Spread 的兩頁）拿到同一份快照：後送出的那頁不會看到先送出那頁的變更（spec 第 3.4 節）。
  *
  * 人在 side panel 的修改（#38：編輯條目、接受／忽略建議、匯入）也從這裡寫：每次「讀 → 改 → 寫」互斥，
  * 跟套用 LLM 的變更不會互相蓋掉；但不排進送出順序，不必等還在翻的頁回來。
@@ -18,6 +18,22 @@ export interface NotesStore {
   save(seriesId: string, notes: SeriesNotes): Promise<void>;
 }
 
+declare const snapshotGroup: unique symbol;
+
+/**
+ * 共用一份 Notes 快照的一組頁：同一次排程裡同一個 anchor 切出來的 Page（Spread 的兩頁）。單頁的 anchor 也有一組，
+ * 只是組裡只有它。不是 GLOSSARY 的 Spread：判斷依據是 anchor，不是兩頁並排。
+ */
+export type SnapshotGroup = { readonly [snapshotGroup]: true };
+
+export function newSnapshotGroup(): SnapshotGroup {
+  return {} as SnapshotGroup;
+}
+
+export interface NotesLedgerDeps {
+  store: NotesStore;
+}
+
 /** 一頁送出 LLM 時拿到的號碼牌。commit 與 release 只能擇一呼叫一次。 */
 export interface NotesTurn {
   /** 送出時的 Notes 快照（送進 prompt）。 */
@@ -28,14 +44,14 @@ export interface NotesTurn {
   release(): void;
 }
 
-export function createNotesLedger(store: NotesStore) {
+export function createNotesLedger({ store }: NotesLedgerDeps) {
   /** 每個 Series 最後一張號碼牌輪完時 resolve。 */
   const tails = new Map<string, Promise<void>>();
   /**
-   * Spread 記號 → 第一頁送出時拿的快照，與這組裡已套用的頁新增的條目原文（後面的頁看不到它們）。
-   * 記號不再被引用（那次排程結束）就自動放掉。
+   * SnapshotGroup → 第一頁送出時拿的快照，與這組裡已套用的頁新增的條目原文（後面的頁看不到它們）。
+   * 組不再被引用（那次排程結束）就自動放掉。
    */
-  const snapshots = new WeakMap<object, { notes: Promise<NotesEntry[]>; added: Set<string> }>();
+  const snapshots = new WeakMap<SnapshotGroup, { notes: Promise<NotesEntry[]>; added: Set<string> }>();
   /** 每個 Series 最後一次「讀 → 改 → 寫」做完時 resolve。 */
   const writes = new Map<string, Promise<unknown>>();
 
@@ -54,12 +70,21 @@ export function createNotesLedger(store: NotesStore) {
     return run;
   }
 
+  /** 這個 Series 目前的條目。讀不到就當沒有：只是少了 Notes 或過時提示，不擋翻譯。 */
+  function list(seriesId: string): Promise<NotesEntry[]> {
+    return store.list(seriesId).catch((e: unknown) => {
+      console.warn('notes lookup failed', e);
+      return [];
+    });
+  }
+
   return {
+    list,
+
     /**
-     * 送出 LLM 的那一刻呼叫（同步拿號碼牌，順序＝送出順序）。spread：同一個 Spread 的頁面傳同一個記號，
-     * 共用第一頁拿的快照。
+     * 送出 LLM 的那一刻呼叫（同步拿號碼牌，順序＝送出順序）。group：同一組的頁共用第一頁拿的快照。
      */
-    checkout(seriesId: string, spread?: object): NotesTurn {
+    checkout(seriesId: string, group?: SnapshotGroup): NotesTurn {
       const previous = tails.get(seriesId) ?? Promise.resolve();
       let done!: () => void;
       const turn = new Promise<void>((resolve) => (done = resolve));
@@ -67,15 +92,8 @@ export function createNotesLedger(store: NotesStore) {
       void turn.then(() => {
         if (tails.get(seriesId) === turn) tails.delete(seriesId);
       });
-      const shared =
-        (spread && snapshots.get(spread)) ?? {
-          notes: store.list(seriesId).catch((e: unknown) => {
-            console.warn('notes lookup failed', e);
-            return [];
-          }),
-          added: new Set<string>(),
-        };
-      if (spread) snapshots.set(spread, shared);
+      const shared = (group && snapshots.get(group)) ?? { notes: list(seriesId), added: new Set<string>() };
+      if (group) snapshots.set(group, shared);
       const { notes } = shared;
       return {
         notes,

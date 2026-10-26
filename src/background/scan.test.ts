@@ -217,8 +217,8 @@ describe('scan', () => {
         candidates.flatMap((c) => {
           const overlaid = !chrome.env.capturedHidden && (c.overlaid?.length ?? 0) > 0;
           return [
-            { anchorId: c.anchorId, rect: c.rect, sub: { x: 0.5, y: 0, w: 0.5, h: 1 }, thumbnail: 'r', pageHash: overlaid ? WITH_OVERLAY : RIGHT },
-            { anchorId: c.anchorId, rect: c.rect, sub: { x: 0, y: 0, w: 0.5, h: 1 }, thumbnail: 'l', pageHash: LEFT },
+            { anchorId: c.anchorId, rect: c.rect, subRect: { x: 0.5, y: 0, w: 0.5, h: 1 }, thumbnail: 'r', pageHash: overlaid ? WITH_OVERLAY : RIGHT },
+            { anchorId: c.anchorId, rect: c.rect, subRect: { x: 0, y: 0, w: 0.5, h: 1 }, thumbnail: 'l', pageHash: LEFT },
           ];
         });
       const scanner = createScanner(chrome.deps);

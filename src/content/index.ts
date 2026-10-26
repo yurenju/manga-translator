@@ -117,7 +117,7 @@ if (!globalThis.__mangaTranslator) {
         overlay.setEnabled(message.enabled);
         if (anchor instanceof HTMLElement)
           overlay
-            .show(anchor, message.sub, message.text, message.pageHash)
+            .show(anchor, message.subRect, message.text, message.pageHash)
             .then(() => chrome.runtime.sendMessage({ type: 'content:overlayShown' } satisfies Message))
             .catch((e: unknown) => console.warn('overlay failed', e));
         else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });

@@ -17,10 +17,10 @@ function setup() {
   const pageHashes: string[] = [];
   const subs: (RatioRect | undefined)[] = [];
   const sync = createOverlaySync({
-    show: ({ tabId, anchorId, pageHash, sub, text }) => {
+    show: ({ tabId, anchorId, pageHash, subRect, text }) => {
       shown.push([tabId, anchorId, text]);
       pageHashes.push(pageHash);
-      subs.push(sub);
+      subs.push(subRect);
     },
   });
   return { sync, shown, pageHashes, subs };
@@ -69,7 +69,7 @@ describe('overlay sync', () => {
     const { sync, subs } = setup();
     const sub = { x: 0.5, y: 0, w: 0.5, h: 1 };
 
-    sync.publish(1, [{ ...page('a1', { state: 'done', text: TEXT, translated: true }), sub }]);
+    sync.publish(1, [{ ...page('a1', { state: 'done', text: TEXT, translated: true }), subRect: sub }]);
 
     expect(subs).toEqual([sub]);
   });

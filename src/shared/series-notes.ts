@@ -3,7 +3,7 @@
  * 合併 Series（#36）與套用 LLM 的 notes_changes（#37）共用：新條目直接加、既有條目只補空欄位（含空的譯文），
  * 想改既有（非空）的譯文一律變成 NotesSuggestion，由人在 side panel 接受或忽略。
  */
-import type { NotesChanges, NotesEntry } from './translator.ts';
+import type { NotesChanges, NotesEntry, UsedNote } from './translator.ts';
 
 /** LLM（或合併進來的 Series）想改既有譯名時只能提建議。 */
 export interface NotesSuggestion {
@@ -90,16 +90,17 @@ export interface NotesPage {
   unseen?: ReadonlySet<string>;
 }
 
-const normalize = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
+/** 比對原文用：忽略全形半形與空白。 */
+export const normalizeText = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
 
 /** 原文有沒有出現在某一段文字裡（忽略全形半形與空白）。空的原文不算出現。 */
 function appearsIn(texts: readonly string[], 原文: string): boolean {
-  const needle = normalize(原文);
-  return needle !== '' && texts.some((text) => normalize(text).includes(needle));
+  const needle = normalizeText(原文);
+  return needle !== '' && texts.some((text) => normalizeText(text).includes(needle));
 }
 
 /** 原文出現在這些文字裡的條目（快取的 usedNotes，#38 判斷過時用）。 */
-export function usedNotes(entries: readonly NotesEntry[], texts: readonly string[]): { 原文: string; 譯文: string }[] {
+export function usedNotes(entries: readonly NotesEntry[], texts: readonly string[]): UsedNote[] {
   return entries.filter((e) => appearsIn(texts, e.原文)).map(({ 原文, 譯文 }) => ({ 原文, 譯文 }));
 }
 
@@ -193,13 +194,13 @@ export type StaleReason = 'notes' | 'version';
  * current 是 undefined（沒有 API key）時不比版本。
  */
 export function staleReason(
-  page: { usedNotes: readonly { 原文: string; 譯文: string }[]; model: string; promptVersion: string },
+  page: { usedNotes: readonly UsedNote[]; model: string; promptVersion: string },
   entries: readonly NotesEntry[],
   current: TranslatorVersion | undefined,
 ): StaleReason | undefined {
   const byOriginal = new Map(entries.map((e) => [e.原文, e]));
   // 條目不在了（不會發生：條目不能刪）就當沒改
-  const changed = (u: { 原文: string; 譯文: string }) => {
+  const changed = (u: UsedNote) => {
     const now = byOriginal.get(u.原文);
     return now !== undefined && now.譯文 !== u.譯文 && (u.譯文 !== '' || now.locked);
   };

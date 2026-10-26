@@ -181,8 +181,8 @@ const transcriber = createTranscriber({
 const overlayEnabled = new Map<number, boolean>();
 
 const overlaySync = createOverlaySync({
-  show({ tabId, anchorId, pageHash, sub, text }) {
-    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, ...(sub ? { sub } : {}), text, enabled: overlayEnabled.get(tabId) ?? true };
+  show({ tabId, anchorId, pageHash, subRect, text }) {
+    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, subRect, text, enabled: overlayEnabled.get(tabId) ?? true };
     chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });

@@ -46,11 +46,11 @@ export type Message =
   | { type: 'panel:testConnection' }
   | { type: 'offscreen:testConnection' }
   /**
-   * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。sub＝Page 在 anchor 裡的範圍
+   * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。subRect＝Page 在 anchor 裡的範圍
    * （沒給＝整個 anchor；Spread 的一頁或去掉黑邊，#35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
    * enabled＝side panel 的覆蓋開關。
    */
-  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; sub?: RatioRect; text: PageText; enabled: boolean }
+  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; subRect?: RatioRect; text: PageText; enabled: boolean }
   /** SW → content script：截圖前隱藏覆蓋層，等兩個 rAF（已重繪）才回應。 */
   | { type: 'content:hideOverlay' }
   /** SW → content script：截完還原覆蓋層。 */
@@ -181,6 +181,12 @@ export interface Size {
   height: number;
 }
 
+/** 哪個 anchor 上的哪一個 Page（Spread 的兩頁在同一個 anchor 上，要靠 pageHash 分）。 */
+export interface PageOnAnchor {
+  anchorId: string;
+  pageHash: string;
+}
+
 /** 一個 Page 候選。anchorId 對應 content script 記在記憶體裡的元素（anchor）。 */
 export interface PageCandidate {
   anchorId: string;
@@ -202,7 +208,7 @@ export interface CropRequest extends PageCandidatesResponse {
 
 export interface PageThumb extends PageCandidate {
   /** Page 在 anchor 裡的範圍（Spread 切開的一頁，或去掉黑邊）；整個 anchor 就是一個 Page 時省略。 */
-  sub?: RatioRect;
+  subRect?: RatioRect;
   /** 裁切後縮小的 data URL。 */
   thumbnail: string;
   /** Page 的身分（shared/page-hash.ts），從全解析度的裁切算出來；翻譯快取的 key。 */
@@ -258,8 +264,8 @@ export interface AnalyzeRequest {
   screenshot: string;
   viewport: Size;
   candidate: PageCandidate;
-  /** Page 在候選裡的範圍（PageThumb.sub）；省略＝整個候選。 */
-  sub?: RatioRect;
+  /** Page 在候選裡的範圍（PageThumb.subRect）；省略＝整個候選。 */
+  subRect?: RatioRect;
   /** e2e build 才會帶。 */
   pipeline?: PipelineConfig;
 }

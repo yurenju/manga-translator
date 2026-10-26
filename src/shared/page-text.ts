@@ -2,6 +2,7 @@
  * 一個 Page 上的文字：Balloon 與 Loose Text（spec #27 第 4.3 節的 balloons／looseText）。
  * 本機流水線（偵測＋OCR＋閱讀順序）產生座標、原文、順序；讀音與譯文來自 Translator，沒有時用 kuromoji 讀音。
  */
+import type { UsedNote } from './translator.ts';
 
 /**
  * 相對 Page 的 0～1 比例座標（ADR 0003）。跟 shared/messages.ts 的 Rect（畫面 CSS px）是不同東西，
@@ -61,7 +62,7 @@ export interface PageTranslation extends PageText {
   /** shared/page-hash.ts 的 perceptual hash；查詢用 Hamming 距離門檻。 */
   pageHash: string;
   /** 判斷過時用（#38）。 */
-  usedNotes: { 原文: string; 譯文: string }[];
+  usedNotes: UsedNote[];
   model: string;
   promptVersion: string;
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; costUsd: number };

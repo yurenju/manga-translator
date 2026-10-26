@@ -2,6 +2,7 @@
  * e2e 用的 Translator（spec #27 第 12 節）：回傳合成頁 ground truth 的讀音與譯文，不花錢、結果固定、不需要 API key。
  * TranslateInput 沒有座標，所以用原文相似度（1 − 字元編輯距離 / 長度）把 OCR 結果對回 ground truth。
  */
+import { normalizeText } from './series-notes.ts';
 import type { NotesChanges, TranslateInput, TranslateOutput, Translator } from './translator.ts';
 
 /** FakeTranslator 的模型與 prompt 版本（寫進快取、過時提示比對用）。 */
@@ -19,8 +20,6 @@ export interface GroundTruthText {
   zh: string;
 }
 
-const normalize = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
-
 function levenshtein(a: string[], b: string[]): number {
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {
@@ -34,8 +33,8 @@ function levenshtein(a: string[], b: string[]): number {
 }
 
 function similarity(a: string, b: string): number {
-  const x = [...normalize(a)];
-  const y = [...normalize(b)];
+  const x = [...normalizeText(a)];
+  const y = [...normalizeText(b)];
   return 1 - levenshtein(x, y) / Math.max(x.length, y.length, 1);
 }
 
@@ -53,7 +52,7 @@ export interface FakeTranslatorOptions {
 function notesChanges(notes: NotesChanges['added'], input: TranslateInput): NotesChanges {
   const changes: NotesChanges = { added: [], filled: [], suggestions: [] };
   for (const n of notes) {
-    if (!input.items.some((i) => i.kind === 'balloon' && normalize(i.原文).includes(normalize(n.原文)))) continue;
+    if (!input.items.some((i) => i.kind === 'balloon' && normalizeText(i.原文).includes(normalizeText(n.原文)))) continue;
     const existing = input.seriesNotes.find((e) => e.原文 === n.原文);
     if (!existing) {
       changes.added.push(n);

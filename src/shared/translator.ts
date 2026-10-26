@@ -18,6 +18,9 @@ export interface NotesEntry {
   稱呼?: string;
 }
 
+/** 一頁翻譯時用到的條目：當時的原文與譯文（快取的 usedNotes，#38 判斷過時用）。 */
+export type UsedNote = Pick<NotesEntry, '原文' | '譯文'>;
+
 export interface TranslateInput {
   /** v1 整份送。 */
   seriesNotes: NotesEntry[];
