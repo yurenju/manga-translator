@@ -10,7 +10,7 @@ import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import { createTrace } from '../shared/trace.ts';
-import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -243,9 +243,14 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     ];
     const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
 
-    const items = balloons.map((balloon) => {
+    const regionsList = balloons.map((balloon) => {
+      const text = toPx(balloon.textBbox, size);
+      return { text, ...textRegions(toPx(balloon.balloonBbox, size), text) };
+    });
+    separateRegions(regionsList);
+    const items = balloons.map((balloon, i) => {
       const balloonBox = toPx(balloon.balloonBbox, size);
-      const regions = textRegions(balloonBox, toPx(balloon.textBbox, size));
+      const regions = regionsList[i]!;
       const luminance = balloon.eraseLuminance ?? 255;
       const erase = document.createElement('div');
       erase.className = 'er';
@@ -259,10 +264,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       box.style.color = luminance < 128 ? '#fff' : '#111';
       const inner = buildText(balloon.譯文, vertical);
       box.append(inner);
-      element.append(erase, box);
-      return { balloon, regions, box, inner };
+      return { balloon, regions, erase, box, inner };
     });
-    element.append(highlight, tip);
+    // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
+    element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
 
     const old = entry.layers.get(subKey(sub));
     if (old && hovered?.layer === old) setHovered(undefined);

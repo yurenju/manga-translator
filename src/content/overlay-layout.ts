@@ -69,6 +69,37 @@ export function textRegions(balloon: Box, text: Box): { erase: Box; fit1: Box; f
   return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1, fit2 };
 }
 
+const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+/**
+ * 對話框疊在一起時偵測框也會重疊，譯文就排進隔壁的框裡（#27 除錯在 Jump+ 看到）。兩兩比對譯文範圍，
+ * 重疊就沿著兩個文字框分得比較開的那一軸，在文字框相對的兩邊中間切一刀，各留在自己那一側。
+ * 只改 fit1／fit2（就地修改）；擦除範圍不動，原文還是要整個蓋掉。
+ */
+export function separateRegions(items: { text: Box; fit1: Box; fit2: Box }[]): void {
+  for (const [i, a] of items.entries()) {
+    for (const b of items.slice(i + 1)) {
+      if (!boxesOverlap(a.fit2, b.fit2)) continue;
+      const gapX = Math.max(b.text.x - (a.text.x + a.text.w), a.text.x - (b.text.x + b.text.w));
+      const gapY = Math.max(b.text.y - (a.text.y + a.text.h), a.text.y - (b.text.y + b.text.h));
+      const [pos, size] = gapX >= gapY ? (['x', 'w'] as const) : (['y', 'h'] as const);
+      const mid = (t: Box) => t[pos] + t[size] / 2;
+      const [first, second] = mid(a.text) <= mid(b.text) ? [a, b] : [b, a];
+      // 文字框重疊很多時中點可能越過自己的文字中心，夾在兩個中心之間
+      const line = Math.min(Math.max((first.text[pos] + first.text[size] + second.text[pos]) / 2, mid(first.text)), mid(second.text));
+      for (const key of ['fit1', 'fit2'] as const) {
+        const f = first[key];
+        if (f[pos] + f[size] > line) f[size] = line - f[pos];
+        const s = second[key];
+        if (s[pos] < line) {
+          s[size] = s[pos] + s[size] - line;
+          s[pos] = line;
+        }
+      }
+    }
+  }
+}
+
 /** 最小畫面字級（畫面 px）。Jump+ 顯示倍率約 0.49×，只看 Page 像素的話 14px 在畫面上只剩約 7px。 */
 export const MIN_SCREEN_FONT_PX = 9;
 

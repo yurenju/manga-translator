@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 describe('verticalize（直書前的文字處理）', () => {
   it('半形 !?~, 換成全形', () => {
@@ -58,6 +58,47 @@ describe('textRegions', () => {
   it('第 2 階：Balloon 往內 10%，而且不比第 1 階小', () => {
     expect(textRegions(balloon, text).fit2).toEqual({ x: 120, y: 140, w: 160, h: 320 });
     expect(textRegions(balloon, { x: 105, y: 105, w: 190, h: 390 }).fit2).toEqual({ x: 116, y: 132, w: 168, h: 336 });
+  });
+});
+
+describe('separateRegions（相鄰 Balloon 的譯文範圍不重疊）', () => {
+  // 真實 Jump+ 一頁（822×1200）的偵測結果（#27 除錯 trace）：三個直書 Balloon 疊在一起，
+  // 偵測框互相重疊，b7 的譯文「這個……」原本排進了 b6 的框裡
+  const px = (r: Box): Box => ({ x: r.x * 822, y: r.y * 1200, w: r.w * 822, h: r.h * 1200 });
+  const detected = {
+    b5: { balloon: px({ x: 0.85523, y: 0.52083, w: 0.09367, h: 0.10083 }), text: px({ x: 0.87591, y: 0.53333, w: 0.05109, h: 0.0725 }) },
+    b6: { balloon: px({ x: 0.73723, y: 0.53167, w: 0.17032, h: 0.19 }), text: px({ x: 0.77007, y: 0.55, w: 0.09976, h: 0.15333 }) },
+    b7: { balloon: px({ x: 0.68978, y: 0.63, w: 0.10706, h: 0.1 }), text: px({ x: 0.72263, y: 0.6575, w: 0.05353, h: 0.05667 }) },
+  };
+  const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const center = (b: Box) => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+  const contains = (b: Box, p: { x: number; y: number }) => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+
+  it('重疊的 Balloon 之間，譯文範圍沿著文字框分得比較開的方向從中間切開', () => {
+    const items = Object.values(detected).map(({ balloon, text }) => ({ text, ...textRegions(balloon, text) }));
+    separateRegions(items);
+    for (const [i, a] of items.entries()) {
+      for (const b of items.slice(i + 1)) {
+        expect(overlaps(a.fit1, b.fit1)).toBe(false);
+        expect(overlaps(a.fit2, b.fit2)).toBe(false);
+      }
+      // 自己的文字框中心仍在範圍內，第 2 階仍不比第 1 階小
+      expect(contains(a.fit1, center(a.text))).toBe(true);
+      expect(contains(a.fit2, a.fit1) && contains(a.fit2, { x: a.fit1.x + a.fit1.w, y: a.fit1.y + a.fit1.h })).toBe(true);
+    }
+  });
+
+  it('不重疊的 Balloon 不動', () => {
+    const balloon = { x: 100, y: 100, w: 200, h: 400 };
+    const text = { x: 170, y: 200, w: 60, h: 200 };
+    const far = { x: 1000, y: 100, w: 200, h: 400 };
+    const items = [
+      { text, ...textRegions(balloon, text) },
+      { text: { ...text, x: 1070 }, ...textRegions(far, { ...text, x: 1070 }) },
+    ];
+    const before = structuredClone(items);
+    separateRegions(items);
+    expect(items).toEqual(before);
   });
 });
 
