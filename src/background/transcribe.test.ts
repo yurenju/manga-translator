@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
-import type { TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import type { NotesSuggestion } from '../shared/series-notes.ts';
+import type { NotesChanges, NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createClaudeTranslator } from '../offscreen/claude-translator.ts';
-import { createTranscriber, type PageCache, type TranscriberDeps } from './transcribe.ts';
+import { createTranscriber, type NotesStore, type PageCache, type TranscriberDeps } from './transcribe.ts';
 
 const rect = { x: 0, y: 0, w: 1, h: 1 };
 
@@ -54,6 +55,20 @@ function memoryCache(): PageCache & { saved: PageTranslation[] } {
   };
 }
 
+/** 記憶體裡的 Series Notes。 */
+function memoryNotes(initial: NotesEntry[] = []): NotesStore & { entries: NotesEntry[]; suggestions: NotesSuggestion[] } {
+  const store = {
+    entries: structuredClone(initial),
+    suggestions: [] as NotesSuggestion[],
+    list: async (seriesId: string) => structuredClone(store.entries.filter((e) => e.seriesId === seriesId)),
+    async save(seriesId: string, entries: NotesEntry[], suggestions: NotesSuggestion[]) {
+      store.entries = [...store.entries.filter((e) => e.seriesId !== seriesId), ...structuredClone(entries)];
+      store.suggestions.push(...structuredClone(suggestions));
+    },
+  };
+  return store;
+}
+
 function setup(overrides: Partial<TranscriberDeps> = {}) {
   const published: PageView[][] = [];
   const deps: TranscriberDeps = {
@@ -61,6 +76,7 @@ function setup(overrides: Partial<TranscriberDeps> = {}) {
     getTranslator: () => undefined,
     getSeriesId: async () => 'series-1',
     cache: memoryCache(),
+    notes: memoryNotes(),
     publish: (_tabId, pages) => published.push(structuredClone(pages)),
     ...overrides,
   };
@@ -684,5 +700,112 @@ describe('自動翻譯開關', () => {
     transcriber.clear(1);
 
     expect(transcriber.isAutoTranslate(1)).toBe(true);
+  });
+});
+
+const note = (原文: string, 譯文: string, more: Partial<NotesEntry> = {}): NotesEntry => ({
+  seriesId: 'series-1',
+  原文,
+  讀音: '',
+  譯文,
+  類別: '用語',
+  locked: false,
+  ...more,
+});
+const noChanges = (): NotesChanges => ({ added: [], filled: [], suggestions: [] });
+
+/** 每次呼叫依序回傳 changes 裡的一份 notes_changes；inputs 記下每次送出的內容。 */
+function translatorWithNotes(changes: NotesChanges[], inputs: TranslateInput[] = []): Translator {
+  let call = 0;
+  return {
+    async translatePage(input) {
+      inputs.push(structuredClone(input));
+      const output = await translatorReturning('譯').translatePage(input);
+      return { ...output, notes_changes: changes[call++] ?? noChanges() };
+    },
+  };
+}
+
+describe('Series Notes 累積（#37）', () => {
+  it('第 1 頁 LLM 新增的條目存進 Notes，第 2 頁送出時就帶著它', async () => {
+    const inputs: TranslateInput[] = [];
+    const notes = memoryNotes();
+    const translator = translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: 'きょう', 譯文: '今天', 類別: '用語' }] }], inputs);
+    const { transcriber } = setup({ getTranslator: () => translator, notes });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2')], capture);
+
+    expect(inputs.map((i) => i.seriesNotes)).toEqual([[], [note('今日', '今天', { 讀音: 'きょう' })]]);
+    expect(notes.entries).toEqual([note('今日', '今天', { 讀音: 'きょう' })]);
+  });
+
+  it('依送出 LLM 的順序套用：後送出的先回來也要等，同一個原文先送出的那頁先贏', async () => {
+    const notes = memoryNotes();
+    const sent: { anchor: string; reply(zh: string): void }[] = [];
+    const translator: Translator = {
+      translatePage: (input) =>
+        new Promise((resolve) =>
+          sent.push({
+            anchor: input.items[0]!.id,
+            reply: (zh) =>
+              void translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: zh, 類別: '用語' }] }])
+                .translatePage(input)
+                .then(resolve),
+          }),
+        ),
+    };
+    const { transcriber } = setup({ getTranslator: () => translator, notes });
+
+    const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    sent[1]!.reply('今兒');
+    await flush();
+    expect(notes.entries).toEqual([]);
+
+    sent[0]!.reply('今天');
+    await running;
+    expect(notes.entries).toEqual([note('今日', '今天')]);
+    expect(notes.suggestions).toEqual([{ seriesId: 'series-1', 原文: '今日', 建議譯文: '今兒', 來源: { pageHash: HASHES.a2 } }]);
+  });
+
+  it('先送出的那頁翻譯失敗：不套用它，也不擋住後面的', async () => {
+    const notes = memoryNotes();
+    const sent: { ok(): void; fail(): void }[] = [];
+    const translator: Translator = {
+      translatePage: (input) =>
+        new Promise((resolve, reject) =>
+          sent.push({
+            ok: () =>
+              void translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] }])
+                .translatePage(input)
+                .then(resolve),
+            fail: () => reject(new Error('Claude API 500')),
+          }),
+        ),
+    };
+    const { transcriber } = setup({ getTranslator: () => translator, notes });
+
+    const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    sent[1]!.ok();
+    sent[0]!.fail();
+    await running;
+
+    expect(notes.entries).toEqual([note('今日', '今天')]);
+  });
+
+  it('快取記錄這頁原文裡出現的條目（usedNotes，含這頁剛新增的），其他條目不記', async () => {
+    const cache = memoryCache();
+    const notes = memoryNotes([note('ドン', '咚', { 類別: '狀聲詞' }), note('明日', '明天')]);
+    const translator = translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: 'きょう', 譯文: '今天', 類別: '用語' }] }]);
+    const { transcriber } = setup({ getTranslator: () => translator, notes, cache });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(cache.saved[0]!.usedNotes).toEqual([
+      { 原文: 'ドン', 譯文: '咚' },
+      { 原文: '今日', 譯文: '今天' },
+    ]);
   });
 });

@@ -48,7 +48,7 @@ export async function configuredServiceWorker(
   context: BrowserContext,
   site: MockSite,
   fakeTranslator = false,
-  translatorOptions: Pick<TestConfig, 'requireApiKey' | 'unreadableTexts'> = {},
+  translatorOptions: Pick<TestConfig, 'requireApiKey' | 'unreadableTexts' | 'fakeNotes'> = {},
 ): Promise<Worker> {
   const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
   const config: TestConfig = { pipeline: E2E_PIPELINE(site), fakeTranslator, ...translatorOptions };
@@ -68,6 +68,8 @@ export const test = base.extend<{
   requireApiKey: boolean;
   /** FakeTranslator 當成無法辨識的 ground truth 原文。 */
   unreadableTexts: string[];
+  /** FakeTranslator 在 Balloon 裡看到就回傳成新增的 Notes 條目（#37）。 */
+  fakeNotes: NonNullable<TestConfig['fakeNotes']>;
   context: BrowserContext;
   sw: Worker;
   extensionId: string;
@@ -82,8 +84,9 @@ export const test = base.extend<{
   fakeTranslator: [false, { option: true }],
   requireApiKey: [false, { option: true }],
   unreadableTexts: [[], { option: true }],
-  sw: async ({ context, mockSite, fakeTranslator, requireApiKey, unreadableTexts }, use) => {
-    await use(await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts }));
+  fakeNotes: [[], { option: true }],
+  sw: async ({ context, mockSite, fakeTranslator, requireApiKey, unreadableTexts, fakeNotes }, use) => {
+    await use(await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts, fakeNotes }));
   },
   extensionId: async ({ sw }, use) => {
     await use(new URL(sw.url()).host);

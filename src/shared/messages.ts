@@ -1,6 +1,6 @@
 import type { PageText, RatioRect } from './page-text.ts';
 import type { SeriesOption } from './series.ts';
-import type { TranslateInput, TranslateOutput } from './translator.ts';
+import type { NotesChanges, TranslateInput, TranslateOutput } from './translator.ts';
 
 /** onnxruntime-web 的執行環境。 */
 export type ExecutionProvider = 'webgpu' | 'wasm';
@@ -107,11 +107,14 @@ export interface TestConfig {
   requireApiKey?: boolean;
   /** FakeTranslator 把這些 ground truth 原文當成無法辨識（模擬 Claude 回 unreadable）。 */
   unreadableTexts?: string[];
+  /** FakeTranslator 在 Balloon 原文裡看到這些條目、而 Notes 還沒有時，回傳成新增的條目（#37）。 */
+  fakeNotes?: NotesChanges['added'];
 }
 
 /** e2e build 才有：offscreen 用 FakeTranslator 取代 Claude。 */
 export interface FakeTranslatorConfig {
   unreadableTexts: string[];
+  notes: NotesChanges['added'];
 }
 
 export type TranslateResponse = { output: TranslateOutput } | { error: string; noApiKey?: true };

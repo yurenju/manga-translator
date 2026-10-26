@@ -3,6 +3,7 @@ import type { PageTranslation } from '../shared/page-text.ts';
 import type { NotesSuggestion } from '../shared/series-notes.ts';
 import type { Series, UrlPattern } from '../shared/series.ts';
 import type { NotesEntry } from '../shared/translator.ts';
+import type { NotesStore } from './notes-ledger.ts';
 import type { SeriesRepo } from './series-catalog.ts';
 
 /** key 以 seriesId 開頭的 store（[seriesId, …]）裡，這個 Series 的全部。陣列 key 比任何字串都大。 */
@@ -16,6 +17,30 @@ function eachBySeries(store: IDBObjectStore, seriesId: string, visit: (cursor: I
     if (!cursor) return;
     visit(cursor);
     cursor.continue();
+  };
+}
+
+/**
+ * 翻譯時累積的 Series Notes（#37）。依 index 讀出來是照原文排序（主鍵 [seriesId, 原文]），每次順序相同，
+ * prompt cache 才吃得到。條目與建議修改在同一個 transaction 寫入。
+ */
+export function indexedDbNotesStore(): NotesStore {
+  let db: Promise<IDBDatabase> | undefined;
+  return {
+    list: (seriesId) =>
+      storeRequest((db ??= openDb()), STORES.seriesNotes, 'readonly', (s) => s.index(BY_SERIES).getAll(seriesId) as IDBRequest<NotesEntry[]>),
+    async save(seriesId, entries, suggestions) {
+      const conn = await (db ??= openDb());
+      await new Promise<void>((resolve, reject) => {
+        const tx = conn.transaction([STORES.seriesNotes, STORES.notesSuggestions], 'readwrite');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        const notes = tx.objectStore(STORES.seriesNotes);
+        for (const entry of entries) notes.put({ ...entry, seriesId });
+        const pending = tx.objectStore(STORES.notesSuggestions);
+        for (const suggestion of suggestions) pending.add(suggestion);
+      });
+    },
   };
 }
 

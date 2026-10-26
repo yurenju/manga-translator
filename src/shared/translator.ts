@@ -30,6 +30,15 @@ export interface TranslateInput {
   }[];
 }
 
+/** LLM 對 Series Notes 的變更：新增／補空欄位／建議修改。套用規則在 series-notes.ts（SW 執行）。 */
+export interface NotesChanges {
+  added: Omit<NotesEntry, 'seriesId' | 'locked'>[];
+  /** 補既有條目的空欄位。 */
+  filled: { 原文: string; fields: Partial<NotesEntry> }[];
+  /** 想改既有條目的譯文。 */
+  suggestions: { 原文: string; 建議譯文: string; 理由?: string }[];
+}
+
 export interface Usage {
   inputTokens: number;
   outputTokens: number;
@@ -39,11 +48,7 @@ export interface Usage {
 
 export interface TranslateOutput {
   items: { id: string; 讀音: string; 譯文: string; unreadable: boolean }[];
-  notes_changes: {
-    added: Omit<NotesEntry, 'seriesId' | 'locked'>[];
-    filled: { 原文: string; fields: Partial<NotesEntry> }[];
-    suggestions: { 原文: string; 建議譯文: string; 理由?: string }[];
-  };
+  notes_changes: NotesChanges;
   usage: Usage;
   model: string;
   latencyMs: number;

@@ -11,13 +11,20 @@
  * - 去重：同一個 Page（hash 在門檻內）已有工作在跑就不重複排，等那份結果。
  * - 自動翻譯關著時新 Page 停在 pending，按「翻譯此頁」才排。快取命中照樣直接顯示（不算翻譯）。
  * - 429 依 retry-after 退避重試在 Translator 裡（claude-translator.ts）；重試後仍失敗就帶 translateError，按「重試」重送 LLM。
+ *
+ * Series Notes（#37；順序在 notes-ledger.ts）：送出 LLM 時帶這個 Series 的 Notes 快照，回來後依送出順序套用
+ * notes_changes，再寫快取。沒有 Series 時不帶 Notes 也不套用。
  */
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
+import { usedNotes } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import type { NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import { createNotesLedger, type NotesLedger, type NotesStore } from './notes-ledger.ts';
 import { createTranslationQueue, type QueuedJob } from './translation-queue.ts';
+
+export type { NotesStore };
 
 export interface PageCache {
   /** 同一個 Series 裡 hash 在門檻內最接近的一筆。 */
@@ -41,6 +48,7 @@ export interface TranscriberDeps {
   /** 這個 tab 啟動時選定的 Series（或 Provisional Series）；沒有就不查也不寫快取。 */
   getSeriesId(tabId: number): Promise<string | undefined>;
   cache: PageCache;
+  notes: NotesStore;
   publish(tabId: number, pages: PageView[]): void;
   onJobEvent?(event: JobEvent): void;
 }
@@ -55,13 +63,12 @@ const trace = createTrace('sw');
 /** 工作的 priority：可見頁 > 預翻頁（v1 只有可見頁，spec 第 10 節）。 */
 export const PRIORITY_VISIBLE = 1;
 
-function toTranslateInput(text: PageText): TranslateInput {
+function toTranslateInput(text: PageText, seriesNotes: NotesEntry[]): TranslateInput {
   const items = [
     ...text.balloons.map((b) => ({ order: b.order, item: { id: b.id, kind: 'balloon' as const, 原文: b.原文, orientation: b.orientation } })),
     ...text.looseText.map((l) => ({ order: l.order, item: { id: l.id, kind: 'loose' as const, 原文: l.原文, orientation: l.orientation } })),
   ];
-  // TODO(#37)：Series Notes 由之後的 ticket 接上
-  return { seriesNotes: [], items: items.sort((a, b) => a.order - b.order).map((i) => i.item) };
+  return { seriesNotes, items: items.sort((a, b) => a.order - b.order).map((i) => i.item) };
 }
 
 function applyTranslation(text: PageText, output: TranslateOutput): PageText {
@@ -80,27 +87,40 @@ interface CacheTarget {
 }
 
 /** text 是本機流水線的結果（kuromoji 讀音）；失敗時就顯示它。只有翻譯成功才寫快取。 */
-async function translateText(text: PageText, translator: Translator | undefined, cache: PageCache, target: CacheTarget): Promise<Transcript> {
+async function translateText(
+  text: PageText,
+  translator: Translator | undefined,
+  { cache, ledger }: { cache: PageCache; ledger: NotesLedger },
+  target: CacheTarget,
+): Promise<Transcript> {
   if (!translator) return { state: 'done', text, translated: false };
+  // 送出的這一刻拿號碼牌：notes_changes 依送出順序套用
+  const turn = target.seriesId === undefined ? undefined : ledger.checkout(target.seriesId);
+  const seriesNotes = (await turn?.notes) ?? [];
   let output: TranslateOutput;
   const startedAt = Date.now();
   try {
-    output = await translator.translatePage(toTranslateInput(text));
+    output = await translator.translatePage(toTranslateInput(text, seriesNotes));
     trace('translate:done', { pageHash: target.pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage });
   } catch (e) {
     // 429／5xx 的重試在 Translator 裡（claude-translator.ts）；這裡是重試後仍失敗
     console.warn('translate failed', e);
     trace('translate:error', { pageHash: target.pageHash, ms: Date.now() - startedAt, error: e });
+    turn?.release();
     return { state: 'done', text, translated: false, translateError: e instanceof Error ? e.message : String(e) };
   }
   const translated = applyTranslation(text, output);
   const { model, latencyMs, usage } = output;
+  // 套用後的條目：這頁剛新增或補上譯文的也算這頁用到的
+  const notes = turn
+    ? await turn.commit(output.notes_changes, { pageHash: target.pageHash, balloonTexts: text.balloons.map((b) => b.原文) })
+    : seriesNotes;
   if (target.seriesId !== undefined) {
     const entry: PageTranslation = {
       ...translated,
       seriesId: target.seriesId,
       pageHash: target.pageHash,
-      usedNotes: [],
+      usedNotes: usedNotes(notes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
       model,
       promptVersion: PROMPT_VERSION,
       usage,
@@ -144,6 +164,7 @@ interface Job extends QueuedJob {
 }
 
 export function createTranscriber(deps: TranscriberDeps) {
+  const ledger = createNotesLedger(deps.notes);
   const tabs = new Map<number, TabState>();
   const views = new Map<number, PageView[]>();
   const autoTranslate = new Map<number, boolean>();
@@ -242,7 +263,7 @@ export function createTranscriber(deps: TranscriberDeps) {
 
   async function runLlm(job: Job): Promise<void> {
     const { record } = job;
-    complete(job, await translateText(record.text!, job.translator, deps.cache, { seriesId: record.seriesId, pageHash: record.pageHash }));
+    complete(job, await translateText(record.text!, job.translator, { cache: deps.cache, ledger }, { seriesId: record.seriesId, pageHash: record.pageHash }));
   }
 
   async function lookupCache(seriesId: string | undefined, pageHash: string): Promise<Transcript | undefined> {

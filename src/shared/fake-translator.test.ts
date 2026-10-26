@@ -32,6 +32,22 @@ describe('FakeTranslator', () => {
     expect(output.items).toEqual([{ id: 'x', 讀音: '', 譯文: NO_MATCH, unreadable: false }]);
   });
 
+  it('設定了 notes：Balloon 原文裡出現、送來的 Notes 還沒有的條目回傳成 notes_changes.added', async () => {
+    const パン = { 原文: 'パン', 讀音: 'ぱん', 譯文: '麵包', 類別: '用語' };
+    const 朝 = { 原文: '朝', 讀音: 'あさ', 譯文: '早上', 類別: '用語' };
+    const withNotes = createFakeTranslator([readGroundTruth('p01-basic')], { notes: [パン, 朝] });
+    const items = [
+      { id: 'b1', kind: 'balloon' as const, 原文: 'うん、パンを買いに行くんだ', orientation: 'vertical' as const },
+      { id: 'l1', kind: 'loose' as const, 原文: '朝七時', orientation: 'vertical' as const },
+    ];
+
+    const first = await withNotes.translatePage({ seriesNotes: [], items });
+    const again = await withNotes.translatePage({ seriesNotes: [{ ...パン, seriesId: 's', locked: false }], items });
+
+    expect(first.notes_changes.added).toEqual([パン]);
+    expect(again.notes_changes.added).toEqual([]);
+  });
+
   it('不花錢、不改 Series Notes', async () => {
     const output = await translator.translatePage({ seriesNotes: [], items: [] });
 

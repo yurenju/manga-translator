@@ -18,14 +18,14 @@ import type {
   TranslateResponse,
 } from '../shared/messages.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { Translator } from '../shared/translator.ts';
+import type { TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { indexedDbPageCache } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
 import { createSeriesCatalog } from './series-catalog.ts';
-import { indexedDbSeriesRepo } from './series-store.ts';
+import { indexedDbNotesStore, indexedDbSeriesRepo } from './series-store.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber, type JobEvent } from './transcribe.ts';
 
@@ -38,6 +38,8 @@ declare global {
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
   var __translateCalls: number | undefined;
+  /** e2e build 才有：每次送給 FakeTranslator 的內容（#37：確認前一頁新增的條目有送出）。 */
+  var __translateInputs: TranslateInput[] | undefined;
   /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
   var __jobLog: (JobEvent & { at: number })[] | undefined;
   /** e2e build 才有：記下過幾個 Page「帶覆蓋層的樣子」（scan.ts），給測試等它做完。 */
@@ -105,7 +107,10 @@ const apiKeys = indexedDbApiKeyStore();
 const offscreenTranslator: Translator = {
   async translatePage(input) {
     // e2e：FakeTranslator 在 offscreen，這裡記呼叫次數（確認命中快取時沒有翻譯，#33）
-    if (__E2E__ && fakeTranslator) globalThis.__translateCalls = (globalThis.__translateCalls ?? 0) + 1;
+    if (__E2E__ && fakeTranslator) {
+      globalThis.__translateCalls = (globalThis.__translateCalls ?? 0) + 1;
+      (globalThis.__translateInputs ??= []).push(input);
+    }
     await ensureOffscreenDocument();
     const response = await chrome.runtime.sendMessage<Message, TranslateResponse>({
       type: 'offscreen:translate',
@@ -137,6 +142,7 @@ const transcriber = createTranscriber({
   getTranslator,
   getSeriesId: (tabId) => activation.getSeriesId(tabId),
   cache: indexedDbPageCache(),
+  notes: indexedDbNotesStore(),
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
     overlaySync.publish(tabId, pages);
@@ -163,8 +169,9 @@ if (__E2E__) {
   globalThis.__configureForTest = (config) => {
     pipelineConfig = config.pipeline;
     globalThis.__translateCalls = 0;
+    globalThis.__translateInputs = [];
     globalThis.__jobLog = [];
-    fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [] } : undefined;
+    fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [], notes: config.fakeNotes ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
   };
 }

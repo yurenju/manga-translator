@@ -3,7 +3,7 @@
  * 合併 Series（#36）與套用 LLM 的 notes_changes（#37）共用：新條目直接加、既有條目只補空欄位（含空的譯文），
  * 想改既有（非空）的譯文一律變成 NotesSuggestion，由人在 side panel 接受或忽略。
  */
-import type { NotesEntry } from './translator.ts';
+import type { NotesChanges, NotesEntry } from './translator.ts';
 
 /** LLM（或合併進來的 Series）想改既有譯名時只能提建議。 */
 export interface NotesSuggestion {
@@ -61,4 +61,56 @@ export function mergeNotes(
     }
   }
   return { entries, suggestions };
+}
+
+/** 這次 LLM 回應所屬的 Page。 */
+export interface NotesPage {
+  seriesId: string;
+  pageHash: string;
+  /** 這頁每個 Balloon 的 OCR 原文。 */
+  balloonTexts: readonly string[];
+}
+
+const normalize = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
+
+/** 原文有沒有出現在某一段文字裡（忽略全形半形與空白）。空的原文不算出現。 */
+function appearsIn(texts: readonly string[], 原文: string): boolean {
+  const needle = normalize(原文);
+  return needle !== '' && texts.some((text) => normalize(text).includes(needle));
+}
+
+/** 原文出現在這些文字裡的條目（快取的 usedNotes，#38 判斷過時用）。 */
+export function usedNotes(entries: readonly NotesEntry[], texts: readonly string[]): { 原文: string; 譯文: string }[] {
+  return entries.filter((e) => appearsIn(texts, e.原文)).map(({ 原文, 譯文 }) => ({ 原文, 譯文 }));
+}
+
+/**
+ * 依只能新增規則套用 LLM 翻某一頁時回傳的 notes_changes（#37）。規則由這裡執行，不交給 LLM 判斷。
+ * OCR 錯字防護：新條目的原文必須出現在這頁某個 Balloon 的原文裡才採用。封面、扉頁的設計字與署名多半是
+ * Loose Text 而且常被 OCR 讀錯，照先到先贏規則，錯的版本一旦進來就會卡住之後正確的版本（#37、#48 的觀察）。
+ */
+export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesChanges, page: NotesPage): MergedNotes {
+  const known = new Set(notes.map((e) => e.原文));
+  const asEntry = (e: Partial<NotesEntry> & { 原文: string }): NotesEntry => ({
+    讀音: '',
+    譯文: '',
+    類別: '',
+    ...e,
+    seriesId: page.seriesId,
+    locked: false,
+  });
+  const incoming = [
+    ...changes.added.filter((a) => known.has(a.原文) || appearsIn(page.balloonTexts, a.原文)).map(asEntry),
+    // 補空欄位只對既有條目有意義
+    ...changes.filled.filter((f) => known.has(f.原文)).map((f) => asEntry({ ...f.fields, 原文: f.原文 })),
+  ];
+  const 來源 = { pageHash: page.pageHash };
+  const merged = mergeNotes(notes, incoming, { seriesId: page.seriesId, 來源 });
+  const byOriginal = new Map(merged.entries.map((e) => [e.原文, e]));
+  for (const { 原文, 建議譯文, 理由 } of changes.suggestions) {
+    const existing = byOriginal.get(原文);
+    if (!existing || !建議譯文 || 建議譯文 === existing.譯文) continue;
+    merged.suggestions.push({ seriesId: page.seriesId, 原文, 建議譯文, ...(理由 ? { 理由 } : {}), 來源 });
+  }
+  return merged;
 }

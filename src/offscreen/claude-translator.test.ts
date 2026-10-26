@@ -83,16 +83,17 @@ describe('Claude 翻譯：request', () => {
     expect(body).not.toHaveProperty('stream');
   });
 
-  it('Series Notes 放在標了 cache_control 的 system，這頁的原文（依閱讀順序、只帶 id）放在 user message', async () => {
+  it('system 分兩段、各標 cache_control：固定的指示在前、Series Notes 在後；這頁的原文（依閱讀順序、只帶 id）放在 user message', async () => {
     const { translator, calls } = setup([ok]);
 
     await translator.translatePage(input);
 
     const body = JSON.parse(calls[0]!.init.body as string);
-    expect(body.system).toHaveLength(1);
-    expect(body.system[0].cache_control).toEqual({ type: 'ephemeral' });
-    expect(body.system[0].text).toContain('霧島湊');
-    expect(body.system[0].text).not.toContain('s1'); // seriesId 不必送
+    expect(body.system).toHaveLength(2);
+    expect(body.system.map((b: { cache_control: unknown }) => b.cache_control)).toEqual([{ type: 'ephemeral' }, { type: 'ephemeral' }]);
+    expect(body.system[0].text).not.toContain('霧島湊');
+    expect(body.system[1].text).toContain('霧島湊');
+    expect(body.system[1].text).not.toContain('s1'); // seriesId 不必送
     expect(body.messages).toHaveLength(1); // 不帶前一頁的對話
     expect(body.messages[0].role).toBe('user');
     const sent = JSON.parse(body.messages[0].content[0].text);
@@ -111,6 +112,16 @@ describe('Claude 翻譯：request', () => {
     const [a, b] = calls.map((c) => JSON.parse(c.init.body as string));
     expect(a.system).toEqual(b.system);
     expect(a.output_config).toEqual(b.output_config);
+  });
+
+  it('Series Notes 變了（前一頁新增了條目）：指示那段仍逐字相同，第 2 頁起吃得到它的快取', async () => {
+    const { translator, calls } = setup([ok, ok]);
+
+    await translator.translatePage({ ...input, seriesNotes: [] });
+    await translator.translatePage(input);
+
+    const [a, b] = calls.map((c) => JSON.parse(c.init.body as string));
+    expect(a.system).toEqual([b.system[0]]);
   });
 });
 
