@@ -10,7 +10,8 @@
     "build:e2e": "node scripts/build.ts --e2e",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "npm run build:e2e && playwright test"
+    "e2e": "npm run build:e2e && playwright test",
+    "smoke": "vitest run --config vitest.smoke.config.ts && npm run build:e2e && playwright test --config playwright.smoke.config.ts"
   },
   "dependencies": {
     "kuromoji": "0.1.2",

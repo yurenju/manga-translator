@@ -9,13 +9,20 @@ import { startMockSite, type MockSite } from './mock-site/server.ts';
 
 const EXTENSION_DIR = fileURLToPath(new URL('../dist/e2e', import.meta.url));
 
-/** userDataDir 給 '' 是每次全新的暫存設定檔；給同一個目錄就能模擬「重開瀏覽器」。 */
-export function launchWithExtension(userDataDir: string, realDeviceScaleFactor?: number): Promise<BrowserContext> {
+/**
+ * userDataDir 給 '' 是每次全新的暫存設定檔；給同一個目錄就能模擬「重開瀏覽器」。
+ * extensionDir 預設是 dist/e2e；smoke test 也用它載入正式 build。
+ */
+export function launchWithExtension(
+  userDataDir: string,
+  realDeviceScaleFactor?: number,
+  extensionDir = EXTENSION_DIR,
+): Promise<BrowserContext> {
   return chromium.launchPersistentContext(userDataDir, {
     channel: 'chromium',
     args: [
-      `--disable-extensions-except=${EXTENSION_DIR}`,
-      `--load-extension=${EXTENSION_DIR}`,
+      `--disable-extensions-except=${extensionDir}`,
+      `--load-extension=${extensionDir}`,
       // 真的視窗大小。用 test.use({ viewport: null }) 的測試靠它；其他測試的 viewport 是模擬的，不受影響。
       '--window-size=1280,1500',
       ...(realDeviceScaleFactor === undefined ? [] : [`--force-device-scale-factor=${realDeviceScaleFactor}`]),
@@ -37,9 +44,14 @@ export const E2E_PIPELINE = (site: MockSite): PipelineConfig => ({
  * 取得 SW 並在建立任何 Page 之前設定：模型從 mock site 下載（內容是 repo 外的模型快取）、強制 wasm
  * （spec 第 12 節：自動測試預設跑 wasm），需要時改用 FakeTranslator。
  */
-export async function configuredServiceWorker(context: BrowserContext, site: MockSite, fakeTranslator = false): Promise<Worker> {
+export async function configuredServiceWorker(
+  context: BrowserContext,
+  site: MockSite,
+  fakeTranslator = false,
+  translatorOptions: Pick<TestConfig, 'requireApiKey' | 'unreadableTexts'> = {},
+): Promise<Worker> {
   const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
-  const config: TestConfig = { pipeline: E2E_PIPELINE(site), fakeTranslator };
+  const config: TestConfig = { pipeline: E2E_PIPELINE(site), fakeTranslator, ...translatorOptions };
   await sw.evaluate((config) => globalThis.__configureForTest!(config), config);
   return sw;
 }
@@ -52,6 +64,10 @@ export const test = base.extend<{
   realDeviceScaleFactor: number | undefined;
   /** 用 FakeTranslator（合成頁 ground truth 的讀音與譯文）；預設 false＝沒有 API key。 */
   fakeTranslator: boolean;
+  /** 跟正式 build 一樣要先在設定區存 API key 才翻譯；預設 false＝FakeTranslator 不需要 key。 */
+  requireApiKey: boolean;
+  /** FakeTranslator 當成無法辨識的 ground truth 原文。 */
+  unreadableTexts: string[];
   context: BrowserContext;
   sw: Worker;
   extensionId: string;
@@ -64,8 +80,10 @@ export const test = base.extend<{
     await context.close();
   },
   fakeTranslator: [false, { option: true }],
-  sw: async ({ context, mockSite, fakeTranslator }, use) => {
-    await use(await configuredServiceWorker(context, mockSite, fakeTranslator));
+  requireApiKey: [false, { option: true }],
+  unreadableTexts: [[], { option: true }],
+  sw: async ({ context, mockSite, fakeTranslator, requireApiKey, unreadableTexts }, use) => {
+    await use(await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts }));
   },
   extensionId: async ({ sw }, use) => {
     await use(new URL(sw.url()).host);

@@ -54,6 +54,22 @@ describe('正式 build', () => {
     expect(sw).not.toContain('FakeTranslator：找不到對應的原文');
     expect(sw).not.toContain('早安！今天好早喔');
     expect(await exists(prodDir, 'test-pipeline.html')).toBe(false);
+    // FakeTranslator 在 #31 搬到 offscreen
+    const offscreen = await readText(prodDir, 'offscreen.js');
+    expect(offscreen).not.toContain('FakeTranslator：找不到對應的原文');
+    expect(offscreen).not.toContain('早安！今天好早喔');
+  });
+
+  it('API key：只有 offscreen 呼叫 API；content script 碰不到 key 的 store，SW 不帶 key', async () => {
+    const [content, sw, offscreen, panel] = await Promise.all(
+      ['content.js', 'background.js', 'offscreen.js', 'sidepanel.js'].map((f) => readText(prodDir, f)),
+    );
+
+    expect(offscreen).toContain('x-api-key');
+    expect(offscreen).toContain('anthropic-dangerous-direct-browser-access');
+    for (const bundle of [content, sw, panel]) expect(bundle).not.toContain('x-api-key');
+    expect(content).not.toContain('apiKeys');
+    expect(content).not.toContain('indexedDB');
   });
 
   it('打包 onnxruntime-web 的 wasm 與 kuromoji 字典，但不打包 ONNX 模型（第一次使用時才下載）', async () => {

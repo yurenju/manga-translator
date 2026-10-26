@@ -1,7 +1,22 @@
-// offscreen document：裁切截圖、偵測＋OCR＋閱讀順序；之後還會放 hash、呼叫 LLM（spec #27 第 2 節）。
+// offscreen document：裁切截圖、偵測＋OCR＋閱讀順序、呼叫 LLM；之後還會放 hash（spec #27 第 2 節）。
 // 由 SW 在需要時用 chrome.offscreen.createDocument 建立，manifest 不必宣告。
-import type { AnalyzeRequest, AnalyzeResponse, CropRequest, CropResponse, Message, PageThumb } from '../shared/messages.ts';
+import { SYNTHETIC_GROUND_TRUTH } from '../background/synthetic-ground-truth.ts';
+import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
+import { createFakeTranslator } from '../shared/fake-translator.ts';
+import type {
+  AnalyzeRequest,
+  AnalyzeResponse,
+  CropRequest,
+  CropResponse,
+  FakeTranslatorConfig,
+  Message,
+  PageThumb,
+  TestConnectionResponse,
+  TranslateResponse,
+} from '../shared/messages.ts';
 import type { PageText } from '../shared/page-text.ts';
+import type { TranslateInput, TranslateOutput } from '../shared/translator.ts';
+import { createClaudeTranslator } from './claude-translator.ts';
 import { thumbnailSize, toImageRect } from './crop.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 
@@ -55,6 +70,45 @@ async function analyze({ screenshot, viewport, candidate, pipeline: config }: An
   }
 }
 
+const apiKeys = indexedDbApiKeyStore();
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    });
+  });
+}
+
+/** API key 只在這裡讀出來、只送到 api.anthropic.com（spec 第 5 節）。 */
+async function claude() {
+  const apiKey = await apiKeys.get();
+  if (!apiKey) return undefined;
+  return createClaudeTranslator({ apiKey, fetch: (url, init) => fetch(url, init), sleep, now: () => performance.now() });
+}
+
+class NoApiKeyError extends Error {}
+
+async function translate(input: TranslateInput, fake: FakeTranslatorConfig | undefined): Promise<TranslateOutput> {
+  // e2e build 才有：FakeTranslator 取代 Claude（正式 build 裡 __E2E__ 是 false，整段與 ground truth 都不會打包）
+  if (__E2E__ && fake) return createFakeTranslator(SYNTHETIC_GROUND_TRUTH, fake).translatePage(input);
+  const translator = await claude();
+  if (!translator) throw new NoApiKeyError('尚未設定 API key');
+  return translator.translatePage(input);
+}
+
+async function testConnection(): Promise<TestConnectionResponse> {
+  try {
+    const translator = await claude();
+    if (!translator) return { ok: false, error: '尚未設定 API key' };
+    return { ok: true, ...(await translator.testConnection()) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
   if (message.type === 'offscreen:crop') {
     crop(message).then(
@@ -68,6 +122,21 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
       (text) => sendResponse({ text } satisfies AnalyzeResponse),
       (e: unknown) => sendResponse({ error: e instanceof Error ? e.message : String(e) } satisfies AnalyzeResponse),
     );
+    return true;
+  }
+  if (message.type === 'offscreen:translate') {
+    translate(message.input, message.fake).then(
+      (output) => sendResponse({ output } satisfies TranslateResponse),
+      (e: unknown) =>
+        sendResponse({
+          error: e instanceof Error ? e.message : String(e),
+          ...(e instanceof NoApiKeyError ? { noApiKey: true as const } : {}),
+        } satisfies TranslateResponse),
+    );
+    return true;
+  }
+  if (message.type === 'offscreen:testConnection') {
+    testConnection().then(sendResponse);
     return true;
   }
   return false;
