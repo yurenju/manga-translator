@@ -1,16 +1,23 @@
 /**
  * 外掛 origin 的 IndexedDB（ADR 0002）。SW、offscreen、side panel 共用，content script 讀不到。
- * 之後的 ticket 加 store（Series、Series Notes、翻譯快取）時，調高 DB_VERSION 並在 upgrade 裡依舊版本建立。
+ * 之後的 ticket 加 store（Series Notes 等）時，調高 DB_VERSION 並在 upgrade 裡依舊版本建立。
  */
 const DB_NAME = 'manga-translator';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const STORES = {
   /** 已啟動的 tab：key 是 tabId。 */
   activeTabs: 'activeTabs',
   /** Claude 的 API key（spec #27 第 5 節）：key 是 API_KEY_ID。只有 offscreen 與 side panel 設定區讀值。 */
   apiKeys: 'apiKeys',
+  /** Series（含 Provisional Series）：keyPath id。 */
+  series: 'series',
+  /** 翻譯快取 PageTranslation：keyPath [seriesId, pageHash]，index seriesId。 */
+  pageTranslations: 'pageTranslations',
 } as const;
+
+/** pageTranslations 依 Series 查詢的 index。 */
+export const BY_SERIES = 'seriesId';
 
 export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,6 +26,10 @@ export function openDb(): Promise<IDBDatabase> {
       const db = request.result;
       if (event.oldVersion < 1) db.createObjectStore(STORES.activeTabs);
       if (event.oldVersion < 2) db.createObjectStore(STORES.apiKeys);
+      if (event.oldVersion < 3) {
+        db.createObjectStore(STORES.series, { keyPath: 'id' });
+        db.createObjectStore(STORES.pageTranslations, { keyPath: ['seriesId', 'pageHash'] }).createIndex(BY_SERIES, 'seriesId');
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);

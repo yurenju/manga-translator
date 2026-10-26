@@ -49,3 +49,20 @@ export interface PageText {
   balloons: BalloonText[];
   looseText: LooseText[];
 }
+
+/**
+ * 翻譯快取的一筆（spec #27 第 4.3 節）：key＝(seriesId, pageHash)。只存文字與座標，不存頁面圖片；
+ * anchor 與 subRect 是畫面狀態，不進快取。
+ */
+export interface PageTranslation extends PageText {
+  seriesId: string;
+  /** shared/page-hash.ts 的 perceptual hash；查詢用 Hamming 距離門檻。 */
+  pageHash: string;
+  /** 判斷過時用（#38）。 */
+  usedNotes: { 原文: string; 譯文: string }[];
+  model: string;
+  promptVersion: string;
+  usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; costUsd: number };
+  latencyMs: number;
+  translatedAt: number;
+}

@@ -16,8 +16,10 @@ import type {
 } from '../shared/messages.ts';
 import type { Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
+import { indexedDbPageCache, indexedDbSeriesStore } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createScanner } from './scan.ts';
+import { provisionalSeries } from './series.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber } from './transcribe.ts';
 
@@ -26,6 +28,8 @@ declare global {
   var __captureLog: number[] | undefined;
   /** e2e build 才有：在建立任何 Page 之前呼叫（e2e/fixtures.ts）。 */
   var __configureForTest: ((config: TestConfig) => void) | undefined;
+  /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
+  var __translateCalls: number | undefined;
 }
 
 const store = indexedDbTabStore();
@@ -75,6 +79,8 @@ const apiKeys = indexedDbApiKeyStore();
 /** SW 不讀 key：翻譯在 offscreen document 裡做，offscreen 自己從 IndexedDB 讀 key（spec #27 第 5 節）。 */
 const offscreenTranslator: Translator = {
   async translatePage(input) {
+    // e2e：FakeTranslator 在 offscreen，這裡記呼叫次數（確認命中快取時沒有翻譯，#33）
+    if (__E2E__ && fakeTranslator) globalThis.__translateCalls = (globalThis.__translateCalls ?? 0) + 1;
     await ensureOffscreenDocument();
     const response = await chrome.runtime.sendMessage<Message, TranslateResponse>({
       type: 'offscreen:translate',
@@ -104,6 +110,8 @@ const transcriber = createTranscriber({
     return response.text;
   },
   getTranslator,
+  getSeriesId: (tabId) => activation.getSeriesId(tabId),
+  cache: indexedDbPageCache(),
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
   },
@@ -114,6 +122,7 @@ let modelStatus: ModelStatus = { state: 'idle' };
 if (__E2E__) {
   globalThis.__configureForTest = (config) => {
     pipelineConfig = config.pipeline;
+    globalThis.__translateCalls = 0;
     fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
   };
@@ -124,8 +133,15 @@ function scan(tabId: number): void {
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
 }
 
+const seriesStore = indexedDbSeriesStore();
+
 const activation = createActivation({
   store,
+  async createProvisionalSeries(url) {
+    const series = provisionalSeries(url, new Date(), crypto.randomUUID());
+    await seriesStore.add(series);
+    return series.id;
+  },
   getTabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
   openSidePanel(tabId) {
     // 不 await setOptions：await 會讓 open() 離開 user gesture。兩個呼叫會依序送到瀏覽器。

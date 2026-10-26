@@ -102,12 +102,17 @@ export interface CropRequest extends PageCandidatesResponse {
 export interface PageThumb extends PageCandidate {
   /** 裁切後縮小的 data URL。 */
   thumbnail: string;
+  /** Page 的身分（shared/page-hash.ts），從全解析度的裁切算出來；翻譯快取的 key。 */
+  pageHash: string;
 }
 
 export type CropResponse = { pages: PageThumb[] } | { error: string };
 
-/** 狀態列顯示的翻譯資訊（spec #27 第 8 節：模型・秒數・費用）。 */
-export type TranslationInfo = Pick<TranslateOutput, 'model' | 'latencyMs' | 'usage'>;
+/**
+ * 狀態列顯示的翻譯資訊（spec #27 第 8 節）：「已翻譯」或「快取」・模型・秒數・費用。
+ * 快取（#33）時是當初翻譯的模型與數字。
+ */
+export type TranslationInfo = Pick<TranslateOutput, 'model' | 'latencyMs' | 'usage'> & { source: 'translated' | 'cache' };
 
 /** side panel 顯示的一個 Page：縮圖＋逐字稿的狀態。 */
 export interface PageView extends PageThumb {

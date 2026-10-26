@@ -33,7 +33,7 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
       return `data:image/png;base64,SCREENSHOT${captures.length}`;
     },
     crop: async ({ screenshot, candidates }) =>
-      candidates.map((c) => ({ anchorId: c.anchorId, rect: c.rect, thumbnail: `thumb(${screenshot},${c.anchorId})` })),
+      candidates.map((c) => ({ anchorId: c.anchorId, rect: c.rect, thumbnail: `thumb(${screenshot},${c.anchorId})`, pageHash: c.anchorId })),
     publish: (tabId, pages) => void published.push([tabId, pages]),
   };
   return { deps, captures, published, env };
@@ -59,7 +59,7 @@ describe('scan', () => {
 
     await settle(scanner.scan(1));
 
-    const expected = [{ anchorId: 'a1', rect: P1.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT1,a1)' }];
+    const expected = [{ anchorId: 'a1', rect: P1.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT1,a1)', pageHash: 'a1' }];
     expect(chrome.published).toEqual([[1, expected]]);
     expect(scanner.getPages(1)).toEqual(expected);
   });
@@ -124,7 +124,7 @@ describe('scan', () => {
 
     expect(chrome.captures).toHaveLength(2);
     expect(scanner.getPages(1)).toEqual([
-      { anchorId: 'a1', rect: shifted.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT2,a1)' },
+      { anchorId: 'a1', rect: shifted.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT2,a1)', pageHash: 'a1' },
     ]);
   });
 

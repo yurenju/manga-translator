@@ -1,4 +1,4 @@
-// offscreen document：裁切截圖、偵測＋OCR＋閱讀順序、呼叫 LLM；之後還會放 hash（spec #27 第 2 節）。
+// offscreen document：裁切截圖、Page hash、偵測＋OCR＋閱讀順序、呼叫 LLM（spec #27 第 2 節）。
 // 由 SW 在需要時用 chrome.offscreen.createDocument 建立，manifest 不必宣告。
 import { SYNTHETIC_GROUND_TRUTH } from '../background/synthetic-ground-truth.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
@@ -11,9 +11,11 @@ import type {
   FakeTranslatorConfig,
   Message,
   PageThumb,
+  Rect,
   TestConnectionResponse,
   TranslateResponse,
 } from '../shared/messages.ts';
+import { pageHash, type GrayImage } from '../shared/page-hash.ts';
 import type { PageText } from '../shared/page-text.ts';
 import type { TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
@@ -34,12 +36,24 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
         const ctx = canvas.getContext('2d')!;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(bitmap, src.x, src.y, src.width, src.height, 0, 0, size.width, size.height);
-        return { ...candidate, thumbnail: await toDataUrl(await canvas.convertToBlob({ type: 'image/png' })) };
+        const thumbnail = await toDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
+        return { ...candidate, thumbnail, pageHash: pageHash(grayOf(bitmap, src)) };
       }),
     );
   } finally {
     bitmap.close();
   }
+}
+
+/** 全解析度的裁切轉灰階（0.299/0.587/0.114，跟本機流水線一致）。縮小交給 pageHash 自己做，Node 的單元測試才算得一樣。 */
+function grayOf(bitmap: ImageBitmap, rect: Rect): GrayImage {
+  const canvas = new OffscreenCanvas(rect.width, rect.height);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
+  const { data } = ctx.getImageData(0, 0, rect.width, rect.height);
+  const gray = new Uint8Array(rect.width * rect.height);
+  for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
+  return { gray, width: rect.width, height: rect.height };
 }
 
 /** messaging 是 JSON 序列化，Blob 傳不過去，跨 context 一律用 data URL（#4）。 */

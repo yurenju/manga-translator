@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CropRequest, PageThumb, PageView } from '../shared/messages.ts';
-import type { PageText } from '../shared/page-text.ts';
-import type { TranslateInput, Translator } from '../shared/translator.ts';
-import { createTranscriber, type TranscriberDeps } from './transcribe.ts';
+import type { PageText, PageTranslation } from '../shared/page-text.ts';
+import type { TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import { createTranscriber, type PageCache, type TranscriberDeps } from './transcribe.ts';
 
 const rect = { x: 0, y: 0, w: 1, h: 1 };
 
@@ -26,14 +26,31 @@ const pageText: PageText = {
   ],
 };
 
-const thumb = (anchorId: string): PageThumb => ({ anchorId, rect: { x: 0, y: 0, width: 10, height: 10 }, thumbnail: `data:${anchorId}` });
+const thumb = (anchorId: string, pageHash = '0'.repeat(64)): PageThumb => ({
+  anchorId,
+  rect: { x: 0, y: 0, width: 10, height: 10 },
+  thumbnail: `data:${anchorId}`,
+  pageHash,
+});
 const capture: CropRequest = { screenshot: 'data:shot', viewport: { width: 100, height: 100 }, candidates: [] };
+
+/** 記憶體裡的快取；查詢只比對完全相同的 hash（門檻比對由 page-hash.test.ts 負責）。 */
+function memoryCache(): PageCache & { saved: PageTranslation[] } {
+  const saved: PageTranslation[] = [];
+  return {
+    saved,
+    find: async (seriesId, pageHash) => saved.find((t) => t.seriesId === seriesId && t.pageHash === pageHash),
+    save: async (translation) => void saved.push(structuredClone(translation)),
+  };
+}
 
 function setup(overrides: Partial<TranscriberDeps> = {}) {
   const published: PageView[][] = [];
   const deps: TranscriberDeps = {
     analyze: vi.fn(async () => structuredClone(pageText)),
     getTranslator: () => undefined,
+    getSeriesId: async () => 'series-1',
+    cache: memoryCache(),
     publish: (_tabId, pages) => published.push(structuredClone(pages)),
     ...overrides,
   };
@@ -54,6 +71,17 @@ function translatorReturning(zh: string, calls: TranslateInput[] = []): Translat
     },
   };
 }
+
+const translatedOutput = (): TranslateOutput => ({
+  items: [
+    { id: 'b1', 讀音: 'きょうは', 譯文: '今天', unreadable: false },
+    { id: 'l1', 讀音: 'どん', 譯文: '咚', unreadable: false },
+  ],
+  notes_changes: { added: [], filled: [], suggestions: [] },
+  usage: { inputTokens: 1200, outputTokens: 300, cacheReadTokens: 0, costUsd: 0.0003 },
+  model: 'claude-haiku-5-5',
+  latencyMs: 2300,
+});
 
 describe('逐字稿：本機流水線＋Translator', () => {
   it('先列出縮圖（分析中），分析完顯示原文＋kuromoji 讀音，沒有 Translator 時標示未翻譯', async () => {
@@ -122,6 +150,7 @@ describe('逐字稿：本機流水線＋Translator', () => {
 
     const transcript = transcriber.get(1)[0]!.transcript;
     expect(transcript.state === 'done' && transcript.translation).toEqual({
+      source: 'translated',
       model: 'claude-haiku-5-5',
       latencyMs: 2300,
       usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 700, costUsd: 0.000137 },
@@ -149,6 +178,7 @@ describe('逐字稿：本機流水線＋Translator', () => {
     const { transcriber, published } = setup({ analyze: () => new Promise((resolve) => (finish = resolve)) });
 
     const running = transcriber.update(1, [thumb('a1')], capture);
+    await vi.waitFor(() => expect(finish).toBeDefined());
     transcriber.clear(1);
     finish(pageText);
     await running;
@@ -163,6 +193,7 @@ describe('逐字稿：本機流水線＋Translator', () => {
 
     const first = transcriber.update(1, [thumb('a1')], capture);
     const second = transcriber.update(1, [thumb('a2')], capture);
+    await vi.waitFor(() => expect(finishers.length).toBeGreaterThan(0));
     finishers[0]!(pageText);
     await first;
 
@@ -254,5 +285,101 @@ describe('翻譯此頁', () => {
     await running;
 
     expect(transcriber.get(1).map((p) => [p.anchorId, p.transcript.state === 'done' && p.transcript.translated])).toEqual([['a2', false]]);
+  });
+});
+
+describe('翻譯快取', () => {
+  function countingTranslator() {
+    const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
+    return translator;
+  }
+
+  it('翻譯完寫進快取：key 是這個 tab 的 Series ID 與 Page hash，只存文字與座標', async () => {
+    const cache = memoryCache();
+    const translator = countingTranslator();
+    const { transcriber } = setup({ cache, getTranslator: () => translator });
+
+    await transcriber.update(1, [thumb('a1', 'ab'.repeat(32))], capture);
+
+    expect(cache.saved).toHaveLength(1);
+    const saved = cache.saved[0]!;
+    expect(saved).toMatchObject({
+      seriesId: 'series-1',
+      pageHash: 'ab'.repeat(32),
+      model: 'claude-haiku-5-5',
+      latencyMs: 2300,
+      usage: { inputTokens: 1200, outputTokens: 300, cacheReadTokens: 0, costUsd: 0.0003 },
+    });
+    expect(saved.balloons[0]).toMatchObject({ id: 'b1', 原文: '今日は', 譯文: '今天', 讀音來源: 'llm' });
+    expect(saved.looseText[0]).toMatchObject({ id: 'l1', 原文: 'ドン', 譯文: '咚' });
+    expect(JSON.stringify(saved)).not.toContain('data:');
+  });
+
+  it('翻譯完的狀態是「已翻譯」，帶模型、秒數、費用', async () => {
+    const { transcriber, published } = setup({ getTranslator: () => countingTranslator() });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    const last = published.at(-1)![0]!.transcript;
+    expect(last.state === 'done' && last.translation).toEqual({
+      source: 'translated',
+      model: 'claude-haiku-5-5',
+      latencyMs: 2300,
+      usage: { inputTokens: 1200, outputTokens: 300, cacheReadTokens: 0, costUsd: 0.0003 },
+    });
+  });
+
+  it('同一個 Series 已有這個 Page：直接用快取，不跑本機流水線也不呼叫 Translator，狀態是「快取」', async () => {
+    const cache = memoryCache();
+    const translator = countingTranslator();
+    const first = setup({ cache, getTranslator: () => translator });
+    await first.transcriber.update(1, [thumb('a1')], capture);
+
+    // 重新整理後 anchor 換了，但 Page 一樣
+    const second = setup({ cache, getTranslator: () => translator });
+    await second.transcriber.update(1, [thumb('a7')], capture);
+
+    expect(translator.translatePage).toHaveBeenCalledTimes(1);
+    expect(second.deps.analyze).not.toHaveBeenCalled();
+    const last = second.published.at(-1)![0]!;
+    expect(last.anchorId).toBe('a7');
+    expect(last.transcript.state === 'done' && last.transcript.translation?.source).toBe('cache');
+    if (last.transcript.state !== 'done') return;
+    expect(last.transcript.translated).toBe(true);
+    expect(last.transcript.text.balloons[0]).toMatchObject({ 原文: '今日は', 譯文: '今天' });
+    expect(last.transcript.translation).toMatchObject({ model: 'claude-haiku-5-5', latencyMs: 2300, usage: { costUsd: 0.0003 } });
+  });
+
+  it('別的 Series 的快取不算數', async () => {
+    const cache = memoryCache();
+    const translator = countingTranslator();
+    await setup({ cache, getTranslator: () => translator, getSeriesId: async () => 'series-1' }).transcriber.update(1, [thumb('a1')], capture);
+
+    await setup({ cache, getTranslator: () => translator, getSeriesId: async () => 'series-2' }).transcriber.update(1, [thumb('a1')], capture);
+
+    expect(translator.translatePage).toHaveBeenCalledTimes(2);
+  });
+
+  it('擷取後才設定 key、按「翻譯此頁」成功時也寫進快取', async () => {
+    const cache = memoryCache();
+    let translator: Translator | undefined;
+    const { transcriber } = setup({ cache, getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1', 'cd'.repeat(32))], capture);
+    expect(cache.saved).toEqual([]);
+
+    translator = countingTranslator();
+    await transcriber.translate(1);
+
+    expect(cache.saved).toHaveLength(1);
+    expect(cache.saved[0]).toMatchObject({ seriesId: 'series-1', pageHash: 'cd'.repeat(32) });
+  });
+
+  it('沒有 Translator（未翻譯）或翻譯失敗時不寫快取', async () => {
+    const cache = memoryCache();
+    await setup({ cache }).transcriber.update(1, [thumb('a1')], capture);
+    const failing: Translator = { translatePage: async () => Promise.reject(new Error('429')) };
+    await setup({ cache, getTranslator: () => failing }).transcriber.update(1, [thumb('a2')], capture);
+
+    expect(cache.saved).toEqual([]);
   });
 });

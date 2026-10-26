@@ -9,6 +9,7 @@ import type {
   PageView,
   StatusResponse,
   TestConnectionResponse,
+  TranslationInfo,
 } from '../shared/messages.ts';
 import type { PageText } from '../shared/page-text.ts';
 
@@ -83,6 +84,16 @@ function Transcript({ text, translated }: { text: PageText; translated: boolean 
   );
 }
 
+/** 「已翻譯」或「快取」・模型・秒數・費用（spec #27 第 8 節）；快取時是當初翻譯的模型與數字。 */
+function TranslationStatusLine({ status }: { status: TranslationInfo }) {
+  const label = status.source === 'cache' ? '快取' : '已翻譯';
+  return (
+    <p class="translation-status" role="status" aria-label="翻譯狀態">
+      {label}・{status.model}・{(status.latencyMs / 1000).toFixed(1)} 秒・${status.usage.costUsd.toFixed(4)}
+    </p>
+  );
+}
+
 function PageItem({ page, index }: { page: PageView; index: number }) {
   const { transcript } = page;
   return (
@@ -90,6 +101,9 @@ function PageItem({ page, index }: { page: PageView; index: number }) {
       <img src={page.thumbnail} alt={`Page ${index + 1}`} />
       {transcript.state === 'analyzing' && <p>辨識中…</p>}
       {transcript.state === 'error' && <p class="error">辨識失敗：{transcript.message}</p>}
+      {transcript.state === 'done' && transcript.translation && !transcript.translating && !transcript.translateError && (
+        <TranslationStatusLine status={transcript.translation} />
+      )}
       {transcript.state === 'done' && transcript.translating && <p>翻譯中…</p>}
       {transcript.state === 'done' && transcript.translateError && (
         <p class="error">翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
