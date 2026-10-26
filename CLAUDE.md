@@ -16,4 +16,8 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ## Real-site debugging
 
-A bug that shows on a real manga site (Jump+, Kindle) but not on the e2e mock site: have the user reproduce it while `npm run debug:chrome` records a trace of the whole pipeline. See `docs/agents/real-site-debugging.md`.
+A bug that shows on a real manga site (Jump+, Kindle) but not on the e2e mock site: have the user reproduce it while `npm run debug:chrome` records a trace of the whole pipeline. Timing and performance: measure in that Chrome with `npm run debug:eval`. See `docs/agents/real-site-debugging.md`.
+
+## Coding standards
+
+Reviewing a change: check it against `CODING_STANDARDS.md`.
