@@ -7,6 +7,7 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { cachedModelPath, TEST_MODEL_FILES } from '../model-cache.ts';
 import { jumpPlusPage } from './jumpplus.ts';
 
 const PAGES_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
@@ -14,6 +15,14 @@ const PAGES_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
 export interface MockSite {
   /** 仿 Jump+：每頁一個 tainted canvas。 */
   jumpPlusUrl: string;
+  /** 取代 https://huggingface.co 的模型下載來源（e2e 透過 test:configure 告訴外掛）。 */
+  modelBaseUrl: string;
+  /** 外掛向模型下載來源要過的路徑（判斷有沒有重新下載）。 */
+  modelRequests: string[];
+  /** 之後送出的這個模型檔最後一個 byte 會被改掉（SHA-256 不符）。path 是 ModelFile.path。 */
+  corruptModel(path: string): void;
+  /** 之後恢復送正確的內容。 */
+  repairModels(): void;
   /** 放圖片的另一個 origin；也可以拿來測「換 origin」。 */
   imageOrigin: string;
   close(): Promise<void>;
@@ -35,10 +44,25 @@ export async function startMockSite(): Promise<MockSite> {
   });
   const imageOrigin = await listen(images);
 
-  const site = createServer((req, res) => {
+  const modelRequests: string[] = [];
+  const corrupted = new Set<string>();
+  const site = createServer(async (req, res) => {
     const path = new URL(req.url ?? '/', 'http://x').pathname;
     if (path === '/jumpplus/') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin));
+      return;
+    }
+    if (path.startsWith('/hf/')) {
+      // 仿 Hugging Face 的 /<repo>/resolve/<revision>/<path>；內容來自 repo 外的模型快取
+      const file = TEST_MODEL_FILES.find((f) => path === `/hf/${f.repo}/resolve/${f.revision}/${f.path}`);
+      modelRequests.push(path);
+      if (!file) {
+        res.writeHead(404, { 'access-control-allow-origin': '*' }).end();
+        return;
+      }
+      const body = await readFile(cachedModelPath(file));
+      if (corrupted.has(file.path)) body[body.length - 1] = body.at(-1)! ^ 0xff;
+      res.writeHead(200, { 'access-control-allow-origin': '*', 'content-type': 'application/octet-stream' }).end(body);
       return;
     }
     res.writeHead(404).end();
@@ -47,6 +71,10 @@ export async function startMockSite(): Promise<MockSite> {
 
   return {
     jumpPlusUrl: `${siteOrigin}/jumpplus/`,
+    modelBaseUrl: `${siteOrigin}/hf`,
+    modelRequests,
+    corruptModel: (path) => void corrupted.add(path),
+    repairModels: () => corrupted.clear(),
     imageOrigin,
     close: async () => {
       await Promise.all([close(site), close(images)]);

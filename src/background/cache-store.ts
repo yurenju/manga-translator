@@ -1,0 +1,41 @@
+import { BY_SERIES, openDb, STORES } from '../shared/db.ts';
+import { findSamePage } from '../shared/page-hash.ts';
+import type { PageTranslation } from '../shared/page-text.ts';
+import type { Series } from '../shared/series.ts';
+import type { PageCache } from './transcribe.ts';
+
+function request<T>(db: Promise<IDBDatabase>, store: string, mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return db.then(
+    (db) =>
+      new Promise<T>((resolve, reject) => {
+        const tx = db.transaction(store, mode);
+        const req = op(tx.objectStore(store));
+        tx.oncomplete = () => resolve(req.result);
+        tx.onerror = () => reject(tx.error);
+      }),
+  );
+}
+
+/**
+ * 翻譯快取（spec #27 第 4.3 節）。hash 是近似比對，不能直接用 key 查：取出這個 Series 的全部再找門檻內最接近的。
+ * 一部 Series 頂多幾千頁、每筆只有文字與座標，v1 這樣夠快。不自動清除。
+ */
+export function indexedDbPageCache(): PageCache {
+  let db: Promise<IDBDatabase> | undefined;
+  const run = <T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>) =>
+    request((db ??= openDb()), STORES.pageTranslations, mode, op);
+  return {
+    async find(seriesId, pageHash) {
+      const entries = await run('readonly', (s) => s.index(BY_SERIES).getAll(seriesId) as IDBRequest<PageTranslation[]>);
+      return findSamePage(entries, pageHash);
+    },
+    save: (translation) => run('readwrite', (s) => s.put(translation)).then(() => {}),
+  };
+}
+
+export function indexedDbSeriesStore() {
+  let db: Promise<IDBDatabase> | undefined;
+  return {
+    add: (series: Series) => request((db ??= openDb()), STORES.series, 'readwrite', (s) => s.add(series)).then(() => {}),
+  };
+}

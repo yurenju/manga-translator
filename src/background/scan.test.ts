@@ -10,6 +10,8 @@ const WINDOW_ID = 7;
 function fakeDeps(candidates: PageCandidate[] = [P1]) {
   const captures: number[] = [];
   const published: [number, PageThumb[]][] = [];
+  /** 覆蓋層與截圖的先後順序。 */
+  const events: string[] = [];
   const env = {
     viewport: VIEWPORT,
     candidates,
@@ -29,14 +31,17 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
     captureWindow: async (windowId) => {
       expect(windowId).toBe(WINDOW_ID);
       captures.push(Date.now());
+      events.push('capture');
       env.onCapture();
       return `data:image/png;base64,SCREENSHOT${captures.length}`;
     },
     crop: async ({ screenshot, candidates }) =>
-      candidates.map((c) => ({ anchorId: c.anchorId, rect: c.rect, thumbnail: `thumb(${screenshot},${c.anchorId})` })),
+      candidates.map((c) => ({ anchorId: c.anchorId, rect: c.rect, thumbnail: `thumb(${screenshot},${c.anchorId})`, pageHash: c.anchorId })),
     publish: (tabId, pages) => void published.push([tabId, pages]),
+    hideOverlay: async (tabId) => void events.push(`hide ${tabId}`),
+    restoreOverlay: async (tabId) => void events.push(`restore ${tabId}`),
   };
-  return { deps, captures, published, env };
+  return { deps, captures, published, events, env };
 }
 
 beforeEach(() => {
@@ -59,9 +64,19 @@ describe('scan', () => {
 
     await settle(scanner.scan(1));
 
-    const expected = [{ anchorId: 'a1', rect: P1.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT1,a1)' }];
+    const expected = [{ anchorId: 'a1', rect: P1.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT1,a1)', pageHash: 'a1' }];
     expect(chrome.published).toEqual([[1, expected]]);
     expect(scanner.getPages(1)).toEqual(expected);
+  });
+
+  it('公布時一併給出截圖與量到的版面，讓後面的流水線用全解析度的 Page', async () => {
+    const chrome = fakeDeps();
+    const captures: unknown[] = [];
+    const scanner = createScanner({ ...chrome.deps, publish: (_tabId, _pages, capture) => void captures.push(capture) });
+
+    await settle(scanner.scan(1));
+
+    expect(captures).toEqual([{ screenshot: 'data:image/png;base64,SCREENSHOT1', viewport: VIEWPORT, candidates: [P1] }]);
   });
 
   it('沒有 Page 候選就不截圖，公布空清單', async () => {
@@ -114,7 +129,7 @@ describe('scan', () => {
 
     expect(chrome.captures).toHaveLength(2);
     expect(scanner.getPages(1)).toEqual([
-      { anchorId: 'a1', rect: shifted.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT2,a1)' },
+      { anchorId: 'a1', rect: shifted.rect, thumbnail: 'thumb(data:image/png;base64,SCREENSHOT2,a1)', pageHash: 'a1' },
     ]);
   });
 
@@ -129,5 +144,29 @@ describe('scan', () => {
 
     expect(scanner.getPages(1)).toEqual([]);
     expect(chrome.published.at(-1)).toEqual([1, []]);
+  });
+
+  it('截圖前隱藏覆蓋層、截完立刻還原，截圖裡才不會有我們的中文', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner(chrome.deps);
+
+    await settle(scanner.scan(1));
+
+    expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
+  });
+
+  it('截圖失敗也會還原覆蓋層', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner({
+      ...chrome.deps,
+      captureWindow: async () => {
+        chrome.events.push('capture');
+        throw new Error('capture failed');
+      },
+    });
+
+    await expect(settle(scanner.scan(1))).rejects.toThrow('capture failed');
+
+    expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
   });
 });

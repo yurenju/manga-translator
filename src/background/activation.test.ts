@@ -9,6 +9,7 @@ function fakeChrome(urls: Record<number, string>) {
   const calls = { openedPanels: [] as number[], injected: [] as number[], stopped: [] as number[] };
   const statusEvents: [number, boolean][] = [];
   const failInjectionFor = new Set<number>();
+  const createdSeries: string[] = [];
   const deps: ActivationDeps = {
     store: {
       get: async (tabId) => states.get(tabId),
@@ -23,8 +24,13 @@ function fakeChrome(urls: Record<number, string>) {
     },
     stopContentScript: async (tabId) => void calls.stopped.push(tabId),
     onStatusChanged: (tabId, active) => void statusEvents.push([tabId, active]),
+    createProvisionalSeries: async (url) => {
+      const id = `provisional-${createdSeries.length + 1}`;
+      createdSeries.push(url);
+      return id;
+    },
   };
-  return { deps, calls, statusEvents, failInjectionFor, urls };
+  return { deps, calls, statusEvents, failInjectionFor, urls, createdSeries };
 }
 
 describe('activate', () => {
@@ -165,5 +171,48 @@ describe('tab 生命週期', () => {
     await activation.handleTabRemoved(1);
 
     expect(await activation.isActive(1)).toBe(false);
+  });
+});
+
+describe('Series', () => {
+  it('啟動時沒有預選到 Series，就用這個網址建一個 Provisional Series 給這個 tab', async () => {
+    const chrome = fakeChrome({ 1: JUMP });
+    const activation = createActivation(chrome.deps);
+
+    await activation.activate(1);
+
+    expect(chrome.createdSeries).toEqual([JUMP]);
+    expect(await activation.getSeriesId(1)).toBe('provisional-1');
+  });
+
+  it('每次這樣的啟動各一個：停止後再啟動是新的 Provisional Series', async () => {
+    const chrome = fakeChrome({ 1: JUMP, 2: JUMP });
+    const activation = createActivation(chrome.deps);
+
+    await activation.activate(1);
+    await activation.activate(2);
+    await activation.stop(1);
+    await activation.activate(1);
+
+    expect(await activation.getSeriesId(1)).toBe('provisional-3');
+    expect(await activation.getSeriesId(2)).toBe('provisional-2');
+  });
+
+  it('已啟動的 tab 重新整理、再點一次圖示，沿用同一個 Series', async () => {
+    const chrome = fakeChrome({ 1: JUMP });
+    const activation = createActivation(chrome.deps);
+
+    await activation.activate(1);
+    await activation.handleTabUpdated(1, { status: 'complete' });
+    await activation.activate(1);
+
+    expect(chrome.createdSeries).toHaveLength(1);
+    expect(await activation.getSeriesId(1)).toBe('provisional-1');
+  });
+
+  it('沒啟動的 tab 沒有 Series', async () => {
+    const activation = createActivation(fakeChrome({ 1: JUMP }).deps);
+
+    expect(await activation.getSeriesId(1)).toBeUndefined();
   });
 });
