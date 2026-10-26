@@ -862,4 +862,59 @@ describe('Spread（#35）', () => {
 
     expect(calls.map((input) => input.items[0]!.原文)).toEqual(['右', '左']);
   });
+
+  it('兩頁拿到同一份 Notes 快照：右頁的變更在左頁送出前就套用了，左頁仍送右頁送出時的 Notes', async () => {
+    const inputs: TranslateInput[] = [];
+    const notes = memoryNotes([note('明日', '明天')]);
+    let releaseLeft!: () => void;
+    const leftAnalyzed = new Promise<void>((resolve) => (releaseLeft = resolve));
+    const translator = translatorWithNotes(
+      [
+        { ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] },
+        { ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今兒', 類別: '用語' }] },
+      ],
+      inputs,
+    );
+    const { transcriber } = setup({
+      notes,
+      getTranslator: () => translator,
+      analyze: async (request) => {
+        if (request.sub === LEFT) await leftAnalyzed;
+        return structuredClone(pageText);
+      },
+    });
+
+    const running = transcriber.update(1, spread(), capture);
+    await vi.waitFor(() => expect(notes.entries).toHaveLength(2));
+    releaseLeft();
+    await running;
+
+    expect(inputs.map((i) => i.seriesNotes)).toEqual([[note('明日', '明天')], [note('明日', '明天')]]);
+    // 套用仍依送出順序：右頁先贏，左頁的變成建議
+    expect(notes.entries).toEqual([note('明日', '明天'), note('今日', '今天')]);
+    expect(notes.suggestions.map((s) => s.建議譯文)).toEqual(['今兒']);
+  });
+
+  it('不同 anchor 的兩頁不共用快照：後送出的帶著前一頁套用後的 Notes', async () => {
+    const inputs: TranslateInput[] = [];
+    const notes = memoryNotes();
+    let releaseSecond!: () => void;
+    const secondAnalyzed = new Promise<void>((resolve) => (releaseSecond = resolve));
+    const translator = translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] }], inputs);
+    const { transcriber } = setup({
+      notes,
+      getTranslator: () => translator,
+      analyze: async (request) => {
+        if (request.candidate.anchorId === 'a2') await secondAnalyzed;
+        return structuredClone(pageText);
+      },
+    });
+
+    const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await vi.waitFor(() => expect(notes.entries).toHaveLength(1));
+    releaseSecond();
+    await running;
+
+    expect(inputs.map((i) => i.seriesNotes)).toEqual([[], [note('今日', '今天')]]);
+  });
 });

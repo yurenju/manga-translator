@@ -13,7 +13,8 @@
  * - 429 依 retry-after 退避重試在 Translator 裡（claude-translator.ts）；重試後仍失敗就帶 translateError，按「重試」重送 LLM。
  *
  * Series Notes（#37；順序在 notes-ledger.ts）：送出 LLM 時帶這個 Series 的 Notes 快照，回來後依送出順序套用
- * notes_changes，再寫快取。沒有 Series 時不帶 Notes 也不套用。
+ * notes_changes，再寫快取。同一次排程裡同一個 anchor 的 Page（Spread 的兩頁）共用一份快照。
+ * 沒有 Series 時不帶 Notes 也不套用。
  */
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
@@ -84,6 +85,8 @@ function applyTranslation(text: PageText, output: TranslateOutput): PageText {
 interface CacheTarget {
   seriesId: string | undefined;
   pageHash: string;
+  /** 同一個 Spread 的頁面是同一個記號，共用 Notes 快照。 */
+  spread: object;
 }
 
 /** text 是本機流水線的結果（kuromoji 讀音）；失敗時就顯示它。只有翻譯成功才寫快取。 */
@@ -95,7 +98,7 @@ async function translateText(
 ): Promise<Transcript> {
   if (!translator) return { state: 'done', text, translated: false };
   // 送出的這一刻拿號碼牌：notes_changes 依送出順序套用
-  const turn = target.seriesId === undefined ? undefined : ledger.checkout(target.seriesId);
+  const turn = target.seriesId === undefined ? undefined : ledger.checkout(target.seriesId, target.spread);
   const seriesNotes = (await turn?.notes) ?? [];
   let output: TranslateOutput;
   const startedAt = Date.now();
@@ -160,7 +163,20 @@ interface Job extends QueuedJob {
   record: PageRecord;
   /** 進到 LLM 段才有。 */
   translator?: Translator;
+  /** 同一次排程裡同一個 anchor 切出來的 Page（Spread 的兩頁）共用的記號。 */
+  spread: object;
   resolve(): void;
+}
+
+/** 同一次排程裡，同一個 anchor 切出來的 Page（Spread 的兩頁）拿到同一個記號。 */
+function spreadMarks(): (record: PageRecord) => object {
+  const byAnchor = new Map<string, object>();
+  return (record) => {
+    const { anchorId } = record.request.candidate;
+    let mark = byAnchor.get(anchorId);
+    if (!mark) byAnchor.set(anchorId, (mark = {}));
+    return mark;
+  };
 }
 
 export function createTranscriber(deps: TranscriberDeps) {
@@ -195,10 +211,10 @@ export function createTranscriber(deps: TranscriberDeps) {
     deps.publish(tab.tabId, current);
   }
 
-  function newJob(tab: TabState, record: PageRecord, batch: number, index: number): Job {
+  function newJob(tab: TabState, record: PageRecord, batch: number, index: number, spread: object): Job {
     let resolve!: () => void;
     record.settled = new Promise<void>((r) => (resolve = r));
-    const job: Job = { tab, record, priority: PRIORITY_VISIBLE, batch, index, resolve };
+    const job: Job = { tab, record, priority: PRIORITY_VISIBLE, batch, index, spread, resolve };
     record.job = job;
     return job;
   }
@@ -264,7 +280,14 @@ export function createTranscriber(deps: TranscriberDeps) {
   async function runLlm(job: Job): Promise<void> {
     const { record } = job;
     report(job, 'llm');
-    complete(job, await translateText(record.text!, job.translator, { cache: deps.cache, ledger }, { seriesId: record.seriesId, pageHash: record.pageHash }));
+    complete(
+      job,
+      await translateText(record.text!, job.translator, { cache: deps.cache, ledger }, {
+        seriesId: record.seriesId,
+        pageHash: record.pageHash,
+        spread: job.spread,
+      }),
+    );
   }
 
   async function lookupCache(seriesId: string | undefined, pageHash: string): Promise<Transcript | undefined> {
@@ -330,9 +353,10 @@ export function createTranscriber(deps: TranscriberDeps) {
 
     const seriesId = await deps.getSeriesId(tabId);
     // 查快取期間佔住這頁，同一頁又出現時不會重複排
+    const spreadOf = spreadMarks();
     const jobs = newPages.map(({ record, index }) => {
       record.seriesId = seriesId;
-      return newJob(tab, record, batch, index);
+      return newJob(tab, record, batch, index, spreadOf(record));
     });
     const lookups = await Promise.all(jobs.map((job) => lookupCache(seriesId, job.record.pageHash)));
     // 快取都查完才依閱讀順序排：佇列一有工作就開始跑，Spread 的左頁先查完也不能比右頁先送出 LLM（spec 第 3.4 節）
@@ -360,15 +384,16 @@ export function createTranscriber(deps: TranscriberDeps) {
     const translator = await deps.getTranslator();
     const visible = [...new Set(tab.pages.flatMap((p) => findSamePage(tab.records, p.pageHash) ?? []))];
     const batch = ++batches;
+    const spreadOf = spreadMarks();
     const started: PageRecord[] = [];
     for (const [index, record] of visible.entries()) {
       if (record.job) continue;
       if (record.transcript.state === 'pending') {
         record.transcript = { state: 'analyzing' };
-        enqueueLocal(newJob(tab, record, batch, index));
+        enqueueLocal(newJob(tab, record, batch, index, spreadOf(record)));
       } else if (translator && record.transcript.state === 'done' && record.text) {
         record.transcript = { ...record.transcript, translating: true };
-        const job = newJob(tab, record, batch, index);
+        const job = newJob(tab, record, batch, index, spreadOf(record));
         job.translator = translator;
         queue.enqueueLlm(job);
       } else continue;
