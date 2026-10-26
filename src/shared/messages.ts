@@ -59,6 +59,8 @@ export type Message =
   | { type: 'panel:getOverlay'; tabId: number }
   /** content script → SW：翻頁訊號 debounce 後（#34）。SW 截圖比對 hash，變了才算翻頁。 */
   | { type: 'content:pageTurn' }
+  /** content script → SW：覆蓋層畫好了。SW 不藏覆蓋層截一次，記下這頁帶覆蓋層的樣子（#27 除錯）。 */
+  | { type: 'content:overlayShown' }
   /** side panel → SW：「自動翻譯」開關（#34）。 */
   | { type: 'panel:setAutoTranslate'; tabId: number; enabled: boolean }
   /** side panel → SW：自動翻譯開關目前的狀態。回應 AutoTranslateResponse。 */
@@ -152,6 +154,8 @@ export interface Size {
 export interface PageCandidate {
   anchorId: string;
   rect: Rect;
+  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；沒有覆蓋層時省略。 */
+  overlaid?: string[];
 }
 
 export interface PageCandidatesResponse {

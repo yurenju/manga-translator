@@ -52,7 +52,10 @@ if (!globalThis.__mangaTranslator) {
       const rect = { x, y, width, height };
       const clips = clipRects(element);
       const reason = pageCandidateRejection(rect, visible, clips);
-      if (reason === undefined) candidates.push({ anchorId: anchorIdOf(element), rect });
+      if (reason === undefined) {
+        const overlaid = overlay.shownPages(element);
+        candidates.push({ anchorId: anchorIdOf(element), rect, ...(overlaid.length > 0 ? { overlaid } : {}) });
+      }
       else if (__DEBUG__ && reason === 'small') small++;
       else if (__DEBUG__) rejected.push({ tag: element.tagName.toLowerCase(), rect, reason, clips });
     }
@@ -112,7 +115,11 @@ if (!globalThis.__mangaTranslator) {
         // anchor 不在最近一次量到的 Page 裡（已經捲走或換頁）就不覆蓋
         const anchor = anchors.get(message.anchorId);
         overlay.setEnabled(message.enabled);
-        if (anchor instanceof HTMLElement) overlay.show(anchor, message.sub, message.text, message.pageHash).catch((e: unknown) => console.warn('overlay failed', e));
+        if (anchor instanceof HTMLElement)
+          overlay
+            .show(anchor, message.sub, message.text, message.pageHash)
+            .then(() => chrome.runtime.sendMessage({ type: 'content:overlayShown' } satisfies Message))
+            .catch((e: unknown) => console.warn('overlay failed', e));
         else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });
         return false;
       }

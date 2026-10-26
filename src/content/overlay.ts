@@ -317,6 +317,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     highlight.style.borderWidth = `${HIGHLIGHT_SCREEN_PX / screenScale}px`;
     highlight.style.borderRadius = `${(2 * HIGHLIGHT_SCREEN_PX) / screenScale}px`;
     renderHighlights();
+    // 等畫到畫面上才 resolve：呼叫端接著會截「帶覆蓋層的樣子」，太早截會截到還沒畫出來的畫面
+    await Promise.race([nextFrame().then(nextFrame), new Promise((resolve) => setTimeout(resolve, FRAME_TIMEOUT_MS))]);
   }
 
   /**
@@ -443,6 +445,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return ms;
   }
 
+  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；覆蓋開關關著或 host 不在畫面上就是空的。 */
+  function shownPages(anchor: Element): string[] {
+    const entry = entries.get(anchor as HTMLElement);
+    if (!entry || !enabled || stopped || !entry.host.isConnected) return [];
+    return [...entry.layers.values()].map((layer) => layer.pageHash);
+  }
+
   /** 停止：拿掉所有 host、還原被改成 relative 的父元素。 */
   function clear(): void {
     stopped = true;
@@ -463,7 +472,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return changedParents.has(element as HTMLElement);
   }
 
-  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, clear, ownsStyleOf };
+  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;
