@@ -110,6 +110,43 @@ export function cropGray(
   return { gray: out, width: w, height: h };
 }
 
+/**
+ * 仿 Kindle 的合成圖：整頁等比例縮放（區塊平均）置中塞進 viewport 大小的畫面，周圍填 border（預設純黑）。
+ * 回傳合成圖與內容在裡面的位置。
+ */
+export function letterbox(
+  image: { gray: Uint8Array; width: number; height: number },
+  viewport: { width: number; height: number },
+  border = 0,
+): { image: { gray: Uint8Array; width: number; height: number }; content: { x: number; y: number; width: number; height: number } } {
+  const scale = Math.min(viewport.width / image.width, viewport.height / image.height);
+  const cw = Math.round(image.width * scale);
+  const ch = Math.round(image.height * scale);
+  const ox = Math.floor((viewport.width - cw) / 2);
+  const oy = Math.floor((viewport.height - ch) / 2);
+  const gray = new Uint8Array(viewport.width * viewport.height).fill(border);
+  for (let ty = 0; ty < ch; ty++) {
+    const y0 = (ty * image.height) / ch;
+    const y1 = ((ty + 1) * image.height) / ch;
+    for (let tx = 0; tx < cw; tx++) {
+      const x0 = (tx * image.width) / cw;
+      const x1 = ((tx + 1) * image.width) / cw;
+      let sum = 0;
+      let area = 0;
+      for (let y = Math.floor(y0); y < Math.ceil(y1); y++) {
+        const wy = Math.min(y + 1, y1) - Math.max(y, y0);
+        for (let x = Math.floor(x0); x < Math.ceil(x1); x++) {
+          const w = (Math.min(x + 1, x1) - Math.max(x, x0)) * wy;
+          sum += image.gray[y * image.width + x]! * w;
+          area += w;
+        }
+      }
+      gray[(oy + ty) * viewport.width + ox + tx] = Math.round(sum / area);
+    }
+  }
+  return { image: { gray, width: viewport.width, height: viewport.height }, content: { x: ox, y: oy, width: cw, height: ch } };
+}
+
 /** 要原地覆蓋的種類（其他是 Loose Text）。 */
 const OVERLAY_KINDS = new Set<GtText['kind']>(['balloon', 'thought', 'narration']);
 

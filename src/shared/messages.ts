@@ -43,7 +43,7 @@ export type Message =
   | { type: 'offscreen:testConnection' }
   /**
    * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。sub＝Page 在 anchor 裡的範圍
-   * （沒給＝整個 anchor；Spread 在 #35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
+   * （沒給＝整個 anchor；Spread 的一頁或去掉黑邊，#35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
    * enabled＝side panel 的覆蓋開關。
    */
   | { type: 'content:showOverlay'; anchorId: string; pageHash: string; sub?: RatioRect; text: PageText; enabled: boolean }
@@ -173,6 +173,8 @@ export interface CropRequest extends PageCandidatesResponse {
 }
 
 export interface PageThumb extends PageCandidate {
+  /** Page 在 anchor 裡的範圍（Spread 切開的一頁，或去掉黑邊）；整個 anchor 就是一個 Page 時省略。 */
+  sub?: RatioRect;
   /** 裁切後縮小的 data URL。 */
   thumbnail: string;
   /** Page 的身分（shared/page-hash.ts），從全解析度的裁切算出來；翻譯快取的 key。 */
@@ -226,6 +228,8 @@ export interface AnalyzeRequest {
   screenshot: string;
   viewport: Size;
   candidate: PageCandidate;
+  /** Page 在候選裡的範圍（PageThumb.sub）；省略＝整個候選。 */
+  sub?: RatioRect;
   /** e2e build 才會帶。 */
   pipeline?: PipelineConfig;
 }

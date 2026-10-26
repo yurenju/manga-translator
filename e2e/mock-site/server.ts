@@ -1,5 +1,5 @@
 /**
- * localhost mock site（spec #27 第 12 節）。內容一律是 testdata/synthetic 的合成頁。
+ * localhost mock site（spec #27 第 12 節）：仿 Jump+ 與仿 Kindle。內容一律是 testdata/synthetic 的合成頁。
  *
  * 開兩個 server：網站與圖片在不同 port＝不同 origin，而且圖片 server 不送 CORS header，
  * 所以把圖片畫進 canvas 後 canvas 會是 tainted，跟 Jump+ 一樣不能從 DOM 讀像素。
@@ -9,6 +9,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { cachedModelPath, TEST_MODEL_FILES } from '../model-cache.ts';
 import { jumpPlusPage } from './jumpplus.ts';
+import { kindlePage } from './kindle.ts';
 
 const PAGES_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
 
@@ -17,6 +18,8 @@ export interface MockSite {
   jumpPlusUrl: string;
   /** 仿 Jump+ 的 RTL 翻頁版（一次一頁、翻頁動畫，#34）。 */
   jumpPlusPagedUrl: string;
+  /** 仿 Kindle：整個 viewport 一張 blob img（Spread＋黑邊），翻頁換 src（#35）。 */
+  kindleUrl: string;
   /** 取代 https://huggingface.co 的模型下載來源（e2e 透過 test:configure 告訴外掛）。 */
   modelBaseUrl: string;
   /** 外掛向模型下載來源要過的路徑（判斷有沒有重新下載）。 */
@@ -57,6 +60,20 @@ export async function startMockSite(): Promise<MockSite> {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin, { paged }));
       return;
     }
+    if (path === '/kindle/') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(kindlePage());
+      return;
+    }
+    const kindleImage = /^\/kindle\/img\/([\w-]+\.png)$/.exec(path);
+    if (kindleImage) {
+      // 跟網站同 origin：仿 Kindle 要把圖畫進 canvas 再 toBlob
+      try {
+        res.writeHead(200, { 'content-type': 'image/png' }).end(await readFile(new URL(kindleImage[1]!, PAGES_DIR)));
+      } catch {
+        res.writeHead(404).end();
+      }
+      return;
+    }
     if (path.startsWith('/hf/')) {
       // 仿 Hugging Face 的 /<repo>/resolve/<revision>/<path>；內容來自 repo 外的模型快取
       const file = TEST_MODEL_FILES.find((f) => path === `/hf/${f.repo}/resolve/${f.revision}/${f.path}`);
@@ -77,6 +94,7 @@ export async function startMockSite(): Promise<MockSite> {
   return {
     jumpPlusUrl: `${siteOrigin}/jumpplus/`,
     jumpPlusPagedUrl: `${siteOrigin}/jumpplus/?mode=paged`,
+    kindleUrl: `${siteOrigin}/kindle/`,
     modelBaseUrl: `${siteOrigin}/hf`,
     modelRequests,
     corruptModel: (path) => void corrupted.add(path),

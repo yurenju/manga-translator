@@ -209,6 +209,31 @@ describe('scan', () => {
     }
     const publishedHashes = (chrome: ReturnType<typeof fakeDeps>) => chrome.published.at(-1)?.[1].map((p) => p.pageHash);
 
+    it('Spread（一個 anchor 兩頁）不記帶覆蓋層的樣子（記錄以 anchor 為單位，分不出是哪一頁），也就不多截一次', async () => {
+      const RIGHT = CLEAN;
+      const LEFT = '0f'.repeat(32);
+      const chrome = fakeDeps([P1]);
+      chrome.deps.crop = async ({ candidates }) =>
+        candidates.flatMap((c) => {
+          const overlaid = !chrome.env.capturedHidden && (c.overlaid?.length ?? 0) > 0;
+          return [
+            { anchorId: c.anchorId, rect: c.rect, sub: { x: 0.5, y: 0, w: 0.5, h: 1 }, thumbnail: 'r', pageHash: overlaid ? WITH_OVERLAY : RIGHT },
+            { anchorId: c.anchorId, rect: c.rect, sub: { x: 0, y: 0, w: 0.5, h: 1 }, thumbnail: 'l', pageHash: LEFT },
+          ];
+        });
+      const scanner = createScanner(chrome.deps);
+      await settle(scanner.scan(1));
+      chrome.env.candidates = [{ ...P1, overlaid: [RIGHT] }];
+      chrome.events.length = 0;
+      await settle(scanner.recordOverlaid(1));
+      expect(chrome.events).toEqual([]);
+
+      await settle(scanner.scan(1));
+
+      expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
+      expect(publishedHashes(chrome)).toEqual([RIGHT, LEFT]);
+    });
+
     it('覆蓋層畫好後不藏覆蓋層截一次，記下「帶覆蓋層的樣子」，而且不公布', async () => {
       const chrome = page(false);
       const scanner = createScanner(chrome.deps);

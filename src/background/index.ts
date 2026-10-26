@@ -90,6 +90,8 @@ const scanner = createScanner({
   },
   publish(tabId, pages, capture) {
     // 沒有 capture＝畫面上沒有完整可見的 Page（或停止）；停止時的清理在 onStatusChanged
+    // 先讓 overlaySync 知道哪些覆蓋已經不在了（換 src），transcriber 接著 publish 時才會重送
+    overlaySync.captured(tabId, pages);
     void transcriber.update(tabId, pages, capture);
   },
 });
@@ -157,8 +159,8 @@ const transcriber = createTranscriber({
 const overlayEnabled = new Map<number, boolean>();
 
 const overlaySync = createOverlaySync({
-  show({ tabId, anchorId, pageHash, text }) {
-    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, text, enabled: overlayEnabled.get(tabId) ?? true };
+  show({ tabId, anchorId, pageHash, sub, text }) {
+    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, ...(sub ? { sub } : {}), text, enabled: overlayEnabled.get(tabId) ?? true };
     chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });
