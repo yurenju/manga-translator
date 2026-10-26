@@ -160,11 +160,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /** 主頁面重繪把 host 丟掉（或把 anchor 搬走）就重掛；anchor 不在了就先拿掉 host，等它回來。 */
   function reattach(entry: Entry): void {
+    const pageHashes = () => [...entry.layers.values()].map((layer) => layer.pageHash);
     if (!entry.anchor.isConnected) {
-      if (entry.host.isConnected) entry.host.remove();
+      if (entry.host.isConnected) {
+        entry.host.remove();
+        trace('overlay:detach', { pageHashes: pageHashes(), reason: 'anchor 不在 DOM 裡' });
+      }
       return;
     }
     if (entry.host.isConnected && entry.host.previousElementSibling === entry.anchor) return;
+    trace('overlay:reattach', { pageHashes: pageHashes(), reason: entry.host.isConnected ? 'host 被移到別處' : 'host 被移除' });
     attach(entry);
     place(entry);
   }
@@ -409,6 +414,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   }
   /** side panel 的覆蓋開關。用 visibility，關著時仍能量測排版。 */
   function setEnabled(value: boolean): void {
+    // 每次 showOverlay 都會帶開關狀態，只記改變
+    if (value !== enabled) trace('overlay:enabled', { enabled: value });
     enabled = value;
     entries.forEach(applyVisibility);
   }

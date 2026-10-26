@@ -112,6 +112,8 @@ async function record(cdp: Cdp, sessionDir: string): Promise<void> {
   const tracePath = join(sessionDir, 'trace.jsonl');
   await mkdir(join(sessionDir, 'images'), { recursive: true });
   await writeFile(tracePath, '');
+  /** Runtime.enable 會把 target 之前印過的 console 重送一次（例如上一次錄製時的記錄）；比這個時間早的都不收。 */
+  const startedAt = Date.now();
   const attached = new Map<string, Attached>();
   /** setDiscoverTargets 會對既有的 target 再送一次 targetCreated；同一個 target 只 attach 一次，記錄才不會重複。 */
   const seen = new Set<string>();
@@ -174,6 +176,8 @@ async function record(cdp: Cdp, sessionDir: string): Promise<void> {
     }
     const target = sessionId ? attached.get(sessionId) : undefined;
     if (!target) return;
+    // console 與例外的 timestamp 是 epoch ms
+    if ((method === 'Runtime.consoleAPICalled' || method === 'Runtime.exceptionThrown') && params.timestamp < startedAt) return;
     if (method === 'Runtime.executionContextCreated') {
       const { id, name, auxData } = params.context;
       if (auxData?.type === 'isolated' && name === EXTENSION_NAME) target.ourContexts.add(id);

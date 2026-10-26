@@ -11,6 +11,7 @@
     "build:debug": "node scripts/build.ts --debug",
     "debug:chrome": "node scripts/debug-chrome.ts",
     "debug:reload": "node scripts/debug-chrome.ts --reload",
+    "debug:summary": "node scripts/debug-summary.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "npm run build:e2e && playwright test",
