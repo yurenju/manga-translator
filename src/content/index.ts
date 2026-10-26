@@ -95,15 +95,27 @@ if (!globalThis.__mangaTranslator) {
     return clips;
   }
 
+  /**
+   * 送訊息給 SW；SW 停止或重新載入時送不到，忽略。外掛重新載入或更新後這個 content script 就斷線了
+   * （chrome.runtime.id 變 undefined），sendMessage 會同步丟錯、.catch 接不到 → 自己收掉（#40）。
+   */
+  function send(message: Message): Promise<unknown> {
+    if (!chrome.runtime?.id) {
+      stop();
+      return Promise.resolve();
+    }
+    return chrome.runtime.sendMessage(message).catch(() => {});
+  }
+
   const overlay = createOverlay({
     loadFont: createOverlayFontLoader(),
     // 頁面 hover → side panel 高亮那行（panel 用 sender.tab 分辨是哪個 tab）
     onHover(line) {
-      chrome.runtime.sendMessage({ type: 'content:hover', line } satisfies Message).catch(() => {});
+      void send({ type: 'content:hover', line });
     },
   });
 
-  // 翻頁訊號 → SW 截圖比對 hash（#34）。SW 停止或重新載入時送不到，忽略。
+  // 翻頁訊號 → SW 截圖比對 hash（#34）。
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
   const isOwn = (node: Node, attribute?: string) =>
     node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
@@ -116,7 +128,7 @@ if (!globalThis.__mangaTranslator) {
   const stopWatching = watchPageTurns({
     notify(reasons) {
       trace('pageTurn', { reasons });
-      chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
+      void send({ type: 'content:pageTurn' });
     },
     isOwn,
     relatesToPage,
@@ -137,7 +149,7 @@ if (!globalThis.__mangaTranslator) {
         if (anchor instanceof HTMLElement)
           overlay
             .show(anchor, message.subRect, message.text, message.pageHash)
-            .then(() => chrome.runtime.sendMessage({ type: 'content:overlayShown' } satisfies Message))
+            .then(() => send({ type: 'content:overlayShown' }))
             .catch((e: unknown) => console.warn('overlay failed', e));
         else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });
         return false;
@@ -159,16 +171,20 @@ if (!globalThis.__mangaTranslator) {
         overlay.setEnabled(message.enabled);
         return false;
       case 'content:stop':
-        chrome.runtime.onMessage.removeListener(onMessage);
-        stopWatching();
-        overlay.clear();
-        anchors.clear();
-        globalThis.__mangaTranslator = undefined;
-        // 停止後頁面要跟沒裝外掛時一樣（#40 驗收 I1）
-        trace('content:stop', { overlaysLeft: document.querySelectorAll(`[${HOST_ATTRIBUTE}]`).length });
+        stop();
         return false;
     }
     return false;
   };
   chrome.runtime.onMessage.addListener(onMessage);
+
+  /** 停止後頁面要跟沒裝外掛時一樣（#40 驗收 I1）。 */
+  function stop() {
+    chrome.runtime.onMessage.removeListener(onMessage);
+    stopWatching();
+    overlay.clear();
+    anchors.clear();
+    globalThis.__mangaTranslator = undefined;
+    trace('content:stop', { overlaysLeft: document.querySelectorAll(`[${HOST_ATTRIBUTE}]`).length });
+  }
 }
