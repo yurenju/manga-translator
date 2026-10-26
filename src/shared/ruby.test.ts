@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readGroundTruth, SYNTHETIC_IDS } from '../testing/synthetic.ts';
-import { alignRuby, type RubySegment } from './ruby.ts';
+import { alignRuby, rubyDisplay, type RubySegment } from './ruby.ts';
 
 const hasKanji = (s: string) => /[一-鿿々〆ヶ]/.test(s);
 
@@ -83,5 +83,19 @@ describe('alignRuby 在合成頁 ground truth 上', () => {
   it('對不上的只有數字寫成假名的句子（退回整句讀音）', () => {
     const failed = withKanji.filter((t) => alignRuby(t.ja, t.reading) === null).map((t) => t.ja);
     expect(failed.sort()).toEqual(['あと10分で着く訳ない！', '潮見坂高校4月12日', '駅前に7時ね'].sort());
+  });
+});
+
+describe('rubyDisplay：panel 與 tooltip 共用的顯示方式', () => {
+  it('對得上：每段漢字帶ルビ', () => {
+    expect(rubyDisplay('本気で', 'マジで')).toEqual({ segments: [{ text: '本気', rt: 'マジ' }, { text: 'で' }] });
+  });
+
+  it('沒有讀音：原文一段、沒有ルビ', () => {
+    expect(rubyDisplay('今日は', '')).toEqual({ segments: [{ text: '今日は' }] });
+  });
+
+  it('對不上：退回原文＋整句讀音', () => {
+    expect(rubyDisplay('駅前に7時ね', 'えきまえにしちじね')).toEqual({ fallback: 'えきまえにしちじね' });
   });
 });

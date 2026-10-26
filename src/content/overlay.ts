@@ -8,7 +8,7 @@
  */
 import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
-import { alignRuby } from '../shared/ruby.ts';
+import { rubyDisplay } from '../shared/ruby.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
@@ -220,8 +220,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     tip.className = 'tip';
     const highlight = document.createElement('div');
     highlight.className = 'hl';
-    const common = (t: PageText['balloons'][number] | PageText['looseText'][number]) => ({
+    const toHoverLine = (t: PageText['balloons'][number] | PageText['looseText'][number], bbox: RatioRect): HoverLine => ({
       id: t.id,
+      box: toPx(bbox, size),
       原文: t.原文,
       讀音: t.讀音,
       譯文: t.譯文,
@@ -229,8 +230,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     });
     // unreadable 與 Loose Text 不覆蓋，但滑過時一樣有 tooltip、一樣跟 side panel 同步
     const lines: HoverLine[] = [
-      ...text.balloons.map((b) => ({ ...common(b), box: toPx(b.balloonBbox, size) })),
-      ...text.looseText.map((l) => ({ ...common(l), box: toPx(l.bbox, size) })),
+      ...text.balloons.map((b) => toHoverLine(b, b.balloonBbox)),
+      ...text.looseText.map((l) => toHoverLine(l, l.bbox)),
     ];
     const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
 
@@ -338,9 +339,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       ja.textContent = line.原文;
       parts.push(textDiv('tip-zh', '無法辨識'));
     } else {
-      const segments = line.讀音 ? alignRuby(line.原文, line.讀音) : [{ text: line.原文 }];
-      if (segments) {
-        for (const segment of segments) {
+      const display = rubyDisplay(line.原文, line.讀音);
+      if ('segments' in display) {
+        for (const segment of display.segments) {
           if (segment.rt === undefined) ja.append(segment.text);
           else {
             const ruby = document.createElement('ruby');
@@ -352,7 +353,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         }
       } else {
         // 對不上：原文＋整句讀音
-        ja.append(line.原文, textDiv('tip-guess', line.讀音));
+        ja.append(line.原文, textDiv('tip-guess', display.fallback));
       }
       if (line.譯文) parts.push(textDiv('tip-zh', line.譯文));
       if (line.讀音) parts.push(textDiv('tip-note', '讀音為推測'));

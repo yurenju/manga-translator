@@ -56,3 +56,13 @@ export function alignRuby(ja: string, reading: string): RubySegment[] | null {
   if (!segments.some((s) => s.kanji)) return [{ text: ja }];
   return match(segments, reading, SPACE) ?? match(segments, reading, SPACE_OR_PUNCT);
 }
+
+/** side panel 與頁面 tooltip 怎麼顯示一句：分段（漢字段帶ルビ），或對不上時原文＋整句讀音（fallback）。 */
+export type RubyDisplay = { segments: RubySegment[] } | { fallback: string };
+
+/** 沒有讀音＝原文一段、沒有ルビ；對不上＝fallback 整句讀音。 */
+export function rubyDisplay(ja: string, reading: string): RubyDisplay {
+  if (!reading) return { segments: [{ text: ja }] };
+  const segments = alignRuby(ja, reading);
+  return segments ? { segments } : { fallback: reading };
+}

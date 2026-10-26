@@ -1,10 +1,10 @@
 /**
  * 學習模式的逐字稿（spec #27 第 8 節、#21 的變體 B）：依閱讀順序一行一句，上方全域切換顯示層級，
- * 振り仮名用 alignRuby 對齊回每段漢字，頁面 ↔ panel 的 hover 同步。
+ * 振り仮名用 rubyDisplay（alignRuby）對齊回每段漢字，頁面 ↔ panel 的 hover 同步。
  */
 import { useEffect, useRef } from 'preact/hooks';
 import type { PageText } from '../shared/page-text.ts';
-import { alignRuby } from '../shared/ruby.ts';
+import { rubyDisplay } from '../shared/ruby.ts';
 
 /** 全域顯示層級：整頁一起切。 */
 export const LEVELS = ['只看譯文', '原文＋譯文', '加振り仮名', '只看日文'] as const;
@@ -28,19 +28,19 @@ export function LevelSwitch({ level, onChange }: { level: Level; onChange: (leve
 
 /** 原文＋ルビ；對不上時退回「原文＋下面一行整句讀音」。 */
 function Ruby({ ja, reading }: { ja: string; reading: string }) {
-  const segments = reading ? alignRuby(ja, reading) : [{ text: ja }];
-  if (!segments)
+  const display = rubyDisplay(ja, reading);
+  if ('fallback' in display)
     return (
       <>
         {ja}
         <span class="reading" lang="ja">
-          {reading}
+          {display.fallback}
         </span>
       </>
     );
   return (
     <>
-      {segments.map((s, i) =>
+      {display.segments.map((s, i) =>
         s.rt === undefined ? (
           s.text
         ) : (
