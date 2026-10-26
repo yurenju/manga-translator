@@ -167,6 +167,29 @@ describe('merge', () => {
     expect(await catalog.seriesForUrl(EP2)).toBe(target.id);
   });
 
+  it('來源不是 Provisional Series：不合併，什麼都不動', async () => {
+    const { db, catalog } = setup();
+    const target = await catalog.create('火ノ丸相撲', EP1);
+    const named = await catalog.create('鬼滅', EP2);
+    db.seed([translation(named.id, B, '另一頁')], [note(named.id, '小関', '小關')]);
+
+    const merged = await catalog.merge(named.id, target.id, EP2);
+
+    expect(merged).toBe(false);
+    expect(db.series.has(named.id)).toBe(true);
+    expect(db.translations.map((t) => t.seriesId)).toEqual([named.id]);
+    expect(db.notes.map((n) => n.seriesId)).toEqual([named.id]);
+    expect(await catalog.seriesForUrl(EP2)).toBe(named.id);
+  });
+
+  it('合併成功時回傳 true', async () => {
+    const { catalog } = setup();
+    const target = await catalog.create('A', EP1);
+    const provisional = await catalog.seriesForUrl(EP2);
+
+    expect(await catalog.merge(provisional, target.id, EP2)).toBe(true);
+  });
+
   it('臨時 Series 原有的建議修改改掛到目標', async () => {
     const { db, catalog } = setup();
     const target = await catalog.create('A', EP1);

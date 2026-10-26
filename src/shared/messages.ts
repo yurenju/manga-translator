@@ -43,9 +43,10 @@ export type Message =
   | { type: 'offscreen:testConnection' }
   /**
    * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。sub＝Page 在 anchor 裡的範圍
-   * （沒給＝整個 anchor；Spread 在 #35）。enabled＝side panel 的覆蓋開關。
+   * （沒給＝整個 anchor；Spread 在 #35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
+   * enabled＝side panel 的覆蓋開關。
    */
-  | { type: 'content:showOverlay'; anchorId: string; sub?: RatioRect; text: PageText; enabled: boolean }
+  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; sub?: RatioRect; text: PageText; enabled: boolean }
   /** SW → content script：截圖前隱藏覆蓋層，等兩個 rAF（已重繪）才回應。 */
   | { type: 'content:hideOverlay' }
   /** SW → content script：截完還原覆蓋層。 */
@@ -75,14 +76,23 @@ export type Message =
   /** SW → side panel：這個 tab 的 Series 或 Series 清單變了，重新 panel:getSeries。 */
   | { type: 'series:changed'; tabId: number }
   /**
-   * content script → side panel（runtime 廣播，panel 用 sender.tab 分辨）：滑鼠在頁面上的哪一句（Balloon 或
-   * Loose Text）上；lineId null＝離開（#39）。anchorId 對應 PageView.anchorId。
+   * content script → side panel（runtime 廣播，panel 用 sender.tab 分辨）：滑鼠在頁面上的哪一句上；
+   * null＝離開（#39）。
    */
-  | { type: 'content:hover'; anchorId: string; lineId: string | null }
+  | { type: 'content:hover'; line: LineRef | null }
   /** side panel → content script（tabs.sendMessage）：滑過 panel 那行時高亮頁面上的那句；null＝取消。 */
-  | { type: 'content:highlight'; anchorId: string; lineId: string | null }
+  | { type: 'content:highlight'; line: LineRef | null }
   /** e2e build 才有：等同點外掛圖示（spec #27 第 12 節）。 */
   | { type: 'test:activate'; tabId: number };
+
+/**
+ * 一個 Page 上的一句（line：一個 Balloon 或 Loose Text 項目）。lineId（b1、l1…）每個 Page 各自編號，
+ * 所以要連同 Page 身分（PageView.pageHash）一起才認得出是哪一句。
+ */
+export interface LineRef {
+  pageHash: string;
+  lineId: string;
+}
 
 /** e2e build 才有（SW 的 globalThis.__configureForTest）：模型下載來源、強制 wasm、改用 FakeTranslator。 */
 export interface TestConfig {

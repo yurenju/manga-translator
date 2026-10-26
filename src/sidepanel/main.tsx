@@ -2,6 +2,7 @@ import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
 import type {
+  LineRef,
   Message,
   ModelStatus,
   ModelStatusResponse,
@@ -68,9 +69,9 @@ function TranslationStatusLine({ status }: { status: TranslationInfo }) {
 interface LearningProps {
   level: Level;
   /** 頁面上滑鼠所在的那句。 */
-  hovered: { anchorId: string; lineId: string } | undefined;
-  /** 滑過 panel 的某行 → 頁面上那句高亮。 */
-  onLineHover: (anchorId: string, lineId: string | null) => void;
+  hovered: LineRef | undefined;
+  /** 滑過 panel 的某行 → 頁面上那句高亮；null＝離開。 */
+  onLineHover: (line: LineRef | null) => void;
 }
 
 function PageItem({ page, index, onRetry, learning }: { page: PageView; index: number; onRetry: () => void; learning: LearningProps }) {
@@ -99,8 +100,8 @@ function PageItem({ page, index, onRetry, learning }: { page: PageView; index: n
           text={transcript.text}
           translated={transcript.translated}
           level={level}
-          hoveredId={hovered?.anchorId === page.anchorId ? hovered.lineId : undefined}
-          onHover={(lineId) => onLineHover(page.anchorId, lineId)}
+          hoveredId={hovered?.pageHash === page.pageHash ? hovered.lineId : undefined}
+          onHover={(lineId) => onLineHover(lineId === null ? null : { pageHash: page.pageHash, lineId })}
         />
       )}
     </li>
@@ -370,7 +371,7 @@ function App({ tabId }: { tabId: number | undefined }) {
     if (tabId === undefined) return;
     const onMessage = (message: Message, sender: chrome.runtime.MessageSender) => {
       if (message.type === 'content:hover' && sender.tab?.id === tabId)
-        setHovered(message.lineId === null ? undefined : { anchorId: message.anchorId, lineId: message.lineId });
+        setHovered(message.line ?? undefined);
       if (message.type === 'status:changed' && message.tabId === tabId) setActive(message.active);
       if (message.type === 'pages:updated' && message.tabId === tabId) setPages(message.pages);
       if (message.type === 'models:status') setModelStatus(message.status);
@@ -399,8 +400,8 @@ function App({ tabId }: { tabId: number | undefined }) {
   const learning: LearningProps = {
     level,
     hovered,
-    onLineHover(anchorId, lineId) {
-      chrome.tabs.sendMessage(tabId, { type: 'content:highlight', anchorId, lineId } satisfies Message).catch(() => {});
+    onLineHover(line) {
+      chrome.tabs.sendMessage(tabId, { type: 'content:highlight', line } satisfies Message).catch(() => {});
     },
   };
   return (
@@ -422,7 +423,8 @@ function App({ tabId }: { tabId: number | undefined }) {
         {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
         <ul aria-label="Page">
           {pages.map((page, i) => (
-            <PageItem key={page.anchorId} page={page} index={i} onRetry={translate} learning={learning} />
+            // 同一個 anchor 可能有兩個 Page（Spread），key 要帶 Page 身分
+            <PageItem key={`${page.anchorId}/${page.pageHash}`} page={page} index={i} onRetry={translate} learning={learning} />
           ))}
         </ul>
       </main>

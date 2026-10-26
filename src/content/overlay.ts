@@ -6,6 +6,7 @@
  * translate＋scale 對到 anchor 的 offset*×subRect，捲動、祖先 transform、overflow 裁切都由瀏覽器自然套用。
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛。
  */
+import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { alignRuby } from '../shared/ruby.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
@@ -58,8 +59,8 @@ interface HoverLine {
 }
 
 interface PageLayer {
-  /** 呼叫端給的 Page 識別（content script 用 anchorId），hover 同步用。 */
-  key: string;
+  /** Page 身分（pageHash），hover 同步用：同一個 anchor 上的兩個 Page 各自一個。 */
+  pageHash: string;
   sub: RatioRect;
   size: { width: number; height: number };
   element: HTMLElement;
@@ -105,8 +106,8 @@ function textDiv(className: string, text: string): HTMLElement {
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
-/** 滑鼠移到哪一句上（lineId null＝離開）。 */
-export type OnHover = (key: string, lineId: string | null) => void;
+/** 滑鼠移到哪一句上（null＝離開）。 */
+export type OnHover = (line: LineRef | null) => void;
 
 export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHover?: OnHover }) {
   const entries = new Map<HTMLElement, Entry>();
@@ -132,7 +133,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   /** 滑鼠目前在哪一句上（頁面 hover）。 */
   let hovered: { layer: PageLayer; line: HoverLine } | undefined;
   /** side panel 那邊滑過的那句。 */
-  let panelHighlight: { key: string; lineId: string } | undefined;
+  let panelHighlight: LineRef | undefined;
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
@@ -204,8 +205,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return inner;
   }
 
-  /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。key＝hover 同步用的 Page 識別。 */
-  async function show(anchor: HTMLElement, sub: RatioRect = WHOLE_PAGE, text: PageText, key = ''): Promise<void> {
+  /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。pageHash＝hover 同步用的 Page 身分。 */
+  async function show(anchor: HTMLElement, sub: RatioRect = WHOLE_PAGE, text: PageText, pageHash = ''): Promise<void> {
     // unreadable 與 Loose Text 不覆蓋（spec 第 7.2 節）
     const balloons = text.balloons.filter((b) => !b.unreadable && b.譯文 !== '');
     const fontFamily = await loadFont(balloons.map((b) => b.譯文).join(''));
@@ -231,7 +232,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       ...text.balloons.map((b) => ({ ...common(b), box: toPx(b.balloonBbox, size) })),
       ...text.looseText.map((l) => ({ ...common(l), box: toPx(l.bbox, size) })),
     ];
-    const layer: PageLayer = { key, sub, size, element, tip, highlight, lines };
+    const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
 
     const items = balloons.map((balloon) => {
       const balloonBox = toPx(balloon.balloonBbox, size);
@@ -321,8 +322,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     previous?.layer.tip.classList.remove('on');
     if (next) showTooltip(next.layer, next.line);
     renderHighlights();
-    if (next) onHover?.(next.layer.key, next.line.id);
-    else if (previous) onHover?.(previous.layer.key, null);
+    if (next) onHover?.({ pageHash: next.layer.pageHash, lineId: next.line.id });
+    else if (previous) onHover?.(null);
   }
 
   /** tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。 */
@@ -373,7 +374,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         const line =
           hovered?.layer === layer
             ? hovered.line
-            : panelHighlight?.key === layer.key
+            : panelHighlight?.pageHash === layer.pageHash
               ? layer.lines.find((l) => l.id === panelHighlight!.lineId)
               : undefined;
         layer.highlight.classList.toggle('on', line !== undefined);
@@ -382,9 +383,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     }
   }
 
-  /** side panel 滑過那行 → 頁面上那句高亮；lineId null＝取消。 */
-  function highlight(key: string, lineId: string | null): void {
-    panelHighlight = lineId === null ? undefined : { key, lineId };
+  /** side panel 滑過那行 → 頁面上那句高亮；null＝取消。 */
+  function highlight(line: LineRef | null): void {
+    panelHighlight = line ?? undefined;
     renderHighlights();
   }
   /** side panel 的覆蓋開關。用 visibility，關著時仍能量測排版。 */

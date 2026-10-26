@@ -141,8 +141,8 @@ const transcriber = createTranscriber({
 const overlayEnabled = new Map<number, boolean>();
 
 const overlaySync = createOverlaySync({
-  show(tabId, anchorId, text) {
-    const message: Message = { type: 'content:showOverlay', anchorId, text, enabled: overlayEnabled.get(tabId) ?? true };
+  show({ tabId, anchorId, pageHash, text }) {
+    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, text, enabled: overlayEnabled.get(tabId) ?? true };
     chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });
@@ -312,7 +312,10 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
     }
     case 'panel:mergeSeries': {
       const { targetId } = message;
-      changeSeries(message.tabId, (url, current) => seriesCatalog.merge(current, targetId, url).then(() => targetId), false).then(() => sendResponse());
+      // 來源不是 Provisional Series（或目標不在）時 merge 不動，這個 tab 留在原本的 Series
+      changeSeries(message.tabId, async (url, current) => ((await seriesCatalog.merge(current, targetId, url)) ? targetId : current), false).then(() =>
+        sendResponse(),
+      );
       return true;
     }
     case 'panel:scan':

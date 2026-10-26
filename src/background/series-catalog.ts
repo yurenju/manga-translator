@@ -87,9 +87,12 @@ export function createSeriesCatalog(repo: SeriesRepo, options: SeriesCatalogOpti
     /**
      * 把 Provisional Series 合併進既有 Series：快取改用目標 ID（同一個 Page 保留目標的）、Notes 依只能新增規則
      * 併入（衝突變成建議修改）、刪掉臨時 Series、記住網址。合併後不自動重翻。
+     * 來源必須是 Provisional Series、目標必須存在；不符合就什麼都不動，回傳 false。
      */
-    async merge(sourceId: string, targetId: string, url: string): Promise<void> {
-      if (sourceId === targetId || !(await repo.getSeries(targetId))) return;
+    async merge(sourceId: string, targetId: string, url: string): Promise<boolean> {
+      if (sourceId === targetId) return false;
+      const [source, target] = await Promise.all([repo.getSeries(sourceId), repo.getSeries(targetId)]);
+      if (!source?.provisional || !target) return false;
       const [targetCache, sourceCache, targetNotes, sourceNotes, sourceSuggestions] = await Promise.all([
         repo.listTranslations(targetId),
         repo.listTranslations(sourceId),
@@ -106,6 +109,7 @@ export function createSeriesCatalog(repo: SeriesRepo, options: SeriesCatalogOpti
         suggestions: [...sourceSuggestions.map((s) => ({ ...s, seriesId: targetId })), ...notes.suggestions],
       });
       await remember(targetId, url);
+      return true;
     },
   };
 }

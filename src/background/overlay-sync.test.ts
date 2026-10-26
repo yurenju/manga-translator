@@ -4,18 +4,24 @@ import type { PageText } from '../shared/page-text.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 
 const TEXT: PageText = { balloons: [], looseText: [] };
-const page = (anchorId: string, transcript: PageView['transcript']): PageView => ({
+const page = (anchorId: string, transcript: PageView['transcript'], pageHash = '0'.repeat(64)): PageView => ({
   anchorId,
   rect: { x: 0, y: 0, width: 430, height: 625 },
   thumbnail: 'data:',
-  pageHash: '0'.repeat(64),
+  pageHash,
   transcript,
 });
 
 function setup() {
   const shown: [number, string, PageText][] = [];
-  const sync = createOverlaySync({ show: (tabId, anchorId, text) => void shown.push([tabId, anchorId, text]) });
-  return { sync, shown };
+  const pageHashes: string[] = [];
+  const sync = createOverlaySync({
+    show: ({ tabId, anchorId, pageHash, text }) => {
+      shown.push([tabId, anchorId, text]);
+      pageHashes.push(pageHash);
+    },
+  });
+  return { sync, shown, pageHashes };
 }
 
 describe('overlay sync', () => {
@@ -45,5 +51,15 @@ describe('overlay sync', () => {
     sync.publish(1, [page('a1', { state: 'done', text: other, translated: true })]);
 
     expect(shown.map(([, , text]) => text)).toEqual([TEXT, other]);
+  });
+
+  it('同一個 anchor 上的兩個 Page（Spread）各自帶上 Page 身分，hover 同步才分得出是哪一頁', () => {
+    const { sync, pageHashes } = setup();
+    const left: PageText = { balloons: [], looseText: [] };
+    const right: PageText = { balloons: [], looseText: [] };
+
+    sync.publish(1, [page('a1', { state: 'done', text: left, translated: true }, 'aa'.repeat(32)), page('a1', { state: 'done', text: right, translated: true }, 'bb'.repeat(32))]);
+
+    expect(pageHashes).toEqual(['aa'.repeat(32), 'bb'.repeat(32)]);
   });
 });
