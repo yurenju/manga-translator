@@ -75,6 +75,8 @@ export interface CropRequest extends PageCandidatesResponse {
 export interface PageThumb extends PageCandidate {
   /** 裁切後縮小的 data URL。 */
   thumbnail: string;
+  /** Page 的身分（shared/page-hash.ts），從全解析度的裁切算出來；翻譯快取的 key。 */
+  pageHash: string;
 }
 
 export type CropResponse = { pages: PageThumb[] } | { error: string };
@@ -84,8 +86,16 @@ export interface PageView extends PageThumb {
   transcript:
     | { state: 'analyzing' }
     /** translated=false：沒有 Translator（沒有 API key），讀音是 kuromoji、沒有譯文。 */
-    | { state: 'done'; text: PageText; translated: boolean }
+    | { state: 'done'; text: PageText; translated: boolean; translation?: TranslationStatus }
     | { state: 'error'; message: string };
+}
+
+/** side panel 狀態列：「已翻譯」或「快取」、模型、秒數、費用（spec #27 第 8 節）。快取時是當初翻譯的數字。 */
+export interface TranslationStatus {
+  source: 'translated' | 'cache';
+  model: string;
+  latencyMs: number;
+  costUsd: number;
 }
 
 export interface PagesResponse {

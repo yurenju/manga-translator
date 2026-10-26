@@ -1,6 +1,14 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { Message, ModelStatus, ModelStatusResponse, PagesResponse, PageView, StatusResponse } from '../shared/messages.ts';
+import type {
+  Message,
+  ModelStatus,
+  ModelStatusResponse,
+  PagesResponse,
+  PageView,
+  StatusResponse,
+  TranslationStatus,
+} from '../shared/messages.ts';
 import type { PageText } from '../shared/page-text.ts';
 
 /**
@@ -65,6 +73,16 @@ function Transcript({ text, translated }: { text: PageText; translated: boolean 
   );
 }
 
+/** 「已翻譯」或「快取」・模型・秒數・費用（spec #27 第 8 節）；快取時是當初翻譯的模型與數字。 */
+function TranslationStatusLine({ status }: { status: TranslationStatus }) {
+  const label = status.source === 'cache' ? '快取' : '已翻譯';
+  return (
+    <p class="translation-status" role="status" aria-label="翻譯狀態">
+      {label}・{status.model}・{(status.latencyMs / 1000).toFixed(1)} 秒・${status.costUsd.toFixed(4)}
+    </p>
+  );
+}
+
 function PageItem({ page, index }: { page: PageView; index: number }) {
   const { transcript } = page;
   return (
@@ -72,6 +90,7 @@ function PageItem({ page, index }: { page: PageView; index: number }) {
       <img src={page.thumbnail} alt={`Page ${index + 1}`} />
       {transcript.state === 'analyzing' && <p>辨識中…</p>}
       {transcript.state === 'error' && <p class="error">辨識失敗：{transcript.message}</p>}
+      {transcript.state === 'done' && transcript.translation && <TranslationStatusLine status={transcript.translation} />}
       {transcript.state === 'done' && <Transcript text={transcript.text} translated={transcript.translated} />}
     </li>
   );

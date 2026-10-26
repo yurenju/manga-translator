@@ -6,6 +6,8 @@
 export interface TabState {
   /** 啟動當下的 origin；換 origin 就停止。 */
   origin: string;
+  /** 這次啟動的 Series；翻譯快取寫在它的 ID 下。 */
+  seriesId: string;
 }
 
 export interface TabStateStore {
@@ -21,6 +23,8 @@ export interface ActivationDeps {
   injectContentScript(tabId: number): Promise<void>;
   stopContentScript(tabId: number): Promise<void>;
   onStatusChanged(tabId: number, active: boolean): void;
+  /** 建一個 Provisional Series，回傳它的 ID。網址模式預選（#36）之前，每次新的啟動都會呼叫。 */
+  createProvisionalSeries(url: string): Promise<string>;
 }
 
 export function createActivation(deps: ActivationDeps) {
@@ -32,12 +36,18 @@ export function createActivation(deps: ActivationDeps) {
     const url = await deps.getTabUrl(tabId);
     if (url === undefined) return;
     if (!(await tryInject(tabId))) return;
-    await deps.store.set(tabId, { origin: new URL(url).origin });
+    // 已啟動的 tab 再點一次圖示不算新的啟動，沿用同一個 Series。
+    const seriesId = (await deps.store.get(tabId))?.seriesId ?? (await deps.createProvisionalSeries(url));
+    await deps.store.set(tabId, { origin: new URL(url).origin, seriesId });
     deps.onStatusChanged(tabId, true);
   }
 
   async function isActive(tabId: number): Promise<boolean> {
     return (await deps.store.get(tabId)) !== undefined;
+  }
+
+  async function getSeriesId(tabId: number): Promise<string | undefined> {
+    return (await deps.store.get(tabId))?.seriesId;
   }
 
   async function tryInject(tabId: number): Promise<boolean> {
@@ -79,5 +89,5 @@ export function createActivation(deps: ActivationDeps) {
     await deps.stopContentScript(tabId).catch(() => {});
   }
 
-  return { activate, stop, isActive, handleTabUpdated, handleTabRemoved };
+  return { activate, stop, isActive, getSeriesId, handleTabUpdated, handleTabRemoved };
 }
