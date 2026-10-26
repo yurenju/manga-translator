@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
-import type { NotesSuggestion } from '../shared/series-notes.ts';
+import { editEntry, type NotesSuggestion, type SeriesNotes } from '../shared/series-notes.ts';
 import type { NotesChanges, NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createClaudeTranslator } from '../offscreen/claude-translator.ts';
 import { createTranscriber, type NotesStore, type PageCache, type TranscriberDeps } from './transcribe.ts';
@@ -51,7 +51,11 @@ function memoryCache(): PageCache & { saved: PageTranslation[] } {
   return {
     saved,
     find: async (seriesId, pageHash) => saved.find((t) => t.seriesId === seriesId && t.pageHash === pageHash),
-    save: async (translation) => void saved.push(structuredClone(translation)),
+    // 跟 IndexedDB 的 put 一樣：同一個 key 覆寫
+    async save(translation) {
+      const i = saved.findIndex((t) => t.seriesId === translation.seriesId && t.pageHash === translation.pageHash);
+      saved.splice(i === -1 ? saved.length : i, i === -1 ? 0 : 1, structuredClone(translation));
+    },
   };
 }
 
@@ -61,9 +65,11 @@ function memoryNotes(initial: NotesEntry[] = []): NotesStore & { entries: NotesE
     entries: structuredClone(initial),
     suggestions: [] as NotesSuggestion[],
     list: async (seriesId: string) => structuredClone(store.entries.filter((e) => e.seriesId === seriesId)),
-    async save(seriesId: string, entries: NotesEntry[], suggestions: NotesSuggestion[]) {
-      store.entries = [...store.entries.filter((e) => e.seriesId !== seriesId), ...structuredClone(entries)];
-      store.suggestions.push(...structuredClone(suggestions));
+    load: async (seriesId: string) =>
+      structuredClone({ entries: store.entries.filter((e) => e.seriesId === seriesId), suggestions: store.suggestions.filter((s) => s.seriesId === seriesId) }),
+    async save(seriesId: string, notes: SeriesNotes) {
+      store.entries = [...store.entries.filter((e) => e.seriesId !== seriesId), ...structuredClone(notes.entries)];
+      store.suggestions = [...store.suggestions.filter((s) => s.seriesId !== seriesId), ...structuredClone(notes.suggestions)];
     },
   };
   return store;
@@ -916,5 +922,99 @@ describe('Spread（#35）', () => {
     await running;
 
     expect(inputs.map((i) => i.seriesNotes)).toEqual([[], [note('今日', '今天')]]);
+  });
+});
+
+describe('過時提示（#38）', () => {
+  /** 用 Notes 裡「今日＝今天」翻好的快取。 */
+  const cachedPage = (pageHash: string, more: Partial<PageTranslation> = {}): PageTranslation => ({
+    ...structuredClone(pageText),
+    seriesId: 'series-1',
+    pageHash,
+    usedNotes: [{ 原文: '今日', 譯文: '今天' }],
+    model: 'claude-haiku-5-5',
+    promptVersion: 'v2',
+    usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, costUsd: 0 },
+    latencyMs: 1,
+    translatedAt: 0,
+    ...more,
+  });
+  const staleOf = (pages: PageView[]) => pages.map((p) => (p.transcript.state === 'done' ? p.transcript.stale : p.transcript.state));
+
+  it('快取命中時，這頁用到的條目譯文被改了：標成過時；只新增條目不算', async () => {
+    const cache = memoryCache();
+    cache.saved.push(cachedPage(HASHES.a1!), cachedPage(HASHES.a2!));
+    const notes = memoryNotes([note('今日', '今兒', { locked: true }), note('明日', '明天')]);
+    const { transcriber, published } = setup({ cache, notes });
+    await transcriber.update(1, [thumb('a1')], capture);
+    expect(staleOf(published.at(-1)!)).toEqual(['notes']);
+
+    notes.entries = [note('今日', '今天'), note('明日', '明天'), note('ドン', '咚')];
+    await transcriber.update(1, [thumb('a2')], capture);
+    expect(staleOf(published.at(-1)!)).toEqual([undefined]);
+  });
+
+  it('模型或 prompt 版本跟目前的不同也標成過時；翻譯時寫進快取的是目前的 prompt 版本', async () => {
+    const cache = memoryCache();
+    cache.saved.push(cachedPage(HASHES.a1!, { promptVersion: 'v1' }));
+    const version = { model: 'claude-haiku-5-5', promptVersion: 'v2' };
+    const { transcriber, published } = setup({
+      cache,
+      notes: memoryNotes([note('今日', '今天')]),
+      getTranslator: () => translatorReturning('譯'),
+      translatorVersion: () => version,
+    });
+
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+
+    expect(staleOf(published.at(-1)!)).toEqual(['version', undefined]);
+    expect(cache.saved.find((t) => t.pageHash === HASHES.a2)?.promptVersion).toBe('v2');
+  });
+
+  it('Notes 改了（notesChanged）：畫面上用到那個條目的頁馬上更新提示，改回來就消失', async () => {
+    const notes = memoryNotes([note('今日', '今天')]);
+    const { transcriber, published } = setup({ notes, getTranslator: () => translatorReturning('譯') });
+    await transcriber.update(1, [thumb('a1')], capture);
+    expect(staleOf(published.at(-1)!)).toEqual([undefined]);
+
+    notes.entries = [note('今日', '今兒', { locked: true })];
+    await transcriber.notesChanged('series-1');
+    expect(staleOf(published.at(-1)!)).toEqual(['notes']);
+    expect(staleOf(transcriber.get(1))).toEqual(['notes']);
+
+    notes.entries = [note('今日', '今天', { locked: true })];
+    await transcriber.notesChanged('series-1');
+    expect(staleOf(published.at(-1)!)).toEqual([undefined]);
+  });
+
+  it('只重翻指定的那頁：命中快取的頁用快取裡的原文送出（不重跑 OCR），翻完不再過時、快取換成新的', async () => {
+    const cache = memoryCache();
+    cache.saved.push(cachedPage(HASHES.a1!), cachedPage(HASHES.a2!));
+    const notes = memoryNotes([note('今日', '今兒', { locked: true })]);
+    const calls: TranslateInput[] = [];
+    const { transcriber, published, deps } = setup({ cache, notes, getTranslator: () => translatorReturning('新', calls) });
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    expect(staleOf(published.at(-1)!)).toEqual(['notes', 'notes']);
+
+    await transcriber.translate(1, HASHES.a1);
+
+    expect(deps.analyze).not.toHaveBeenCalled();
+    expect(calls.map((c) => c.items.map((i) => i.原文))).toEqual([['今日は', 'ドン']]);
+    expect(calls[0]!.seriesNotes).toEqual([note('今日', '今兒', { locked: true })]);
+    const [first, second] = published.at(-1)!;
+    expect(first!.transcript).toMatchObject({ state: 'done', translation: { source: 'translated' } });
+    expect(staleOf([first!, second!])).toEqual([undefined, 'notes']);
+    expect(cache.saved.find((t) => t.pageHash === HASHES.a1)!.usedNotes).toEqual([{ 原文: '今日', 譯文: '今兒' }]);
+  });
+
+  it('updateNotes：人的修改寫進 Notes，畫面上用到那個條目的頁馬上標成過時', async () => {
+    const notes = memoryNotes([note('今日', '今天')]);
+    const { transcriber, published } = setup({ notes, getTranslator: () => translatorReturning('譯') });
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    await transcriber.updateNotes('series-1', (current) => ({ ...current, entries: editEntry(current.entries, '今日', { 譯文: '今兒' }) }));
+
+    expect(notes.entries).toEqual([note('今日', '今兒', { locked: true })]);
+    expect(staleOf(published.at(-1)!)).toEqual(['notes']);
   });
 });

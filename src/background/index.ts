@@ -1,12 +1,16 @@
+import { CLAUDE_MODEL, PROMPT_VERSION } from '../offscreen/claude-translator.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
+import { FAKE_VERSION } from '../shared/fake-translator.ts';
 import type {
   AnalyzeResponse,
   AutoTranslateResponse,
   CropResponse,
   FakeTranslatorConfig,
+  ImportResponse,
   Message,
   ModelStatus,
   ModelStatusResponse,
+  NotesResponse,
   OverlayResponse,
   PageCandidatesResponse,
   PagesResponse,
@@ -17,15 +21,17 @@ import type {
   TestConnectionResponse,
   TranslateResponse,
 } from '../shared/messages.ts';
+import { acceptSuggestion, editEntry, ignoreSuggestion, pendingSuggestions, type SeriesNotes, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
+import { createBackup } from './backup.ts';
 import { indexedDbPageCache } from './cache-store.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
 import { createSeriesCatalog } from './series-catalog.ts';
-import { indexedDbNotesStore, indexedDbSeriesRepo } from './series-store.ts';
+import { indexedDbBackupRepo, indexedDbNotesStore, indexedDbSeriesRepo } from './series-store.ts';
 import { indexedDbTabStore } from './tab-store.ts';
 import { createTranscriber, type JobEvent } from './transcribe.ts';
 
@@ -130,6 +136,14 @@ async function getTranslator(): Promise<Translator | undefined> {
   return (await apiKeys.has()) ? offscreenTranslator : undefined;
 }
 
+/** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 key 時不比。 */
+async function translatorVersion(): Promise<TranslatorVersion | undefined> {
+  if (!(await getTranslator())) return undefined;
+  return __E2E__ && fakeTranslator ? FAKE_VERSION : { model: CLAUDE_MODEL, promptVersion: PROMPT_VERSION };
+}
+
+const notesStore = indexedDbNotesStore();
+
 const transcriber = createTranscriber({
   async analyze(request) {
     await ensureOffscreenDocument();
@@ -142,9 +156,17 @@ const transcriber = createTranscriber({
     return response.text;
   },
   getTranslator,
+  translatorVersion,
   getSeriesId: (tabId) => activation.getSeriesId(tabId),
   cache: indexedDbPageCache(),
-  notes: indexedDbNotesStore(),
+  notes: {
+    ...notesStore,
+    // 翻譯時套用 notes_changes 或人改了：side panel 的 Series Notes 區塊重新讀
+    async save(seriesId, notes) {
+      await notesStore.save(seriesId, notes);
+      notifyPanel({ type: 'notes:changed', seriesId });
+    },
+  },
   publish(tabId, pages) {
     notifyPanel({ type: 'pages:updated', tabId, pages });
     overlaySync.publish(tabId, pages);
@@ -182,6 +204,22 @@ if (__E2E__) {
 function scan(tabId: number): void {
   trace('scan', { tabId });
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
+}
+
+const backupRepo = indexedDbBackupRepo();
+const backup = createBackup({ repo: backupRepo, updateNotes: (seriesId, change) => transcriber.updateNotes(seriesId, change), now: () => Date.now() });
+
+async function notesResponse(tabId: number): Promise<NotesResponse> {
+  const seriesId = await activation.getSeriesId(tabId);
+  if (seriesId === undefined) return { seriesId, entries: [], suggestions: [] };
+  const notes = await notesStore.load(seriesId);
+  return { seriesId, entries: notes.entries, suggestions: pendingSuggestions(notes) };
+}
+
+/** side panel 改這個 tab 目前 Series 的 Notes（#38）。沒啟動就不動。 */
+async function changeNotes(tabId: number, change: (notes: SeriesNotes) => SeriesNotes): Promise<void> {
+  const seriesId = await activation.getSeriesId(tabId);
+  if (seriesId !== undefined) await transcriber.updateNotes(seriesId, change);
 }
 
 const seriesCatalog = createSeriesCatalog({ repo: indexedDbSeriesRepo(), now: () => new Date(), newId: () => crypto.randomUUID() });
@@ -321,7 +359,42 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
       sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);
       return false;
     case 'panel:translate':
-      void transcriber.translate(message.tabId).finally(() => sendResponse());
+      void transcriber.translate(message.tabId, message.pageHash).finally(() => sendResponse());
+      return true;
+    case 'panel:getNotes':
+      notesResponse(message.tabId).then(sendResponse);
+      return true;
+    case 'panel:editNote': {
+      const { 原文, fields } = message;
+      changeNotes(message.tabId, (notes) => ({ ...notes, entries: editEntry(notes.entries, 原文, fields) })).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:acceptSuggestion':
+    case 'panel:ignoreSuggestion': {
+      const { suggestion } = message;
+      const apply = message.type === 'panel:acceptSuggestion' ? acceptSuggestion : ignoreSuggestion;
+      changeNotes(message.tabId, (notes) => apply(notes, suggestion)).then(() => sendResponse());
+      return true;
+    }
+    case 'panel:clearCache':
+      // 畫面上已經顯示的頁不動；之後翻回來就重新翻譯
+      activation
+        .getSeriesId(message.tabId)
+        .then((seriesId) => (seriesId === undefined ? undefined : backupRepo.clearTranslations(seriesId)))
+        .then(() => sendResponse());
+      return true;
+    case 'panel:export':
+      backup.exportAll().then(sendResponse);
+      return true;
+    case 'panel:import':
+      backup
+        .importAll(message.data)
+        .then((seriesIds): ImportResponse => {
+          for (const seriesId of seriesIds) notifyPanel({ type: 'notes:changed', seriesId });
+          return { ok: true };
+        })
+        .catch((e: unknown): ImportResponse => ({ ok: false, error: e instanceof Error ? e.message : String(e) }))
+        .then(sendResponse);
       return true;
     case 'panel:testConnection':
       ensureOffscreenDocument()

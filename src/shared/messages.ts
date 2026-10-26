@@ -1,6 +1,7 @@
 import type { PageText, RatioRect } from './page-text.ts';
+import type { EditableFields, NotesSuggestion, StaleReason, SuggestionRef } from './series-notes.ts';
 import type { SeriesOption } from './series.ts';
-import type { NotesChanges, TranslateInput, TranslateOutput } from './translator.ts';
+import type { NotesChanges, NotesEntry, TranslateInput, TranslateOutput } from './translator.ts';
 
 /** onnxruntime-web 的執行環境。 */
 export type ExecutionProvider = 'webgpu' | 'wasm';
@@ -31,8 +32,11 @@ export type Message =
   | { type: 'models:status'; status: ModelStatus }
   /** side panel → SW：目前的模型狀態。回應 ModelStatusResponse。 */
   | { type: 'panel:getModelStatus' }
-  /** side panel → SW：「翻譯此頁／重新翻譯」：用已經辨識好的原文重新呼叫 Translator。 */
-  | { type: 'panel:translate'; tabId: number }
+  /**
+   * side panel → SW：「翻譯此頁／重新翻譯」：用已經辨識好的原文重新呼叫 Translator。
+   * pageHash：只翻這一頁（過時提示的「重新翻譯」，#38）。
+   */
+  | { type: 'panel:translate'; tabId: number; pageHash?: string }
   /**
    * SW → offscreen：翻譯一個 Page。回應 TranslateResponse。
    * API key 不在訊息裡：offscreen 自己從 IndexedDB 讀（spec 第 5 節：key 永遠不經過 messaging）。
@@ -77,6 +81,20 @@ export type Message =
   | { type: 'panel:mergeSeries'; tabId: number; targetId: string }
   /** SW → side panel：這個 tab 的 Series 或 Series 清單變了，重新 panel:getSeries。 */
   | { type: 'series:changed'; tabId: number }
+  /** side panel → SW：這個 tab 目前 Series 的 Notes 條目與要列出的建議修改（#38）。回應 NotesResponse。 */
+  | { type: 'panel:getNotes'; tabId: number }
+  /** side panel → SW：修正一個條目（之後 locked）。 */
+  | { type: 'panel:editNote'; tabId: number; 原文: string; fields: EditableFields }
+  /** side panel → SW：接受／忽略一個建議修改。 */
+  | { type: 'panel:acceptSuggestion' | 'panel:ignoreSuggestion'; tabId: number; suggestion: SuggestionRef }
+  /** side panel → SW：清除這個 tab 目前 Series 的翻譯快取。 */
+  | { type: 'panel:clearCache'; tabId: number }
+  /** SW → side panel：某部 Series 的 Notes 變了（人改的或翻譯時套用的），重新 panel:getNotes。 */
+  | { type: 'notes:changed'; seriesId: string }
+  /** side panel → SW：匯出全部 Series、網址模式、Notes、快取（不含 API key）。回應 BackupFile。 */
+  | { type: 'panel:export' }
+  /** side panel → SW：匯入匯出檔（合併，本機優先）。回應 ImportResponse。 */
+  | { type: 'panel:import'; data: unknown }
   /**
    * content script → side panel（runtime 廣播，panel 用 sender.tab 分辨）：滑鼠在頁面上的哪一句上；
    * null＝離開（#39）。
@@ -131,6 +149,16 @@ export interface SeriesResponse {
   /** 已排好：最近用過的在最上面。 */
   options: SeriesOption[];
 }
+
+/** 沒啟動（沒有 Series）時 seriesId 是 undefined、列表是空的。 */
+export interface NotesResponse {
+  seriesId: string | undefined;
+  entries: NotesEntry[];
+  /** 已去重、沒忽略、跟目前譯文不同的建議修改。 */
+  suggestions: NotesSuggestion[];
+}
+
+export type ImportResponse = { ok: true } | { ok: false; error: string };
 
 export interface OverlayResponse {
   enabled: boolean;
@@ -207,6 +235,8 @@ export interface PageView extends PageThumb {
         translating?: boolean;
         translation?: TranslationInfo;
         translateError?: string;
+        /** 快取的這頁過時了（#38）：只提示，按「重新翻譯」才重翻。 */
+        stale?: StaleReason;
       }
     | { state: 'error'; message: string };
 }

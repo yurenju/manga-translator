@@ -12,13 +12,27 @@ export interface NotesSuggestion {
   建議譯文: string;
   理由?: string;
   來源: SuggestionSource;
+  /** 人按了「忽略」：不再列出，同樣的建議之後也不再加進來（#38）。 */
+  ignored?: true;
 }
+
+/** 一部 Series 的 Notes 條目與建議修改。 */
+export interface SeriesNotes {
+  entries: NotesEntry[];
+  suggestions: NotesSuggestion[];
+}
+
+/** 一個建議修改的身分：同一個原文、同一個建議譯文就是同一個建議，不管是哪一頁提的。 */
+export type SuggestionRef = Pick<NotesSuggestion, '原文' | '建議譯文'>;
+
+const sameSuggestion = (a: SuggestionRef) => (b: SuggestionRef) => a.原文 === b.原文 && a.建議譯文 === b.建議譯文;
 
 /**
  * 建議從哪來：LLM 翻某一頁時提的（pageHash＝那個 Page 的身分，ADR 0002「依頁面順序逐筆套用」），
- * 或合併 Series 時從被合併的 Provisional Series 帶進來的（mergedFrom＝它的 ID，合併後已刪除）。
+ * 合併 Series 時從被合併的 Provisional Series 帶進來的（mergedFrom＝它的 ID，合併後已刪除），
+ * 或匯入 JSON 時跟本機條目衝突的（imported，#38）。
  */
-export type SuggestionSource = { pageHash: string } | { mergedFrom: string };
+export type SuggestionSource = { pageHash: string } | { mergedFrom: string } | { imported: true };
 
 /** 空字串＝沒有值，可以補。譯文也算：目標的譯文是空的就直接補上，有值且不同才變成建議。 */
 const FILLABLE = ['讀音', '譯文', '類別', '備註', '自稱', '語氣', '稱呼'] as const;
@@ -113,4 +127,83 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
     merged.suggestions.push({ seriesId: page.seriesId, 原文, 建議譯文, ...(理由 ? { 理由 } : {}), 來源 });
   }
   return merged;
+}
+
+/** 人在 side panel 可以改的欄位（原文是 key，不能改）。 */
+export type EditableFields = Partial<Pick<NotesEntry, (typeof FILLABLE)[number]>>;
+
+/** 人在 side panel 修正一個條目：寫進改過的欄位並設成 locked（之後 LLM 只能對它提建議，ADR 0002）。 */
+export function editEntry(entries: readonly NotesEntry[], 原文: string, fields: EditableFields): NotesEntry[] {
+  return entries.map((e) => (e.原文 === 原文 ? { ...e, ...fields, locked: true } : e));
+}
+
+/**
+ * 把新的建議修改加進既有的：同一個建議（原文＋建議譯文）已經有了就不加，忽略過的也算。
+ * LLM 每翻一頁都可能再提一次同一個建議（#37 沒有去重）。
+ */
+export function addSuggestions(existing: readonly NotesSuggestion[], incoming: readonly NotesSuggestion[]): NotesSuggestion[] {
+  const result = [...existing];
+  for (const s of incoming) if (!result.some(sameSuggestion(s))) result.push(s);
+  return result;
+}
+
+/** side panel 要列出的建議：沒忽略、條目還在、而且跟目前的譯文不同（例如人已經自己改成一樣了）。 */
+export function pendingSuggestions({ entries, suggestions }: SeriesNotes): NotesSuggestion[] {
+  const byOriginal = new Map(entries.map((e) => [e.原文, e]));
+  return suggestions.filter((s) => !s.ignored && byOriginal.has(s.原文) && byOriginal.get(s.原文)!.譯文 !== s.建議譯文);
+}
+
+/** 接受建議：條目改成建議譯文並 locked（等於人改過），這個建議拿掉。 */
+export function acceptSuggestion(notes: SeriesNotes, ref: SuggestionRef): SeriesNotes {
+  return {
+    entries: editEntry(notes.entries, ref.原文, { 譯文: ref.建議譯文 }),
+    suggestions: notes.suggestions.filter((s) => !sameSuggestion(ref)(s)),
+  };
+}
+
+/** 忽略建議：條目不動，建議留著但標成忽略，同樣的建議之後不會再加進來。 */
+export function ignoreSuggestion(notes: SeriesNotes, ref: SuggestionRef): SeriesNotes {
+  return {
+    entries: notes.entries,
+    suggestions: notes.suggestions.map((s) => (sameSuggestion(ref)(s) ? { ...s, ignored: true } : s)),
+  };
+}
+
+/** 目前會用來翻譯的模型與 prompt 版本（Translator.version）。 */
+export interface TranslatorVersion {
+  model: string;
+  promptVersion: string;
+}
+
+/** 過時的原因：這頁用到的條目譯文被改了（notes），或模型／prompt 版本不同（version）。 */
+export type StaleReason = 'notes' | 'version';
+
+/**
+ * 快取的這頁是不是過時了（spec #27 第 4.3 節：過時只提示、不自動重翻）。只看這頁翻譯時用到的條目（usedNotes）：
+ * 新增條目不算，用到的條目只改了譯文以外的欄位也不算。current 是 undefined（沒有 API key）時不比版本。
+ */
+export function staleReason(
+  page: { usedNotes: readonly { 原文: string; 譯文: string }[]; model: string; promptVersion: string },
+  entries: readonly NotesEntry[],
+  current: TranslatorVersion | undefined,
+): StaleReason | undefined {
+  const byOriginal = new Map(entries.map((e) => [e.原文, e]));
+  // 條目不在了（不會發生：條目不能刪）就當沒改
+  const changed = (u: { 原文: string; 譯文: string }) => {
+    const now = byOriginal.get(u.原文);
+    return now !== undefined && now.譯文 !== u.譯文;
+  };
+  if (page.usedNotes.some(changed)) return 'notes';
+  if (current && (current.model !== page.model || current.promptVersion !== page.promptVersion)) return 'version';
+  return undefined;
+}
+
+/**
+ * 匯入 JSON（#38）時把檔案裡這部 Series 的 Notes 併進本機的：跟合併 Series 同一套只能新增規則，本機已有的條目優先，
+ * 譯文衝突變成建議修改。本機沒有的條目照原樣加進來（另一台電腦上人改過的仍是 locked）。檔案裡的建議去重後加進來。
+ */
+export function mergeImportedNotes(local: SeriesNotes, incoming: SeriesNotes, seriesId: string): SeriesNotes {
+  const merged = mergeNotes(local.entries, incoming.entries, { seriesId, 來源: { imported: true } });
+  const imported = incoming.suggestions.map((s) => ({ ...s, seriesId }));
+  return { entries: merged.entries, suggestions: addSuggestions(addSuggestions(local.suggestions, imported), merged.suggestions) };
 }

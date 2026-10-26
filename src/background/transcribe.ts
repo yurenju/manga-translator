@@ -19,7 +19,7 @@
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
-import { usedNotes } from '../shared/series-notes.ts';
+import { staleReason, usedNotes, type SeriesNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createNotesLedger, type NotesLedger, type NotesStore } from './notes-ledger.ts';
@@ -46,6 +46,8 @@ export interface TranscriberDeps {
   analyze(request: AnalyzeRequest): Promise<PageText>;
   /** 沒有 API key 時回傳 undefined。 */
   getTranslator(): Translator | undefined | Promise<Translator | undefined>;
+  /** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 Translator 時 undefined，就不比版本。 */
+  translatorVersion?(): TranslatorVersion | undefined | Promise<TranslatorVersion | undefined>;
   /** 這個 tab 啟動時選定的 Series（或 Provisional Series）；沒有就不查也不寫快取。 */
   getSeriesId(tabId: number): Promise<string | undefined>;
   cache: PageCache;
@@ -55,9 +57,6 @@ export interface TranscriberDeps {
 }
 
 type Transcript = PageView['transcript'];
-
-// TODO(#38)：Translator 的 prompt 版本（offscreen/claude-translator.ts 的 PROMPT_VERSION）還沒傳到 SW；過時提示要比對它
-const PROMPT_VERSION = '';
 
 const trace = createTrace('sw');
 
@@ -93,7 +92,7 @@ interface CacheTarget {
 async function translateText(
   text: PageText,
   translator: Translator | undefined,
-  { cache, ledger }: { cache: PageCache; ledger: NotesLedger },
+  { cache, ledger, translatorVersion }: Pick<TranscriberDeps, 'cache' | 'translatorVersion'> & { ledger: NotesLedger },
   target: CacheTarget,
 ): Promise<Transcript> {
   if (!translator) return { state: 'done', text, translated: false };
@@ -119,13 +118,15 @@ async function translateText(
     ? await turn.commit(output.notes_changes, { pageHash: target.pageHash, balloonTexts: text.balloons.map((b) => b.原文) })
     : seriesNotes;
   if (target.seriesId !== undefined) {
+    // 過時提示（#38）拿它跟目前的 prompt 版本比；model 用 LLM 回報的
+    const promptVersion = (await translatorVersion?.())?.promptVersion ?? '';
     const entry: PageTranslation = {
       ...translated,
       seriesId: target.seriesId,
       pageHash: target.pageHash,
       usedNotes: usedNotes(notes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
       model,
-      promptVersion: PROMPT_VERSION,
+      promptVersion,
       usage,
       latencyMs,
       translatedAt: Date.now(),
@@ -282,12 +283,24 @@ export function createTranscriber(deps: TranscriberDeps) {
     report(job, 'llm');
     complete(
       job,
-      await translateText(record.text!, job.translator, { cache: deps.cache, ledger }, {
+      await translateText(record.text!, job.translator, { cache: deps.cache, ledger, translatorVersion: deps.translatorVersion }, {
         seriesId: record.seriesId,
         pageHash: record.pageHash,
         spread: job.spread,
       }),
     );
+  }
+
+  /** 快取的這頁過時了沒（#38）。讀不到 Notes 就當沒過時：只是少一個提示。 */
+  async function findStale(cached: PageTranslation): Promise<StaleReason | undefined> {
+    const [entries, version] = await Promise.all([
+      deps.notes.list(cached.seriesId).catch((e: unknown) => {
+        console.warn('notes lookup failed', e);
+        return [];
+      }),
+      deps.translatorVersion?.(),
+    ]);
+    return staleReason(cached, entries, version);
   }
 
   async function lookupCache(seriesId: string | undefined, pageHash: string): Promise<Transcript | undefined> {
@@ -302,8 +315,15 @@ export function createTranscriber(deps: TranscriberDeps) {
     trace(cached ? 'cache:hit' : 'cache:miss', { seriesId, pageHash, cachedHash: cached?.pageHash });
     if (!cached) return undefined;
     const { balloons, looseText, model, latencyMs, usage } = cached;
+    const stale = await findStale(cached);
     // 命中快取時沒有本機流水線的結果（text），「翻譯此頁／重新翻譯」不會重翻這頁。
-    return { state: 'done', text: { balloons, looseText }, translated: true, translation: { source: 'cache', model, latencyMs, usage } };
+    return {
+      state: 'done',
+      text: { balloons, looseText },
+      translated: true,
+      translation: { source: 'cache', model, latencyMs, usage },
+      ...(stale ? { stale } : {}),
+    };
   }
 
   /**
@@ -377,12 +397,15 @@ export function createTranscriber(deps: TranscriberDeps) {
   /**
    * 「翻譯此頁／重新翻譯／重試」：可見的 Page 裡，pending 的排進佇列；已辨識完的重新翻譯（不重跑 OCR）。
    * 已有工作在跑的不重複排。沒有 key 時只會跑 pending 的本機流水線。
+   * pageHash：只翻這一頁（過時提示的「重新翻譯」，#38）；命中快取的頁沒有 OCR 結果，就用快取裡的原文送出。
    */
-  async function translate(tabId: number): Promise<void> {
+  async function translate(tabId: number, pageHash?: string): Promise<void> {
     const tab = tabs.get(tabId);
     if (!tab) return;
     const translator = await deps.getTranslator();
-    const visible = [...new Set(tab.pages.flatMap((p) => findSamePage(tab.records, p.pageHash) ?? []))];
+    const pages = pageHash === undefined ? tab.pages : tab.pages.filter((p) => p.pageHash === pageHash);
+    const visible = [...new Set(pages.flatMap((p) => findSamePage(tab.records, p.pageHash) ?? []))];
+    if (pageHash !== undefined) for (const record of visible) if (record.transcript.state === 'done') record.text ??= record.transcript.text;
     const batch = ++batches;
     const spreadOf = spreadMarks();
     const started: PageRecord[] = [];
@@ -443,11 +466,46 @@ export function createTranscriber(deps: TranscriberDeps) {
     for (const record of tabs.get(tabId)?.records ?? []) record.seriesId = seriesId;
   }
 
+  /**
+   * 這個 Series 的 Notes 被人改了（#38）：畫面上已翻譯的頁重新判斷過時（從快取拿它翻譯時用到的條目），
+   * 有變的 tab 重新 publish。
+   */
+  async function notesChanged(seriesId: string): Promise<void> {
+    await Promise.all(
+      [...tabs.values()].map(async (tab) => {
+        const shown = tab.records.filter((r) => r.seriesId === seriesId && r.transcript.state === 'done' && r.transcript.translated && isVisible(tab, r));
+        let changed = false;
+        await Promise.all(
+          shown.map(async (record) => {
+            const cached = await deps.cache.find(seriesId, record.pageHash).catch(() => undefined);
+            if (!cached || record.transcript.state !== 'done') return;
+            const stale = await findStale(cached);
+            if (stale === record.transcript.stale) return;
+            const { stale: _old, ...rest } = record.transcript;
+            record.transcript = stale ? { ...rest, stale } : rest;
+            changed = true;
+          }),
+        );
+        if (changed) publish(tab);
+      }),
+    );
+  }
+
+  /**
+   * 人在 side panel 改 Notes（#38：編輯、接受／忽略建議、匯入）：跟翻譯時套用 notes_changes 用同一個 ledger 寫，
+   * 不會互相蓋掉；寫完重新判斷畫面上的頁過時了沒。
+   */
+  async function updateNotes(seriesId: string, change: (notes: SeriesNotes) => SeriesNotes): Promise<SeriesNotes> {
+    const next = await ledger.update(seriesId, change);
+    await notesChanged(seriesId);
+    return next;
+  }
+
   /** 停止或關 tab：同 resetPages，設定也回到預設。 */
   function clear(tabId: number): void {
     autoTranslate.delete(tabId);
     resetPages(tabId);
   }
 
-  return { update, translate, setAutoTranslate, isAutoTranslate, get, resetPages, reassignSeries, clear };
+  return { update, translate, setAutoTranslate, isAutoTranslate, get, resetPages, reassignSeries, notesChanged, updateNotes, clear };
 }

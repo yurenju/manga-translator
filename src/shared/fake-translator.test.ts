@@ -48,6 +48,20 @@ describe('FakeTranslator', () => {
     expect(again.notes_changes.added).toEqual([]);
   });
 
+  it('設定的條目已經在 Notes 裡：空欄位回傳成 filled，譯文不同回傳成建議修改（#38：模擬 LLM 想改人改過的條目）', async () => {
+    const パン = { 原文: 'パン', 讀音: 'ぱん', 譯文: '麵包', 類別: '用語' };
+    const withNotes = createFakeTranslator([readGroundTruth('p01-basic')], { notes: [パン] });
+    const items = [{ id: 'b1', kind: 'balloon' as const, 原文: 'うん、パンを買いに行くんだ', orientation: 'vertical' as const }];
+
+    const output = await withNotes.translatePage({ seriesNotes: [{ ...パン, 讀音: '', 譯文: '胖', seriesId: 's', locked: true }], items });
+
+    expect(output.notes_changes).toEqual({
+      added: [],
+      filled: [{ 原文: 'パン', fields: { 讀音: 'ぱん' } }],
+      suggestions: [{ 原文: 'パン', 建議譯文: '麵包' }],
+    });
+  });
+
   it('不花錢、不改 Series Notes', async () => {
     const output = await translator.translatePage({ seriesNotes: [], items: [] });
 

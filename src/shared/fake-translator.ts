@@ -4,6 +4,9 @@
  */
 import type { NotesChanges, TranslateInput, TranslateOutput, Translator } from './translator.ts';
 
+/** FakeTranslator 的模型與 prompt 版本（寫進快取、過時提示比對用）。 */
+export const FAKE_VERSION = { model: 'fake', promptVersion: 'fake' };
+
 /** 找不到對應的 ground truth 時的譯文。 */
 export const NO_MATCH = '（FakeTranslator：找不到對應的原文）';
 
@@ -43,6 +46,26 @@ export interface FakeTranslatorOptions {
   notes?: NotesChanges['added'];
 }
 
+/**
+ * 設定的條目出現在這頁的 Balloon 裡時：Notes 還沒有就新增；已經有了就把空欄位補上（filled），
+ * 譯文不同就提建議（#38：模擬 LLM 想改人改過的條目）。
+ */
+function notesChanges(notes: NotesChanges['added'], input: TranslateInput): NotesChanges {
+  const changes: NotesChanges = { added: [], filled: [], suggestions: [] };
+  for (const n of notes) {
+    if (!input.items.some((i) => i.kind === 'balloon' && normalize(i.原文).includes(normalize(n.原文)))) continue;
+    const existing = input.seriesNotes.find((e) => e.原文 === n.原文);
+    if (!existing) {
+      changes.added.push(n);
+      continue;
+    }
+    const fields = Object.fromEntries(Object.entries(n).filter(([key, value]) => key !== '原文' && key !== '譯文' && value && !existing[key as keyof typeof n]));
+    if (Object.keys(fields).length > 0) changes.filled.push({ 原文: n.原文, fields });
+    if (existing.譯文 && existing.譯文 !== n.譯文) changes.suggestions.push({ 原文: n.原文, 建議譯文: n.譯文 });
+  }
+  return changes;
+}
+
 export function createFakeTranslator(
   pages: readonly { texts: readonly GroundTruthText[] }[],
   { unreadableTexts = [], notes = [] }: FakeTranslatorOptions = {},
@@ -67,17 +90,9 @@ export function createFakeTranslator(
             ? { id: item.id, 讀音: best.reading, 譯文: best.zh, unreadable: false }
             : { id: item.id, 讀音: '', 譯文: NO_MATCH, unreadable: false };
         }),
-        notes_changes: {
-          added: notes.filter(
-            (n) =>
-              !input.seriesNotes.some((e) => e.原文 === n.原文) &&
-              input.items.some((i) => i.kind === 'balloon' && normalize(i.原文).includes(normalize(n.原文))),
-          ),
-          filled: [],
-          suggestions: [],
-        },
+        notes_changes: notesChanges(notes, input),
         usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
-        model: 'fake',
+        model: FAKE_VERSION.model,
         latencyMs: 0,
       };
     },

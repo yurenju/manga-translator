@@ -3,6 +3,7 @@ import type { PageTranslation } from '../shared/page-text.ts';
 import type { NotesSuggestion } from '../shared/series-notes.ts';
 import type { Series, UrlPattern } from '../shared/series.ts';
 import type { NotesEntry } from '../shared/translator.ts';
+import type { BackupData, BackupRepo } from './backup.ts';
 import type { NotesStore } from './notes-ledger.ts';
 import type { SeriesRepo } from './series-catalog.ts';
 
@@ -26,10 +27,18 @@ function eachBySeries(store: IDBObjectStore, seriesId: string, visit: (cursor: I
  */
 export function indexedDbNotesStore(): NotesStore {
   let db: Promise<IDBDatabase> | undefined;
+  const bySeries = <T>(store: string, seriesId: string) =>
+    storeRequest((db ??= openDb()), store, 'readonly', (s) => s.index(BY_SERIES).getAll(seriesId) as IDBRequest<T[]>);
   return {
-    list: (seriesId) =>
-      storeRequest((db ??= openDb()), STORES.seriesNotes, 'readonly', (s) => s.index(BY_SERIES).getAll(seriesId) as IDBRequest<NotesEntry[]>),
-    async save(seriesId, entries, suggestions) {
+    list: (seriesId) => bySeries<NotesEntry>(STORES.seriesNotes, seriesId),
+    async load(seriesId) {
+      const [entries, suggestions] = await Promise.all([
+        bySeries<NotesEntry>(STORES.seriesNotes, seriesId),
+        bySeries<NotesSuggestion>(STORES.notesSuggestions, seriesId),
+      ]);
+      return { entries, suggestions };
+    },
+    async save(seriesId, { entries, suggestions }) {
       const conn = await (db ??= openDb());
       await new Promise<void>((resolve, reject) => {
         const tx = conn.transaction([STORES.seriesNotes, STORES.notesSuggestions], 'readwrite');
@@ -37,8 +46,13 @@ export function indexedDbNotesStore(): NotesStore {
         tx.onerror = () => reject(tx.error);
         const notes = tx.objectStore(STORES.seriesNotes);
         for (const entry of entries) notes.put({ ...entry, seriesId });
+        // 建議修改整份取代（接受的拿掉、忽略的改了標記）。先拿到舊的 key 再刪：cursor 會看到同一個 transaction 裡新加的。
         const pending = tx.objectStore(STORES.notesSuggestions);
-        for (const suggestion of suggestions) pending.add(suggestion);
+        const old = pending.index(BY_SERIES).getAllKeys(seriesId);
+        old.onsuccess = () => {
+          for (const key of old.result) pending.delete(key);
+          for (const suggestion of suggestions) pending.add({ ...suggestion, seriesId });
+        };
       });
     },
   };
@@ -84,5 +98,41 @@ export function indexedDbSeriesRepo(): SeriesRepo {
         tx.objectStore(STORES.series).delete(sourceId);
       });
     },
+  };
+}
+
+/** 匯出／匯入（#38）與清除快取用。只碰 Series、網址模式、Notes、建議修改、快取這五個 store；不碰 apiKeys。 */
+export function indexedDbBackupRepo(): BackupRepo & { clearTranslations(seriesId: string): Promise<void> } {
+  let db: Promise<IDBDatabase> | undefined;
+  const run = <T>(store: string, mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>) =>
+    storeRequest((db ??= openDb()), store, mode, op);
+  const all = <T>(store: string) => run(store, 'readonly', (s) => s.getAll() as IDBRequest<T[]>);
+  return {
+    async dump(): Promise<BackupData> {
+      const [series, urlPatterns, seriesNotes, notesSuggestions, pageTranslations] = await Promise.all([
+        all<Series>(STORES.series),
+        all<UrlPattern>(STORES.urlPatterns),
+        all<NotesEntry>(STORES.seriesNotes),
+        all<NotesSuggestion>(STORES.notesSuggestions),
+        all<PageTranslation>(STORES.pageTranslations),
+      ]);
+      return { series, urlPatterns, seriesNotes, notesSuggestions, pageTranslations };
+    },
+    getSeries: (id) => run(STORES.series, 'readonly', (s) => s.get(id) as IDBRequest<Series | undefined>),
+    putSeries: (series) => run(STORES.series, 'readwrite', (s) => s.put(series)).then(() => {}),
+    getPattern: (pattern) => run(STORES.urlPatterns, 'readonly', (s) => s.get(pattern) as IDBRequest<UrlPattern | undefined>),
+    putPattern: (pattern) => run(STORES.urlPatterns, 'readwrite', (s) => s.put(pattern)).then(() => {}),
+    listTranslations: (seriesId) => run(STORES.pageTranslations, 'readonly', (s) => s.index(BY_SERIES).getAll(seriesId) as IDBRequest<PageTranslation[]>),
+    async putTranslations(translations) {
+      const conn = await (db ??= openDb());
+      await new Promise<void>((resolve, reject) => {
+        const tx = conn.transaction(STORES.pageTranslations, 'readwrite');
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        const store = tx.objectStore(STORES.pageTranslations);
+        for (const t of translations) store.put(t);
+      });
+    },
+    clearTranslations: (seriesId) => run(STORES.pageTranslations, 'readwrite', (s) => s.delete(seriesRange(seriesId))).then(() => {}),
   };
 }
