@@ -15,6 +15,7 @@
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
+import { createTrace } from '../shared/trace.ts';
 import type { TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createTranslationQueue, type QueuedJob } from './translation-queue.ts';
 
@@ -49,6 +50,8 @@ type Transcript = PageView['transcript'];
 // TODO(#38)：Translator 的 prompt 版本（offscreen/claude-translator.ts 的 PROMPT_VERSION）還沒傳到 SW；過時提示要比對它
 const PROMPT_VERSION = '';
 
+const trace = createTrace('sw');
+
 /** 工作的 priority：可見頁 > 預翻頁（v1 只有可見頁，spec 第 10 節）。 */
 export const PRIORITY_VISIBLE = 1;
 
@@ -80,11 +83,14 @@ interface CacheTarget {
 async function translateText(text: PageText, translator: Translator | undefined, cache: PageCache, target: CacheTarget): Promise<Transcript> {
   if (!translator) return { state: 'done', text, translated: false };
   let output: TranslateOutput;
+  const startedAt = Date.now();
   try {
     output = await translator.translatePage(toTranslateInput(text));
+    trace('translate:done', { pageHash: target.pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage });
   } catch (e) {
     // 429／5xx 的重試在 Translator 裡（claude-translator.ts）；這裡是重試後仍失敗
     console.warn('translate failed', e);
+    trace('translate:error', { pageHash: target.pageHash, ms: Date.now() - startedAt, error: e });
     return { state: 'done', text, translated: false, translateError: e instanceof Error ? e.message : String(e) };
   }
   const translated = applyTranslation(text, output);
@@ -215,9 +221,12 @@ export function createTranscriber(deps: TranscriberDeps) {
     const { record } = job;
     report(job, 'start');
     let text: PageText;
+    const startedAt = Date.now();
     try {
       text = await deps.analyze(record.request);
+      trace('analyze:done', { pageHash: record.pageHash, anchorId: record.request.candidate.anchorId, ms: Date.now() - startedAt, balloons: text.balloons.length, looseText: text.looseText.length });
     } catch (e) {
+      trace('analyze:error', { pageHash: record.pageHash, ms: Date.now() - startedAt, error: e });
       complete(job, { state: 'error', message: e instanceof Error ? e.message : String(e) });
       return false;
     }
@@ -237,11 +246,15 @@ export function createTranscriber(deps: TranscriberDeps) {
   }
 
   async function lookupCache(seriesId: string | undefined, pageHash: string): Promise<Transcript | undefined> {
-    if (seriesId === undefined) return undefined;
+    if (seriesId === undefined) {
+      trace('cache:noSeries', { pageHash });
+      return undefined;
+    }
     const cached = await deps.cache.find(seriesId, pageHash).catch((e: unknown) => {
       console.warn('cache lookup failed', e);
       return undefined;
     });
+    trace(cached ? 'cache:hit' : 'cache:miss', { seriesId, pageHash, cachedHash: cached?.pageHash });
     if (!cached) return undefined;
     const { balloons, looseText, model, latencyMs, usage } = cached;
     // 命中快取時沒有本機流水線的結果（text），「翻譯此頁／重新翻譯」不會重翻這頁。

@@ -3,6 +3,9 @@
  * Chrome API 與其他 context 都從 deps 注入，SW 的 index.ts 負責接上真的 chrome.*。
  */
 import type { CropRequest, PageCandidatesResponse, PageThumb } from '../shared/messages.ts';
+import { createTrace } from '../shared/trace.ts';
+
+const trace = createTrace('sw');
 
 /**
  * 兩次 captureVisibleTab 之間至少隔這麼久。Chrome 限制每個外掛最多 2 次/秒，超過會直接丟錯（#4）；
@@ -54,11 +57,15 @@ export function createScanner(deps: ScannerDeps) {
       if (!isCurrentGeneration()) return;
       const before = await deps.findPageCandidates(tabId);
       if (before.candidates.length === 0) {
+        trace('scan:noCandidates', { tabId });
         if (isCurrentGeneration()) publish(tabId, []);
         return;
       }
       const windowId = await deps.getVisibleWindowId(tabId);
-      if (windowId === undefined) return;
+      if (windowId === undefined) {
+        trace('scan:notActiveTab', { tabId });
+        return;
+      }
       // 截圖會截到自己的覆蓋層，hash 就跟原圖對不上；所以截圖期間先藏起來（覆蓋層會消失約 1～2 幀）。
       await deps.hideOverlay(tabId);
       let screenshot: string;
@@ -69,7 +76,10 @@ export function createScanner(deps: ScannerDeps) {
         await deps.restoreOverlay(tabId);
       }
       // side panel 剛打開造成重排、使用者在截圖時捲動……rect 跟截圖對不上就重來。
-      if (!sameLayout(before, await deps.findPageCandidates(tabId))) continue;
+      if (!sameLayout(before, await deps.findPageCandidates(tabId))) {
+        trace('scan:layoutChanged', { tabId, attempt });
+        continue;
+      }
       const capture: CropRequest = { screenshot, ...before };
       const result = await deps.crop(capture);
       if (isCurrentGeneration()) publish(tabId, result, capture);

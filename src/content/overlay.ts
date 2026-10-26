@@ -9,6 +9,7 @@
 import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
+import { createTrace } from '../shared/trace.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
@@ -109,6 +110,8 @@ const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() 
 /** 滑鼠移到哪一句上（null＝離開）。 */
 export type OnHover = (line: LineRef | null) => void;
 
+const trace = createTrace('content');
+
 export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHover?: OnHover }) {
   const entries = new Map<HTMLElement, Entry>();
   /** 被我們從 static 改成 relative 的父元素 → 原本的 inline position，停止時還原。 */
@@ -157,11 +160,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /** 主頁面重繪把 host 丟掉（或把 anchor 搬走）就重掛；anchor 不在了就先拿掉 host，等它回來。 */
   function reattach(entry: Entry): void {
+    const pageHashes = () => [...entry.layers.values()].map((layer) => layer.pageHash);
     if (!entry.anchor.isConnected) {
-      if (entry.host.isConnected) entry.host.remove();
+      if (entry.host.isConnected) {
+        entry.host.remove();
+        trace('overlay:detach', { pageHashes: pageHashes(), reason: 'anchor 不在 DOM 裡' });
+      }
       return;
     }
     if (entry.host.isConnected && entry.host.previousElementSibling === entry.anchor) return;
+    trace('overlay:reattach', { pageHashes: pageHashes(), reason: entry.host.isConnected ? 'host 被移到別處' : 'host 被移除' });
     attach(entry);
     place(entry);
   }
@@ -266,6 +274,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算。
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
+    const fits: Record<string, unknown>[] = [];
     for (const { balloon, regions, box, inner } of items) {
       const result = fitText(
         {
@@ -283,6 +292,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         minLayerPx,
       );
       box.dataset.fit = String(result.stage);
+      if (__DEBUG__) fits.push({ id: balloon.id, 譯文: balloon.譯文, vertical: box.classList.contains('v'), ...result, regions, eraseLuminance: balloon.eraseLuminance });
+    }
+    if (__DEBUG__) {
+      const anchorRect = anchor.getBoundingClientRect();
+      trace('overlay:show', {
+        pageHash,
+        sub,
+        pageSize: size,
+        anchorRect: { x: anchorRect.x, y: anchorRect.y, width: anchorRect.width, height: anchorRect.height },
+        screenScale,
+        minLayerPx,
+        skipped: text.balloons.filter((b) => !balloons.includes(b)).map((b) => ({ id: b.id, unreadable: b.unreadable, 譯文: b.譯文 })),
+        fits,
+      });
     }
     tip.style.fontSize = `${TOOLTIP_SCREEN_PX / screenScale}px`;
     tip.style.maxWidth = `${size.width * 0.8}px`;
@@ -391,6 +414,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   }
   /** side panel 的覆蓋開關。用 visibility，關著時仍能量測排版。 */
   function setEnabled(value: boolean): void {
+    // 每次 showOverlay 都會帶開關狀態，只記改變
+    if (value !== enabled) trace('overlay:enabled', { enabled: value });
     enabled = value;
     entries.forEach(applyVisibility);
   }

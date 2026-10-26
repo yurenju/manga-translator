@@ -1,7 +1,8 @@
 import type { Message, PageCandidate, PageCandidatesResponse, Rect } from '../shared/messages.ts';
+import { createTrace } from '../shared/trace.ts';
 import { createOverlay, HOST_ATTRIBUTE } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
-import { isPageCandidate } from './page-candidates.ts';
+import { pageCandidateRejection } from './page-candidates.ts';
 import { watchPageTurns } from './page-turn.ts';
 
 /**
@@ -17,6 +18,7 @@ declare global {
 // 同一頁可能被注入多次（例如重新整理事件重複），只啟動一次。
 if (!globalThis.__mangaTranslator) {
   globalThis.__mangaTranslator = { active: true };
+  const trace = createTrace('content');
 
   /**
    * anchor：最近一次量到的 Page 候選元素，之後的覆蓋層靠 id 找回元素。每次重量就重建，
@@ -41,13 +43,22 @@ if (!globalThis.__mangaTranslator) {
     // 因為 captureVisibleTab 截的是含捲軸的整個可視區域。
     const visible = { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight };
     const candidates: PageCandidate[] = [];
+    /** 除錯記錄用：夠大但不算候選的元素（太小的只算數量，圖示太多）。 */
+    const rejected: { tag: string; rect: Rect; reason: string; clips: Rect[] }[] = [];
+    let small = 0;
     anchors.clear();
     for (const element of document.querySelectorAll('img, canvas')) {
       const { x, y, width, height } = element.getBoundingClientRect();
       const rect = { x, y, width, height };
-      if (isPageCandidate(rect, visible, clipRects(element))) candidates.push({ anchorId: anchorIdOf(element), rect });
+      const clips = clipRects(element);
+      const reason = pageCandidateRejection(rect, visible, clips);
+      if (reason === undefined) candidates.push({ anchorId: anchorIdOf(element), rect });
+      else if (__DEBUG__ && reason === 'small') small++;
+      else if (__DEBUG__) rejected.push({ tag: element.tagName.toLowerCase(), rect, reason, clips });
     }
-    return { viewport: { width: window.innerWidth, height: window.innerHeight }, candidates };
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    if (__DEBUG__) trace('candidates', { url: location.href, viewport, visible, dpr: devicePixelRatio, candidates, rejected, small });
+    return { viewport, candidates };
   }
 
   /** 會裁切內容的祖先（overflow 不是 visible）：翻頁式 viewer 的隔壁頁在它外面。 */
@@ -76,6 +87,7 @@ if (!globalThis.__mangaTranslator) {
     node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
   const stopWatching = watchPageTurns({
     notify() {
+      trace('pageTurn');
       chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
     },
     isOwn,
@@ -94,6 +106,7 @@ if (!globalThis.__mangaTranslator) {
         const anchor = anchors.get(message.anchorId);
         overlay.setEnabled(message.enabled);
         if (anchor instanceof HTMLElement) overlay.show(anchor, message.sub, message.text, message.pageHash).catch((e: unknown) => console.warn('overlay failed', e));
+        else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });
         return false;
       }
       case 'content:hideOverlay':
@@ -101,6 +114,7 @@ if (!globalThis.__mangaTranslator) {
         return true;
       case 'content:restoreOverlay': {
         const hiddenMs = overlay.restoreAfterCapture();
+        trace('overlay:restore', { hiddenMs });
         if (__E2E__ && hiddenMs !== undefined) (globalThis.__overlayHiddenMs ??= []).push(hiddenMs);
         sendResponse(null);
         return false;

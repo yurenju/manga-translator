@@ -6,15 +6,21 @@ import { build } from './build.ts';
 
 let prodDir: string;
 let e2eDir: string;
+let debugDir: string;
 
 beforeAll(async () => {
   prodDir = await mkdtemp(join(tmpdir(), 'manga-prod-'));
   e2eDir = await mkdtemp(join(tmpdir(), 'manga-e2e-'));
-  await Promise.all([build({ e2e: false, outDir: prodDir }), build({ e2e: true, outDir: e2eDir })]);
+  debugDir = await mkdtemp(join(tmpdir(), 'manga-debug-'));
+  await Promise.all([
+    build({ e2e: false, outDir: prodDir }),
+    build({ e2e: true, outDir: e2eDir }),
+    build({ e2e: false, debug: true, outDir: debugDir }),
+  ]);
 }, 30_000);
 
 afterAll(async () => {
-  await Promise.all([rm(prodDir, { recursive: true, force: true }), rm(e2eDir, { recursive: true, force: true })]);
+  await Promise.all([prodDir, e2eDir, debugDir].map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 const readJson = async (dir: string, file: string) => JSON.parse(await readFile(join(dir, file), 'utf8'));
@@ -59,6 +65,10 @@ describe('正式 build', () => {
     const offscreen = await readText(prodDir, 'offscreen.js');
     expect(offscreen).not.toContain('FakeTranslator：找不到對應的原文');
     expect(offscreen).not.toContain('早安！今天好早喔');
+  });
+
+  it('不包含除錯記錄（debug build 才有）', async () => {
+    for (const file of ['background.js', 'offscreen.js', 'content.js']) expect(await readText(prodDir, file)).not.toContain('[manga-trace]');
   });
 
   it('API key：只有 offscreen 呼叫 API；content script 碰不到 key 的 store，SW 不帶 key', async () => {
@@ -120,5 +130,17 @@ describe('e2e build', () => {
   it('多一個量 #7 指標用的流水線測試頁與覆蓋渲染測試頁', async () => {
     expect(await readText(e2eDir, 'test-pipeline.html')).toContain('test-pipeline.js');
     expect(await readText(e2eDir, 'test-overlay.html')).toContain('test-overlay.js');
+  });
+});
+
+describe('debug build', () => {
+  it('三個流水線 context 都印除錯記錄，權限跟正式 build 一樣', async () => {
+    const [manifest, prodManifest] = await Promise.all([readJson(debugDir, 'manifest.json'), readJson(prodDir, 'manifest.json')]);
+
+    for (const file of ['background.js', 'offscreen.js', 'content.js']) expect(await readText(debugDir, file)).toContain('[manga-trace]');
+    expect(manifest.name).toBe('Manga Translator (debug)');
+    expect(manifest.permissions).toEqual(prodManifest.permissions);
+    expect(manifest.host_permissions).toBeUndefined();
+    expect(await readText(debugDir, 'background.js')).not.toContain('test:activate');
   });
 });

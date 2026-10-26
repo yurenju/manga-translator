@@ -25,6 +25,13 @@ const contains = (outer: Rect, inner: Rect) =>
  * getBoundingClientRect 看不出來，要完整落在每一個裡面才算可見。
  */
 export function isPageCandidate(rect: Rect, viewport: Size, clips: readonly Rect[] = []): boolean {
-  if (rect.width < MIN_PAGE_SIDE || rect.height < MIN_PAGE_SIDE) return false;
-  return contains({ x: 0, y: 0, ...viewport }, rect) && clips.every((clip) => contains(clip, rect));
+  return pageCandidateRejection(rect, viewport, clips) === undefined;
+}
+
+/** 不是 Page 候選的原因（除錯記錄用）：太小、沒完整落在 viewport 內、被裁切祖先擋住；是候選時 undefined。 */
+export function pageCandidateRejection(rect: Rect, viewport: Size, clips: readonly Rect[] = []): 'small' | 'outsideViewport' | 'clipped' | undefined {
+  if (rect.width < MIN_PAGE_SIDE || rect.height < MIN_PAGE_SIDE) return 'small';
+  if (!contains({ x: 0, y: 0, ...viewport }, rect)) return 'outsideViewport';
+  if (!clips.every((clip) => contains(clip, rect))) return 'clipped';
+  return undefined;
 }

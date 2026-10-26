@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPageCandidate } from './page-candidates.ts';
+import { isPageCandidate, pageCandidateRejection } from './page-candidates.ts';
 
 const VIEWPORT = { width: 1280, height: 720 };
 /** 仿 Jump+ 一頁在畫面上的大小。 */
@@ -36,5 +36,15 @@ describe('isPageCandidate', () => {
 
   it('不顯示的元素（rect 為 0）不是', () => {
     expect(isPageCandidate({ x: 0, y: 0, width: 0, height: 0 }, VIEWPORT)).toBe(false);
+  });
+});
+
+describe('pageCandidateRejection（除錯記錄用）', () => {
+  it('說明為什麼不是 Page 候選；是候選時回傳 undefined', () => {
+    const viewer = { x: 425, y: 57, width: 430, height: 625 };
+    expect(pageCandidateRejection(page(425, 57), VIEWPORT, [viewer])).toBeUndefined();
+    expect(pageCandidateRejection({ x: 10, y: 10, width: 120, height: 120 }, VIEWPORT)).toBe('small');
+    expect(pageCandidateRejection(page(425, 699), VIEWPORT)).toBe('outsideViewport');
+    expect(pageCandidateRejection(page(640, 57), VIEWPORT, [viewer])).toBe('clipped');
   });
 });
