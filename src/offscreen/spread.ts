@@ -5,8 +5,9 @@
  *    所以只把「完全均勻的暗色帶」當黑邊，而且兩側都有、寬度相同才切；深色出血頁、夜景的邊緣不會整條均勻，
  *    單側的純黑出血也不對稱，都會留著。白色留白不算黑邊（白底網站的頁面留白不能切掉）。
  * 2. 去掉任何顏色的均勻邊（含白底網站的左右留白）之後寬 > 高才當 Spread，從那個範圍的正中間切；那個範圍的兩半長寬比要像漫畫頁，
- *    不像就當成一頁，不硬切。形狀、中縫與長寬比都看同一個範圍，左右留白才不會讓長寬比失準。切出來的兩頁仍延伸到去黑邊後的外緣：
- *    白色留白跟單頁一樣算在頁面裡（第 1 點）。
+ *    不像的話這次不產生 Page（回傳空陣列，等下一次截圖）：通常是畫面上有東西干擾了形狀，當成一頁會把整張 Spread
+ *    送去翻譯（#55）。形狀、中縫與長寬比都看同一個範圍，左右留白才不會讓長寬比失準。切出來的兩頁仍延伸到去黑邊後的外緣：
+ *    白色留白跟單頁一樣算在頁面裡（第 1 點）。去白邊會連頁面本身對稱的留白一起切掉，送進 OCR 的圖跟 hash 都會變（#55 試過）。
  * 3. 完全均勻的一半（跨頁模式只顯示一頁時的空白半邊）丟掉。
  *
  * 寬 ≤ 高的候選也去黑邊：Kindle 直式視窗的單頁有上下黑邊，不去的話跟跨頁切出來的同一頁 hash 對不上。
@@ -25,7 +26,7 @@ const BORDER_SYMMETRY_PX = 2;
 const PAGE_ASPECT_MIN = 0.5;
 const PAGE_ASPECT_MAX = 0.9;
 
-/** 回傳的 Page 依閱讀順序（Spread 先右後左），座標相對 image。 */
+/** 回傳的 Page 依閱讀順序（Spread 先右後左），座標相對 image；寬 > 高卻切不開時是空陣列。 */
 export function splitSpread(image: GrayImage): Rect[] {
   const content = trimBorders(image, isBorderLine);
   // 是不是 Spread 看的是去掉任何顏色的均勻邊之後的形狀：白底網站上置中的單頁不能從中間切開
@@ -34,7 +35,7 @@ export function splitSpread(image: GrayImage): Rect[] {
   const half = Math.round(shape.width / 2);
   const seam = shape.x + half;
   const aspect = (width: number) => width / shape.height;
-  if ([half, shape.width - half].some((w) => aspect(w) < PAGE_ASPECT_MIN || aspect(w) > PAGE_ASPECT_MAX)) return [content];
+  if ([half, shape.width - half].some((w) => aspect(w) < PAGE_ASPECT_MIN || aspect(w) > PAGE_ASPECT_MAX)) return [];
   const right: Rect = { x: seam, y: content.y, width: content.x + content.width - seam, height: content.height };
   const left: Rect = { x: content.x, y: content.y, width: seam - content.x, height: content.height };
   const pages = [right, left].filter((r) => !isUniform(image, r));

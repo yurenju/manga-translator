@@ -122,4 +122,12 @@ describe('Spread 切頁', () => {
     const { image } = letterbox(readGray('p01-basic'), { width: 1600, height: 1000 }, 255);
     expect(splitSpread(image).map(box)).toEqual([[0, 0, 1600, 1000]]);
   });
+
+  it('寬 > 高但兩半不像漫畫頁（例如啟動當下工具列整個開著、橫幅圖）：這次不產生 Page', () => {
+    const width = 1707;
+    const height = 600;
+    const gray = new Uint8Array(width * height);
+    for (let i = 0; i < gray.length; i++) gray[i] = (i * 37) % 251;
+    expect(splitSpread({ gray, width, height })).toEqual([]);
+  });
 });

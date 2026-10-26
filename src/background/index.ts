@@ -16,6 +16,7 @@ import type {
   PagesResponse,
   PipelineConfig,
   SeriesResponse,
+  OcclusionResponse,
   StatusResponse,
   TestConfig,
   TestConnectionResponse,
@@ -65,6 +66,9 @@ function notifyPanel(message: Message): void {
   chrome.runtime.sendMessage(message).catch(() => {});
 }
 
+/** 每個 tab 的 Page 是不是被擋住了（side panel 提示收起，#55）。 */
+const occludedTabs = new Set<number>();
+
 const scanner = createScanner({
   findPageCandidates: (tabId) =>
     chrome.tabs.sendMessage<Message, PageCandidatesResponse>(tabId, { type: 'content:findPageCandidates' }),
@@ -93,6 +97,12 @@ const scanner = createScanner({
     if ('error' in response) throw new Error(`crop failed: ${response.error}`);
     trace('crop', { ms: Date.now() - startedAt, pages: response.pages });
     return response.pages;
+  },
+  setOccluded(tabId, occluded) {
+    if (occludedTabs.has(tabId) === occluded) return;
+    if (occluded) occludedTabs.add(tabId);
+    else occludedTabs.delete(tabId);
+    notifyPanel({ type: 'occlusion:changed', tabId, occluded });
   },
   publish(tabId, pages, capture) {
     // 沒有 capture＝畫面上沒有完整可見的 Page（或停止）；停止時的清理在 onStatusChanged
@@ -362,6 +372,9 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
     case 'panel:setAutoTranslate':
       void transcriber.setAutoTranslate(message.tabId, message.enabled);
       sendResponse();
+      return false;
+    case 'panel:getOcclusion':
+      sendResponse({ occluded: occludedTabs.has(message.tabId) } satisfies OcclusionResponse);
       return false;
     case 'panel:getPages':
       sendResponse({ pages: transcriber.get(message.tabId) } satisfies PagesResponse);

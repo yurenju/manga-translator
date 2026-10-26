@@ -30,6 +30,8 @@ export interface ScannerDeps {
   crop(request: CropRequest): Promise<PageThumb[]>;
   /** capture＝這次的截圖與版面（沒有 Page 或停止時是 undefined），給後面的本機流水線裁全解析度的 Page。 */
   publish(tabId: number, pages: PageThumb[], capture?: CropRequest): void;
+  /** 畫面上沒有能截的 Page、只有被其他元素擋住的（#55）：side panel 提示使用者收起擋住的東西。 */
+  setOccluded(tabId: number, occluded: boolean): void;
 }
 
 export function createScanner(deps: ScannerDeps) {
@@ -62,7 +64,11 @@ export function createScanner(deps: ScannerDeps) {
   function canKeepOverlay(tabId: number, candidates: PageCandidate[]): boolean {
     const looks = overlaidLooks.get(tabId);
     const shown = withOverlay(candidates);
-    return shown.length > 0 && shown.every((c) => looks?.get(c.anchorId)?.pageHash === shownPage(c));
+    // 一個 anchor 顯示兩頁（Spread）沒有記錄可比：shownPage 是 undefined，不能拿去跟沒記錄的 undefined 比成相同（#55）
+    return shown.length > 0 && shown.every((c) => {
+      const page = shownPage(c);
+      return page !== undefined && looks?.get(c.anchorId)?.pageHash === page;
+    });
   }
 
   /** 帶覆蓋層截到的 hash 換回原圖的；對不上（覆蓋層底下換頁了）回傳 undefined。 */
@@ -106,8 +112,10 @@ export function createScanner(deps: ScannerDeps) {
       if (!isCurrentGeneration()) return;
       const before = await deps.findPageCandidates(tabId);
       if (before.candidates.length === 0) {
-        trace('scan:noCandidates', { tabId });
-        if (isCurrentGeneration()) publish(tabId, []);
+        trace('scan:noCandidates', { tabId, occluded: before.occluded ?? 0 });
+        if (!isCurrentGeneration()) return;
+        publish(tabId, []);
+        deps.setOccluded(tabId, (before.occluded ?? 0) > 0);
         return;
       }
       const windowId = await deps.getVisibleWindowId(tabId);
@@ -134,6 +142,7 @@ export function createScanner(deps: ScannerDeps) {
       }
       if (!isCurrentGeneration()) return;
       publish(tabId, result, request);
+      deps.setOccluded(tabId, false);
       // 覆蓋層顯示中卻還沒記過樣子（例如重新整理後從快取顯示）：補記，下次就不必藏
       if (!keep && withOverlay(before.candidates).length > 0 && !canKeepOverlay(tabId, before.candidates)) void recordOverlaid(tabId);
       return;
@@ -210,6 +219,7 @@ export function createScanner(deps: ScannerDeps) {
     overlaidLooks.delete(tabId);
     pendingScans.delete(tabId);
     deps.publish(tabId, []);
+    deps.setOccluded(tabId, false);
   }
 
   /** 覆蓋層畫好後呼叫（content:overlayShown）；跟掃描排同一條隊，限速才算得準。 */

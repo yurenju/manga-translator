@@ -153,3 +153,44 @@ test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中�
   await expect.poll(() => overlayHostCount(page)).toBe(1);
   await expectAligned(page, 'p07-spread', '重掛後');
 });
+
+const OCCLUDED_HINT = '頁面被其他東西擋住（例如閱讀器的工具列），收起後才會翻譯。';
+
+/** 點畫面中間（仿 Kindle 的感應層）切換工具列。 */
+async function toggleToolbar(page: Page): Promise<void> {
+  const size = page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
+  await page.mouse.click(size.width / 2, size.height / 2);
+}
+
+for (const bg of ['black', 'white'] as const) {
+  test(`#55 工具列蓋住頁面（${bg === 'black' ? '黑底' : '白底'}）：開著時不截、不翻，side panel 提示；收起後才翻，譯文落在 Balloon 內`, async ({ context, sw, extensionId, mockSite }) => {
+    test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
+    const url = `${mockSite.kindleUrl}?toolbar=shown&bg=${bg}`;
+    const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url });
+
+    await expect(panel.getByText(OCCLUDED_HINT)).toBeVisible();
+    // 透明的感應層不算遮擋，但工具列算：被擋住的 Page 不送本機流水線、也不送 LLM
+    expect(await jobLog(sw)).toEqual([]);
+    expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(0);
+
+    await toggleToolbar(page);
+    await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+    await expectAligned(page, 'p07-spread', `收起工具列後（${bg}）`);
+    await expect(panel.getByText(OCCLUDED_HINT)).toBeHidden();
+  });
+}
+
+test('#55 工具列開了又收起：同一頁命中快取、不重翻', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(FIRST_SPREAD_TIMEOUT + SPREAD_TIMEOUT);
+  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
+
+  await toggleToolbar(page);
+  await expect(panel.getByText(OCCLUDED_HINT)).toBeVisible();
+  await toggleToolbar(page);
+  await expect(panel.getByText(OCCLUDED_HINT)).toBeHidden();
+  await waitForOverlay(page, 'p07-spread', SPREAD_TIMEOUT);
+  await expectAligned(page, 'p07-spread', '工具列收起後');
+  expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
+});
