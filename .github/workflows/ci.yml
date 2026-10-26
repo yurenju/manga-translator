@@ -1,0 +1,21 @@
+# 型別檢查＋單元測試。e2e 不在這裡跑：要下載模型，而且受機器速度影響。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24 原生跑 .ts（scripts/、vitest 的設定檔）
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
