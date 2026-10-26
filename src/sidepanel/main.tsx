@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { Message, ModelStatus, ModelStatusResponse, PagesResponse, PageView, StatusResponse } from '../shared/messages.ts';
+import type { Message, ModelStatus, ModelStatusResponse, OverlayResponse, PagesResponse, PageView, StatusResponse } from '../shared/messages.ts';
 import type { PageText } from '../shared/page-text.ts';
 
 /**
@@ -77,6 +77,24 @@ function PageItem({ page, index }: { page: PageView; index: number }) {
   );
 }
 
+/** 原地覆蓋的開關（spec #27 第 8 節的底部列）；關掉只是藏起來，翻譯照常進行。 */
+function OverlayToggle({ tabId }: { tabId: number }) {
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => {
+    void send<OverlayResponse>({ type: 'panel:getOverlay', tabId }).then((r) => setEnabled(r.enabled));
+  }, [tabId]);
+  const toggle = (value: boolean) => {
+    setEnabled(value);
+    void send({ type: 'panel:setOverlay', tabId, enabled: value });
+  };
+  return (
+    <label>
+      <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.currentTarget.checked)} />
+      覆蓋
+    </label>
+  );
+}
+
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
   const [active, setActive] = useState<boolean | undefined>(tabId === undefined ? false : undefined);
@@ -111,6 +129,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       <button type="button" onClick={scan}>
         重新擷取
       </button>
+      <OverlayToggle tabId={tabId} />
       <ModelStatusLine status={modelStatus} onRetry={scan} />
       {/* API key 設定在 #31 */}
       {untranslated && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。</p>}

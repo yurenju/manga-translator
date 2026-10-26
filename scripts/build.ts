@@ -6,7 +6,7 @@
  *   - background（SW）、sidepanel、offscreen：ES module
  *   - content：IIFE。scripting.executeScript({files}) 只能注入傳統 script，不能有 import。
  */
-import { copyFile, cp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -16,7 +16,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 
 /**
  * 原樣複製進外掛的檔案：[來源（相對 repo 根目錄）, 輸出路徑]。
- * ONNX 模型不在這裡：第一次使用時才下載（spec #27 第 3.3 節）。Noto Sans TC 字型之後（#32）也加在這裡。
+ * ONNX 模型不在這裡：第一次使用時才下載（spec #27 第 3.3 節）。Noto Sans TC 字型見 FONT_DIR。
  */
 const STATIC_FILES: [string, string][] = [
   ['src/sidepanel/sidepanel.html', 'sidepanel.html'],
@@ -31,8 +31,32 @@ const STATIC_FILES: [string, string][] = [
 /** 原樣複製的目錄。 */
 const STATIC_DIRS: [string, string][] = [['node_modules/kuromoji/dict', 'kuromoji/dict']];
 
-/** e2e build 才有：量 #7 指標用的流水線測試頁（e2e/ocr-accuracy.spec.ts）。 */
-const E2E_STATIC_FILES: [string, string][] = [['src/test-pipeline/test-pipeline.html', 'test-pipeline.html']];
+/**
+ * 覆蓋層的 Noto Sans TC（#32）：@fontsource 依 unicode-range 切好的 700 字重 woff2 子集（約 3.5 MB），
+ * 原樣複製到 fonts/；子集與範圍的對照在 700.css，由 content script 打包成字串（src/content/overlay-font.ts）。
+ */
+const FONT_DIR = 'node_modules/@fontsource/noto-sans-tc';
+
+/** 700.css 引用的 woff2（同一個目錄還有沒被引用的合併檔，不打包）。 */
+export async function overlayFontFiles(): Promise<string[]> {
+  const css = await readFile(join(root, FONT_DIR, '700.css'), 'utf8');
+  return [...new Set([...css.matchAll(/url\(\.\/files\/([^)]+\.woff2)\)/g)].map((m) => m[1]!))];
+}
+
+/** e2e build 才有：量 #7 指標用的流水線測試頁（e2e/ocr-accuracy.spec.ts）、覆蓋渲染測試頁（e2e/overlay-render.spec.ts）。 */
+const E2E_STATIC_FILES: [string, string][] = [
+  ['src/test-pipeline/test-pipeline.html', 'test-pipeline.html'],
+  ['src/test-overlay/test-overlay.html', 'test-overlay.html'],
+];
+
+async function copyFonts(outDir: string): Promise<void> {
+  await mkdir(join(outDir, 'fonts'), { recursive: true });
+  const files = await overlayFontFiles();
+  await Promise.all([
+    ...files.map((f) => copyFile(join(root, FONT_DIR, 'files', f), join(outDir, 'fonts', f))),
+    copyFile(join(root, FONT_DIR, 'LICENSE'), join(outDir, 'fonts', 'LICENSE')),
+  ]);
+}
 
 export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): Promise<void> {
   await rm(outDir, { recursive: true, force: true });
@@ -49,6 +73,7 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
     sourcemap: e2e ? 'inline' : false,
     // kuromoji 用 Node 的 path.join 拼字典網址
     alias: { path: './src/offscreen/path-shim.ts' },
+    loader: { '.css': 'text' },
     logLevel: 'warning',
   };
 
@@ -61,7 +86,7 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
         background: 'src/background/index.ts',
         sidepanel: 'src/sidepanel/main.tsx',
         offscreen: 'src/offscreen/index.ts',
-        ...(e2e ? { 'test-pipeline': 'src/test-pipeline/main.ts' } : {}),
+        ...(e2e ? { 'test-pipeline': 'src/test-pipeline/main.ts', 'test-overlay': 'src/test-overlay/main.ts' } : {}),
       },
     }),
     esbuild.build({ ...common, format: 'iife', entryPoints: { content: 'src/content/index.ts' } }),
@@ -69,6 +94,7 @@ export async function build({ e2e, outDir }: { e2e: boolean; outDir: string }): 
       await mkdir(dirname(join(outDir, to)), { recursive: true });
       await copyFile(join(root, from), join(outDir, to));
     }),
+    copyFonts(outDir),
     ...STATIC_DIRS.map(([from, to]) => cp(join(root, from), join(outDir, to), { recursive: true })),
     writeFile(join(outDir, 'manifest.json'), JSON.stringify(buildManifest({ e2e }), null, 2)),
   ]);

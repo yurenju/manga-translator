@@ -31,6 +31,8 @@ export interface BalloonText {
   /** 空字串＝未翻譯（沒有 API key 或還沒翻）。 */
   譯文: string;
   unreadable: boolean;
+  /** 原地覆蓋的擦除底色：文字框（外擴 3px）裡最常出現的亮度 0～255，取自截圖（#32）。沒有時當白底。 */
+  eraseLuminance?: number;
 }
 
 export interface LooseText {

@@ -4,6 +4,8 @@
  */
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
+import { eraseLuminance } from '../offscreen/erase-color.ts';
+import type { PageText, RatioRect } from '../shared/page-text.ts';
 
 const OUT_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
 
@@ -104,4 +106,43 @@ export function cropGray(
   const out = new Uint8Array(w * h);
   for (let row = 0; row < h; row++) out.set(gray.subarray((y + row) * width + x, (y + row) * width + x + w), row * w);
   return { gray: out, width: w, height: h };
+}
+
+/** 要原地覆蓋的種類（其他是 Loose Text）。 */
+const OVERLAY_KINDS = new Set<GtText['kind']>(['balloon', 'thought', 'narration']);
+
+/**
+ * 合成頁的 ground truth 換成每個 Page 的 PageText（覆蓋渲染的第 2 層測試用）：sub＝Page 在整張圖裡的比例範圍
+ * （Spread 的兩頁共用同一張圖），座標換成相對 Page 的比例，譯文用參考譯文，擦除底色從原圖算。
+ */
+export function groundTruthPageTexts(id: string): { sub: RatioRect; text: PageText }[] {
+  const gt = readGroundTruth(id);
+  const image = readGray(id);
+  return gt.pages.map((page) => {
+    const [px, py, pw, ph] = page.bbox;
+    const ratio = ([x, y, w, h]: GtBox): RatioRect => ({ x: (x - px) / pw, y: (y - py) / ph, w: w / pw, h: h / ph });
+    const texts = gt.texts.filter((t) => t.page === page.index);
+    const common = (t: GtText) => ({
+      id: t.id,
+      order: t.order,
+      orientation: t.orientation,
+      原文: t.ja,
+      讀音: t.reading,
+      讀音來源: 'llm' as const,
+      譯文: t.zh,
+      unreadable: false,
+    });
+    return {
+      sub: { x: px / gt.width, y: py / gt.height, w: pw / gt.width, h: ph / gt.height },
+      text: {
+        balloons: texts
+          .filter((t) => OVERLAY_KINDS.has(t.kind))
+          .map((t) => {
+            const [x, y, w, h] = t.textBbox;
+            return { ...common(t), balloonBbox: ratio(t.bbox), textBbox: ratio(t.textBbox), eraseLuminance: eraseLuminance(image, { x: x - 3, y: y - 3, w: w + 6, h: h + 6 }) };
+          }),
+        looseText: texts.filter((t) => !OVERLAY_KINDS.has(t.kind)).map((t) => ({ ...common(t), bbox: ratio(t.bbox) })),
+      },
+    };
+  });
 }

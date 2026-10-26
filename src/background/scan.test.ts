@@ -10,6 +10,8 @@ const WINDOW_ID = 7;
 function fakeDeps(candidates: PageCandidate[] = [P1]) {
   const captures: number[] = [];
   const published: [number, PageThumb[]][] = [];
+  /** 覆蓋層與截圖的先後順序。 */
+  const events: string[] = [];
   const env = {
     viewport: VIEWPORT,
     candidates,
@@ -29,14 +31,17 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
     captureWindow: async (windowId) => {
       expect(windowId).toBe(WINDOW_ID);
       captures.push(Date.now());
+      events.push('capture');
       env.onCapture();
       return `data:image/png;base64,SCREENSHOT${captures.length}`;
     },
     crop: async ({ screenshot, candidates }) =>
       candidates.map((c) => ({ anchorId: c.anchorId, rect: c.rect, thumbnail: `thumb(${screenshot},${c.anchorId})` })),
     publish: (tabId, pages) => void published.push([tabId, pages]),
+    hideOverlay: async (tabId) => void events.push(`hide ${tabId}`),
+    restoreOverlay: async (tabId) => void events.push(`restore ${tabId}`),
   };
-  return { deps, captures, published, env };
+  return { deps, captures, published, events, env };
 }
 
 beforeEach(() => {
@@ -139,5 +144,29 @@ describe('scan', () => {
 
     expect(scanner.getPages(1)).toEqual([]);
     expect(chrome.published.at(-1)).toEqual([1, []]);
+  });
+
+  it('截圖前隱藏覆蓋層、截完立刻還原，截圖裡才不會有我們的中文', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner(chrome.deps);
+
+    await settle(scanner.scan(1));
+
+    expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
+  });
+
+  it('截圖失敗也會還原覆蓋層', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner({
+      ...chrome.deps,
+      captureWindow: async () => {
+        chrome.events.push('capture');
+        throw new Error('capture failed');
+      },
+    });
+
+    await expect(settle(scanner.scan(1))).rejects.toThrow('capture failed');
+
+    expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
   });
 });
