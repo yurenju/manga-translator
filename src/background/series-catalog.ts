@@ -102,7 +102,7 @@ export function createSeriesCatalog(deps: SeriesCatalogDeps) {
         repo.listNotes(sourceId),
         repo.listSuggestions(sourceId),
       ]);
-      const notes = mergeNotes(targetNotes, sourceNotes, { seriesId: targetId, 來源Page: `series:${sourceId}` });
+      const notes = mergeNotes(targetNotes, sourceNotes, { seriesId: targetId, 來源: { mergedFrom: sourceId } });
       await repo.commitMerge({
         sourceId,
         targetId,

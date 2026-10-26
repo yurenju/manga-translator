@@ -162,7 +162,7 @@ describe('merge', () => {
       [target.id, '潮火ノ丸', '火之丸'],
       [target.id, '小関', '小關'],
     ]);
-    expect(db.suggestions).toEqual([{ seriesId: target.id, 原文: '潮火ノ丸', 建議譯文: '小火', 來源Page: `series:${provisional}` }]);
+    expect(db.suggestions).toEqual([{ seriesId: target.id, 原文: '潮火ノ丸', 建議譯文: '小火', 來源: { mergedFrom: provisional } }]);
     expect(db.series.has(provisional)).toBe(false);
     expect(await catalog.seriesForUrl(EP2)).toBe(target.id);
   });
@@ -199,11 +199,11 @@ describe('merge', () => {
       targetId: provisional,
       translations: [],
       notes: [],
-      suggestions: [{ seriesId: provisional, 原文: 'x', 建議譯文: 'y', 來源Page: 'h1' }],
+      suggestions: [{ seriesId: provisional, 原文: 'x', 建議譯文: 'y', 來源: { pageHash: 'h1' } }],
     });
 
     await catalog.merge(provisional, target.id, EP2);
 
-    expect(db.suggestions).toEqual([{ seriesId: target.id, 原文: 'x', 建議譯文: 'y', 來源Page: 'h1' }]);
+    expect(db.suggestions).toEqual([{ seriesId: target.id, 原文: 'x', 建議譯文: 'y', 來源: { pageHash: 'h1' } }]);
   });
 });
