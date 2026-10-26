@@ -68,7 +68,24 @@ const HASH = /^[0-9a-f]{64}$/;
 const isRect = (value: object): value is { x: number; y: number; width: number; height: number } =>
   ['x', 'y', 'width', 'height'].every((key) => typeof (value as Record<string, unknown>)[key] === 'number') && Object.keys(value).length === 4;
 
-/** 讓一行看得完：Page hash 只留前 8 碼、rect 寫成 "x,y wxh"、被排除的候選只列各原因的數量。 */
+/** extractImages 換上的圖片路徑；摘要不印，要看圖就去讀那一行。 */
+const IMAGE_PATH = /^images\/\d+-[\w-]+\.\w+$/;
+
+/** 幾個量大的事件只留看時間軸要的：crop 每頁 "anchorId:hash前8碼"，overlay:show 的 fits 只留數量與有沒有被截斷。 */
+function digest(record: SessionRecord): Record<string, unknown> {
+  const data = record.data ?? {};
+  if (record.event === 'crop') {
+    const pages = (data.pages ?? []) as { anchorId: string; pageHash: string }[];
+    return { ...(data.ms === undefined ? {} : { ms: data.ms }), pages: pages.map((page) => `${page.anchorId}:${page.pageHash.slice(0, 8)}`) };
+  }
+  if (record.event === 'overlay:show' && Array.isArray(data.fits)) {
+    const fits = data.fits as { truncated?: boolean }[];
+    return { ...data, fits: { count: fits.length, truncated: fits.some((fit) => fit.truncated === true) } };
+  }
+  return data;
+}
+
+/** 讓一行看得完：Page hash 只留前 8 碼、rect 寫成 "x,y wxh"、被排除的候選只列各原因的數量、圖片路徑不印。 */
 function compact(value: unknown, key?: string): unknown {
   if (typeof value === 'string') return HASH.test(value) ? value.slice(0, 8) : value;
   if (typeof value === 'number') return Math.round(value * 10) / 10;
@@ -82,7 +99,11 @@ function compact(value: unknown, key?: string): unknown {
   }
   if (value !== null && typeof value === 'object') {
     if (isRect(value)) return `${Math.round(value.x)},${Math.round(value.y)} ${Math.round(value.width)}x${Math.round(value.height)}`;
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, compact(v, k)]));
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => !(typeof v === 'string' && IMAGE_PATH.test(v)))
+        .map(([k, v]) => [k, compact(v, k)]),
+    );
   }
   return value;
 }
@@ -90,17 +111,19 @@ function compact(value: unknown, key?: string): unknown {
 /**
  * 給人（與 Claude）讀的時間軸：每筆一行，開頭是 trace.jsonl 的行號（要看完整內容就去讀那一行）與距第一筆的秒數。
  * 跟上一筆 candidates 一樣的 candidates 不列（掃描時截圖前後各量一次）。
+ * since：只列行號大於它的（接著上次讀到的地方看）；秒數仍從整個 session 的第一筆算。
  */
-export function summarize(records: readonly SessionRecord[]): string[] {
+export function summarize(records: readonly SessionRecord[], { since = 0 }: { since?: number } = {}): string[] {
   const start = records[0]?.at ?? 0;
   const lines: string[] = [];
   let lastCandidates: string | undefined;
   for (const [i, record] of records.entries()) {
-    const detail = record.text ?? JSON.stringify(compact(record.data ?? {}));
+    const detail = record.text ?? JSON.stringify(compact(digest(record)));
     if (record.event === 'candidates') {
       if (detail === lastCandidates) continue;
       lastCandidates = detail;
     }
+    if (i + 1 <= since) continue;
     lines.push(`${String(i + 1).padStart(5)} ${((record.at - start) / 1000).toFixed(1).padStart(7)} ${record.ctx} ${record.event} ${detail}`);
   }
   return lines;
