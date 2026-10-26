@@ -13,3 +13,7 @@ Uses the five default triage labels (`needs-triage`, `needs-info`, `ready-for-ag
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Real-site debugging
+
+A bug that shows on a real manga site (Jump+, Kindle) but not on the e2e mock site: have the user reproduce it while `npm run debug:chrome` records a trace of the whole pipeline. See `docs/agents/real-site-debugging.md`.
