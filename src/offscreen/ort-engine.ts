@@ -60,7 +60,10 @@ export async function createOrtEngine(
   // 裁切縮圖等其他訊息才不會被擋住（外掛頁面共用同一個 renderer）。WebGPU 不支援 proxy。
   // 只在第一次初始化前設定有效。
   ort.env.wasm.proxy = ep === 'wasm';
-  const create =(buffer: ArrayBuffer) => ort.InferenceSession.create(new Uint8Array(buffer), { executionProviders: [ep] });
+  // logSeverityLevel 3＝只記 error：「部分節點沒分給 WebGPU」的警告每建一次 session 就印兩行，
+  // 擠滿 chrome://extensions 的錯誤頁，而那是 ORT 刻意把 shape 運算放 CPU（#27 除錯）
+  const create = (buffer: ArrayBuffer) =>
+    ort.InferenceSession.create(new Uint8Array(buffer), { executionProviders: [ep], logSeverityLevel: 3 });
   const detector = await create(models.detector);
   const encoder = await create(models.encoder);
   const decoder = await create(models.decoder);

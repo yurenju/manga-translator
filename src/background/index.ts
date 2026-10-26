@@ -80,9 +80,10 @@ const scanner = createScanner({
   },
   async crop(request) {
     await ensureOffscreenDocument();
+    const startedAt = Date.now();
     const response = await chrome.runtime.sendMessage<Message, CropResponse>({ type: 'offscreen:crop', ...request });
     if ('error' in response) throw new Error(`crop failed: ${response.error}`);
-    trace('crop', { pages: response.pages });
+    trace('crop', { ms: Date.now() - startedAt, pages: response.pages });
     return response.pages;
   },
   publish(tabId, pages, capture) {

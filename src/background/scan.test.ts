@@ -125,12 +125,36 @@ describe('scan', () => {
     const scanner = createScanner(chrome.deps);
 
     chrome.env.findDelays = [120, 0, 300, 0, 50, 0, 200];
-    const scans = [1, 1, 2, 1, 2].map((tabId) => scanner.scan(tabId));
+    const scans = [1, 2, 3, 4, 5].map((tabId) => scanner.scan(tabId));
     await settle(Promise.all(scans));
 
     expect(chrome.captures).toHaveLength(5);
     const gaps = chrome.captures.slice(1).map((t, i) => t - chrome.captures[i]!);
     for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(500);
+  });
+
+  it('同一個 tab 還沒開始的掃描會合併：快速連按翻頁，停下後只再截一次（#27 除錯）', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner(chrome.deps);
+    const first = scanner.scan(1);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const later = [1, 2, 3, 4, 5].map(() => scanner.scan(1));
+    await settle(Promise.all([first, ...later]));
+
+    expect(chrome.captures).toHaveLength(2);
+  });
+
+  it('clear 之後再觸發的掃描不會併進被取消的那次', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner(chrome.deps);
+    const stale = scanner.scan(1);
+    scanner.clear(1);
+    const fresh = scanner.scan(1);
+    await settle(Promise.all([stale, fresh]));
+
+    expect(chrome.captures).toHaveLength(1);
+    expect(scanner.getPages(1)).toHaveLength(1);
   });
 
   it('截圖期間版面變了（例如 side panel 剛打開）就重新量、重新截圖', async () => {

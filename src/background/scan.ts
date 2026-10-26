@@ -36,6 +36,8 @@ export function createScanner(deps: ScannerDeps) {
   const pages = new Map<number, PageThumb[]>();
   /** 每個 tab：anchor → 覆蓋層顯示著哪一頁、那時帶覆蓋層截到的 hash。 */
   const overlaidLooks = new Map<number, Map<string, { pageHash: string; overlaidHash: string }>>();
+  /** 每個 tab 排著、還沒開始的那次掃描。 */
+  const pendingScans = new Map<number, Promise<void>>();
   /** clear() 就加一；掃描開始時記下來，做完時不同就丟掉結果。 */
   const generations = new Map<number, number>();
   /** 掃描一次只跑一個（跨 tab），限速才算得準。 */
@@ -178,9 +180,19 @@ export function createScanner(deps: ScannerDeps) {
     deps.publish(tabId, result, capture);
   }
 
+  /**
+   * 同一個 tab 已經有排著、還沒開始的掃描就併進去：快速連按翻頁時每個訊號各排一次，停下後會一張接一張
+   * 截上好幾秒（真實 Chrome 一次 1～2 秒，#27 除錯）。還沒開始的那次會量到最新的版面，所以合併不會漏掉翻頁。
+   */
   function scan(tabId: number): Promise<void> {
+    const pending = pendingScans.get(tabId);
+    if (pending) return pending;
     const generation = generations.get(tabId) ?? 0;
-    const task = queue.then(() => scanOnce(tabId, generation));
+    const task = queue.then(() => {
+      pendingScans.delete(tabId);
+      return scanOnce(tabId, generation);
+    });
+    pendingScans.set(tabId, task);
     queue = task.catch(() => {});
     return task;
   }
@@ -194,6 +206,7 @@ export function createScanner(deps: ScannerDeps) {
     generations.set(tabId, (generations.get(tabId) ?? 0) + 1);
     pages.delete(tabId);
     overlaidLooks.delete(tabId);
+    pendingScans.delete(tabId);
     deps.publish(tabId, []);
   }
 
