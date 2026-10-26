@@ -88,7 +88,8 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   // 翻譯此頁
   await panel.getByRole('button', { name: '翻譯此頁' }).click();
   await expect(transcript.getByText('早安！今天好早喔')).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
-  await expect(transcript.getByText('おはよう！きょうははやいね')).toBeVisible();
+  // 讀音換成 Translator 的整句讀音（おはよう！きょうははやいね），以ルビ對齊回漢字
+  await expect(transcript.getByRole('listitem').filter({ hasText: '早安！今天好早喔' }).locator('rt')).toHaveText(['きょう', 'はや']);
   const status = panel.getByRole('contentinfo', { name: '狀態列' });
   await expect(status).toContainText('已翻譯');
   await expect(status).toContainText('fake');
@@ -97,7 +98,7 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   console.log('狀態列', await status.innerText());
   await expect(panel.getByRole('button', { name: '重新翻譯' })).toBeVisible();
 
-  // unreadable：OCR 原文（灰、刪除線）＋「無法辨識」
+  // unreadable：OCR 原文（灰、刪除線）＋「無法辨識 · 未覆蓋」
   const unreadable = transcript.getByRole('listitem').filter({ hasText: '無法辨識' });
   await expect(unreadable).toHaveCount(1);
   await expect(unreadable).toContainText('もちろん');

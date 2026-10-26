@@ -22,6 +22,8 @@ export interface GtText {
   textBbox: GtBox;
   ja: string;
   reading: string;
+  /** 頁面上印的振り仮名（義訓以這裡為準）。 */
+  ruby?: { base: string; rt: string }[];
   zh: string;
 }
 
