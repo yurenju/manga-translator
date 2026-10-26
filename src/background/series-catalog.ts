@@ -34,17 +34,19 @@ export interface SeriesRepo {
   commitMerge(merge: SeriesMerge): Promise<void>;
 }
 
-export interface SeriesCatalogOptions {
+export interface SeriesCatalogDeps {
+  repo: SeriesRepo;
   now(): Date;
   newId(): string;
 }
 
-export function createSeriesCatalog(repo: SeriesRepo, options: SeriesCatalogOptions) {
+export function createSeriesCatalog(deps: SeriesCatalogDeps) {
+  const { repo } = deps;
   /** 歸類後才記住網址模式；Provisional Series 不記。 */
   async function remember(seriesId: string, url: string): Promise<void> {
     const series = await repo.getSeries(seriesId);
     if (!series || series.provisional) return;
-    await repo.putPattern({ pattern: urlPattern(url), seriesId, lastUsedAt: options.now().getTime() });
+    await repo.putPattern({ pattern: urlPattern(url), seriesId, lastUsedAt: deps.now().getTime() });
   }
 
   return {
@@ -52,10 +54,10 @@ export function createSeriesCatalog(repo: SeriesRepo, options: SeriesCatalogOpti
     async seriesForUrl(url: string): Promise<string> {
       const pattern = await repo.getPattern(urlPattern(url));
       if (pattern && (await repo.getSeries(pattern.seriesId))) {
-        await repo.putPattern({ ...pattern, lastUsedAt: options.now().getTime() });
+        await repo.putPattern({ ...pattern, lastUsedAt: deps.now().getTime() });
         return pattern.seriesId;
       }
-      const series = provisionalSeries(url, options.now(), options.newId());
+      const series = provisionalSeries(url, deps.now(), deps.newId());
       await repo.putSeries(series);
       return series.id;
     },
@@ -70,7 +72,7 @@ export function createSeriesCatalog(repo: SeriesRepo, options: SeriesCatalogOpti
 
     /** 「新增 Series…」：建一部（非 Provisional）Series 並記住這個網址。 */
     async create(name: string, url: string): Promise<Series> {
-      const series: Series = { id: options.newId(), name, provisional: false, createdAt: options.now().getTime() };
+      const series: Series = { id: deps.newId(), name, provisional: false, createdAt: deps.now().getTime() };
       await repo.putSeries(series);
       await remember(series.id, url);
       return series;

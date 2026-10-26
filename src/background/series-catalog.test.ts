@@ -56,7 +56,7 @@ function setup() {
   const db = memoryRepo();
   let clock = 1000;
   let ids = 0;
-  const catalog = createSeriesCatalog(db.repo, { now: () => new Date(clock), newId: () => `id-${++ids}` });
+  const catalog = createSeriesCatalog({ repo: db.repo, now: () => new Date(clock), newId: () => `id-${++ids}` });
   return { db, catalog, tick: () => (clock += 1000) };
 }
 

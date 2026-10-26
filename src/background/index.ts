@@ -164,7 +164,7 @@ function scan(tabId: number): void {
   scanner.scan(tabId).catch((e: unknown) => console.warn('scan failed', e));
 }
 
-const seriesCatalog = createSeriesCatalog(indexedDbSeriesRepo(), { now: () => new Date(), newId: () => crypto.randomUUID() });
+const seriesCatalog = createSeriesCatalog({ repo: indexedDbSeriesRepo(), now: () => new Date(), newId: () => crypto.randomUUID() });
 
 async function seriesResponse(tabId: number): Promise<SeriesResponse> {
   const [current, options] = await Promise.all([activation.getSeriesId(tabId), seriesCatalog.menu()]);

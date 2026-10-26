@@ -74,9 +74,15 @@ if (!globalThis.__mangaTranslator) {
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
   const isOwn = (node: Node, attribute?: string) =>
     node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
-  const stopWatching = watchPageTurns(() => {
-    chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
-  }, isOwn);
+  const stopWatching = watchPageTurns({
+    notify() {
+      chrome.runtime.sendMessage({ type: 'content:pageTurn' } satisfies Message).catch(() => {});
+    },
+    isOwn,
+    document,
+    window,
+    MutationObserver,
+  });
 
   const onMessage = (message: Message, _sender: chrome.runtime.MessageSender, sendResponse: (r: unknown) => void): boolean => {
     switch (message.type) {
