@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimatePageFontPx, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { breakLines, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 describe('verticalize（直書前的文字處理）', () => {
   it('半形 !?~, 換成全形', () => {
@@ -102,36 +102,89 @@ describe('separateRegions（相鄰 Balloon 的譯文範圍不重疊）', () => {
   });
 });
 
-describe('estimatePageFontPx（起始字級跟著原作字級，#80）', () => {
-  it('從文字框面積與原文字數估原作字級，再乘保守係數', () => {
+describe('estimateFontPx（起始字級跟著原作字級，#80、#81）', () => {
+  it('從文字框面積與譯文字數估字級，再乘保守係數', () => {
     // 200×300 裝 6 個字：√(60000÷6)＝100 → 字寬 54 → 字級 60（字寬約 0.9 em）→ 保守係數 0.9 → 54
-    expect(estimatePageFontPx([{ text: { x: 0, y: 0, w: 200, h: 300 }, 原文: 'あいうえおか' }])).toBeCloseTo(54);
+    const [size] = estimateFontPx([{ text: { x: 0, y: 0, w: 200, h: 300 }, 譯文: '你之前有過嗎' }]);
+    expect(size).toBeCloseTo(54);
   });
 
-  it('取整頁的中位數：喊叫的大字與小框不會把整頁帶偏', () => {
-    // 三個框的 √(面積÷字數)：400×300÷3 → 200、100×400÷4 → 100、50×100÷2 → 50；中位數 100 → 54
+  it('每框各自估，但夾在整頁中位數 ±25%：喊叫的大字與小框不會差太多', () => {
+    // 三個框的 √(面積÷字數)：400×300÷3 → 200、100×400÷4 → 100、50×100÷2 → 50
+    // 各自是 108、54、27；中位數 54，夾在 40.5～67.5
     const page = [
-      { text: { x: 0, y: 0, w: 400, h: 300 }, 原文: 'ああ!' },
-      { text: { x: 0, y: 0, w: 100, h: 400 }, 原文: 'いいいい' },
-      { text: { x: 0, y: 0, w: 50, h: 100 }, 原文: 'うう' },
+      { text: { x: 0, y: 0, w: 400, h: 300 }, 譯文: '欸！？' },
+      { text: { x: 0, y: 0, w: 100, h: 400 }, 譯文: '原來如此' },
+      { text: { x: 0, y: 0, w: 50, h: 100 }, 譯文: '是的' },
     ];
-    expect(estimatePageFontPx(page)).toBeCloseTo(54);
+    const sizes = estimateFontPx(page);
+    expect(sizes[0]).toBeCloseTo(67.5);
+    expect(sizes[1]).toBeCloseTo(54);
+    expect(sizes[2]).toBeCloseTo(40.5);
   });
 
   it('連續的點（...、・・・ 或 …）算 2 個字（直書「……」佔兩格），空白不算', () => {
     // 都是 4 個字：100×400÷4 → 100 → 54
     const box = { x: 0, y: 0, w: 100, h: 400 };
-    expect(estimatePageFontPx([{ text: box, 原文: 'あ... い' }])).toBeCloseTo(54);
-    expect(estimatePageFontPx([{ text: box, 原文: 'あ…い' }])).toBeCloseTo(54);
-    expect(estimatePageFontPx([{ text: box, 原文: 'あ・・・い' }])).toBeCloseTo(54);
-    expect(estimatePageFontPx([{ text: box, 原文: '……あい' }])).toBeCloseTo(54);
+    for (const 譯文 of ['你... 我', '你…我', '你・・・我', '……你我']) expect(estimateFontPx([{ text: box, 譯文 }])[0]).toBeCloseTo(54);
   });
 
-  it('沒有原文或文字框沒有面積的 Balloon 不算；整頁都沒得估就用 26px', () => {
+  it('沒有譯文或文字框沒有面積的框用整頁中位數；整頁都沒得估就用 26px', () => {
     const box = { x: 0, y: 0, w: 200, h: 300 };
-    expect(estimatePageFontPx([])).toBe(26);
-    expect(estimatePageFontPx([{ text: box, 原文: ' ' }, { text: { ...box, w: 0 }, 原文: 'あ' }])).toBe(26);
-    expect(estimatePageFontPx([{ text: box, 原文: '' }, { text: box, 原文: 'あいうえおか' }])).toBeCloseTo(54);
+    expect(estimateFontPx([{ text: box, 譯文: ' ' }, { text: { ...box, w: 0 }, 譯文: '你' }])).toEqual([26, 26]);
+    const sizes = estimateFontPx([{ text: box, 譯文: '' }, { text: box, 譯文: '你之前有過嗎' }]);
+    expect(sizes[0]).toBeCloseTo(54);
+    expect(sizes[1]).toBeCloseTo(54);
+  });
+});
+
+describe('estimateOriginalLines（原文排成幾行，#81）', () => {
+  // 450×200 裝 9 個字：√(90000÷9)＝100 → 字寬 54 → 原作字距約字寬 1.21 倍 ≈ 65.3
+  const text = { x: 0, y: 0, w: 450, h: 200 };
+
+  it('直書：一行沿著文字框的高放 ⌊高 ÷ 字距⌋ 個字', () => {
+    // ⌊200 ÷ 65.3⌋＝3 字一行，9 字 → 3 行
+    expect(estimateOriginalLines(text, 'あいうえおかきくけ', true)).toBe(3);
+  });
+
+  it('橫書：一行沿著文字框的寬', () => {
+    // ⌊450 ÷ 65.3⌋＝6 字一行，9 字 → 2 行
+    expect(estimateOriginalLines(text, 'あいうえおかきくけ', false)).toBe(2);
+  });
+
+  it('沒有原文或文字框沒有面積就當 1 行', () => {
+    expect(estimateOriginalLines(text, '', true)).toBe(1);
+    expect(estimateOriginalLines({ ...text, w: 0 }, 'あいう', true)).toBe(1);
+  });
+});
+
+describe('breakLines（譯文斷成幾行，#81）', () => {
+  it('只在詞與詞之間斷，各行差不多長；標點與刪節號跟著前面的字', () => {
+    expect(breakLines('某個瞬間，力量好像增強了……', 3)).toEqual(['某個瞬間，', '力量好像', '增強了……']);
+  });
+
+  it('優先斷在標點後；為了這樣可以比原文少一行或多一行，數字與後面的量詞不拆開', () => {
+    // 硬排 3 行會變成「七天後，／你們／四個人」；「四｜個人」不能拆
+    expect(breakLines('七天後，你們四個人', 3)).toEqual(['七天後，', '你們四個人']);
+  });
+
+  it('兩邊都是單字的地方盡量不斷：多半是斷詞器不認得的詞', () => {
+    // 斷詞器把「地城」切成「地｜城」
+    expect(breakLines('希望你們能攻略B級地城的第一層到第五層。', 3)).toEqual(['希望你們能攻略B級', '地城的第一層到第五層。']);
+  });
+
+  it('單位比行數少就有幾個排幾行；一行時整句不斷', () => {
+    expect(breakLines('欸！？', 3)).toEqual(['欸！？']);
+    expect(breakLines('你們好嗎', 4)).toEqual(['你們', '好嗎']);
+    expect(breakLines('現在……還不能說。', 1)).toEqual(['現在……還不能說。']);
+  });
+
+  it('只有整個詞是數字才黏住後面：以數字結尾的詞（統一）照常可以斷', () => {
+    expect(breakLines('我們要統一大家的意見', 2)).toEqual(['我們要統一', '大家的意見']);
+  });
+
+  it('英文字之間的空白保留', () => {
+    expect(breakLines('HP MP都滿了', 1)).toEqual(['HP MP都滿了']);
   });
 });
 

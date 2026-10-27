@@ -17,7 +17,7 @@ import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
-import { estimatePageFontPx, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { breakLines, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -32,15 +32,20 @@ export const isShown = (element: Element) => element.checkVisibility({ visibilit
 /** 給 e2e 與頁面辨識用：shadow host 的屬性。 */
 export const HOST_ATTRIBUTE = 'data-naruhodo-overlay';
 
+/** 譯文的行高（em）。 */
+const LINE_HEIGHT = 1.15;
+
 /** tooltip 與高亮框的顏色、字型取自 design tokens（跟 side panel 同一份，#71）；擦字與譯文的顏色跟著原稿算。 */
 const STYLE = `${TOKENS}
 :host { all: initial; }
 .pl { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .er { position: absolute; border-radius: 3px; }
 .tx { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
-  text-align: center; line-height: 1.15; overflow: hidden; font-weight: 700; overflow-wrap: anywhere; }
+  text-align: center; line-height: ${LINE_HEIGHT}; overflow: hidden; font-weight: 700; overflow-wrap: anywhere; }
 .tx.v { writing-mode: vertical-rl; text-orientation: mixed; }
 .tx .u { text-combine-upright: all; }
+.tx > span { white-space: nowrap; }
+.tx[data-wrap] > span { white-space: normal; }
 .tx[data-fit="3"] { align-items: flex-start; justify-content: flex-start; }
 :host([data-page-mode="learn"]) .er, :host([data-page-mode="learn"]) .tx { visibility: hidden; }
 .tip { position: absolute; display: none; box-sizing: border-box; padding: 0.6em 0.8em; border-radius: 0.6em;
@@ -268,8 +273,17 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return entry;
   }
 
-  function buildText(text: string, vertical: boolean): HTMLElement {
+  /** 一行一段、中間 <br>（行在哪裡斷由 breakLines 決定，不讓瀏覽器自動換行，#81）。 */
+  function buildText(lines: string[], vertical: boolean): HTMLElement {
     const inner = document.createElement('span');
+    for (const [i, text] of lines.entries()) {
+      if (i > 0) inner.append(document.createElement('br'));
+      appendRuns(inner, text, vertical);
+    }
+    return inner;
+  }
+
+  function appendRuns(inner: HTMLElement, text: string, vertical: boolean): void {
     for (const run of vertical ? verticalize(text) : [{ text, upright: false }]) {
       if (!run.upright) inner.append(run.text);
       else {
@@ -279,7 +293,6 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         inner.append(span);
       }
     }
-    return inner;
   }
 
   /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。pageHash＝hover 同步用的 Page 身分。 */
@@ -331,9 +344,11 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       box.dataset.balloonId = balloon.id;
       box.style.fontFamily = fontFamily;
       box.style.color = luminance < 128 ? '#fff' : '#111';
-      const inner = buildText(balloon.譯文, vertical);
+      const originalLines = estimateOriginalLines(regions.text, balloon.原文, vertical);
+      const lines = breakLines(balloon.譯文, originalLines);
+      const inner = buildText(lines, vertical);
       box.append(inner);
-      return { balloon, regions, erase, box, inner };
+      return { balloon, regions, erase, box, inner, vertical, originalLines, lines };
     });
     // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
     element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
@@ -345,30 +360,51 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     old?.element.remove();
     place(entry);
 
-    // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算，起始字級跟著原作字級（#80）。
+    // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算，起始字級每框各自估（#80、#81）。
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
-    const startPx = estimatePageFontPx(balloons.map((b, i) => ({ text: regionsList[i]!.text, 原文: b.原文 })));
+    const startSizes = estimateFontPx(balloons.map((b, i) => ({ text: regionsList[i]!.text, 譯文: b.譯文 })));
     const fits: Record<string, unknown>[] = [];
-    for (const { balloon, regions, box, inner } of items) {
-      const result = fitText(
-        {
-          apply(region, px) {
-            setBox(box, region);
-            box.style.fontSize = `${px}px`;
-          },
-          overflows: () =>
-            inner.offsetWidth > box.clientWidth + 1 ||
-            inner.offsetHeight > box.clientHeight + 1 ||
-            box.scrollWidth > box.clientWidth + 1 ||
-            box.scrollHeight > box.clientHeight + 1,
+    for (const [i, { balloon, regions, box, inner, vertical, originalLines, lines }] of items.entries()) {
+      const target = {
+        apply(region: Box, px: number) {
+          setBox(box, region);
+          box.style.fontSize = `${px}px`;
         },
-        regions,
-        minLayerPx,
-        startPx,
-      );
+        overflows: () =>
+          inner.offsetWidth > box.clientWidth + 1 ||
+          inner.offsetHeight > box.clientHeight + 1 ||
+          box.scrollWidth > box.clientWidth + 1 ||
+          box.scrollHeight > box.clientHeight + 1,
+      };
+      let result = fitText(target, regions, minLayerPx, startSizes[i]);
+      // 照 breakLines 的斷法排不下（譯文範圍跟文字框的形狀差太多）就讓瀏覽器自動換行再試，最差跟 #81 之前一樣
+      const wrapped = result.stage === 3;
+      if (wrapped) {
+        box.dataset.wrap = '';
+        result = fitText(target, regions, minLayerPx, startSizes[i]);
+      }
       box.dataset.fit = String(result.stage);
-      if (__DEBUG__) fits.push({ id: balloon.id, 譯文: balloon.譯文, vertical: box.classList.contains('v'), ...result, regions, eraseLuminance: balloon.eraseLuminance });
+      if (__DEBUG__) {
+        // 填充率＝譯文實際佔的面積 ÷ 文字框面積；renderedLines 是畫面上實際排出的行數（#81 的評估指標）
+        const textArea = regions.text.w * regions.text.h;
+        const fillRate = textArea > 0 ? (inner.offsetWidth * inner.offsetHeight) / textArea : null;
+        const renderedLines = Math.round((vertical ? inner.offsetWidth : inner.offsetHeight) / (result.size * LINE_HEIGHT));
+        fits.push({
+          id: balloon.id,
+          譯文: balloon.譯文,
+          vertical,
+          startPx: startSizes[i],
+          lines,
+          originalLines,
+          wrapped,
+          renderedLines,
+          fillRate,
+          ...result,
+          regions,
+          eraseLuminance: balloon.eraseLuminance,
+        });
+      }
     }
     if (__DEBUG__) {
       const anchorRect = anchor.getBoundingClientRect();
@@ -379,7 +415,6 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         anchorRect: { x: anchorRect.x, y: anchorRect.y, width: anchorRect.width, height: anchorRect.height },
         screenScale,
         minLayerPx,
-        startPx,
         skipped: text.balloons.filter((b) => !balloons.includes(b)).map((b) => ({ id: b.id, unreadable: b.unreadable, 譯文: b.譯文 })),
         fits,
       });
