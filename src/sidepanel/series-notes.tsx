@@ -91,13 +91,12 @@ function ClearCache({ tabId }: { tabId: number }) {
   );
 }
 
-export function SeriesNotesSection({ tabId }: { tabId: number }) {
-  const [open, setOpen] = useState(false);
+/** 從 ⚙ 選單打開（#77）；打開時才讀 Notes。 */
+export function SeriesNotesSection({ tabId, onClose }: { tabId: number; onClose: () => void }) {
   const [notes, setNotes] = useState<NotesResponse | undefined>(undefined);
   const [editing, setEditing] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    if (!open) return;
     let seriesId: string | undefined;
     const refresh = () =>
       void send<NotesResponse>({ type: 'panel:getNotes', tabId }).then((r) => {
@@ -111,66 +110,66 @@ export function SeriesNotesSection({ tabId }: { tabId: number }) {
     chrome.runtime.onMessage.addListener(onMessage);
     refresh();
     return () => chrome.runtime.onMessage.removeListener(onMessage);
-  }, [tabId, open]);
+  }, [tabId]);
 
   const translationOf = (原文: string) => notes?.entries.find((e) => e.原文 === 原文)?.譯文;
+  if (!notes) return null;
   return (
-    <>
-      <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
-        📒 Series Notes
-      </Button>
-      {open && notes && (
-        <section aria-label="Series Notes" class="notes">
-          {notes.suggestions.length > 0 && (
-            <>
-              <h2>建議修改</h2>
-              <ul aria-label="建議修改">
-                {notes.suggestions.map((s) => (
-                  <SuggestionItem key={`${s.原文}/${s.建議譯文}`} suggestion={s} current={translationOf(s.原文)} tabId={tabId} />
-                ))}
-              </ul>
-            </>
-          )}
-          {notes.entries.length === 0 ? (
-            <Callout>還沒有條目：翻譯時 LLM 會把人名、用語記下來。</Callout>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>原文</th>
-                  <th>讀音</th>
-                  <th>譯文</th>
-                  <th>類別</th>
-                  <th />
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {notes.entries.map((entry) =>
-                  editing === entry.原文 ? (
-                    <tr key={entry.原文}>
-                      <td colSpan={6}>
-                        <span lang="ja">{entry.原文}</span>
-                        <EntryForm
-                          entry={entry}
-                          onDone={(fields) => {
-                            setEditing(undefined);
-                            if (fields) void send({ type: 'panel:editNote', tabId, 原文: entry.原文, fields });
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ) : (
-                    <EntryRow key={entry.原文} entry={entry} onEdit={() => setEditing(entry.原文)} />
-                  ),
-                )}
-              </tbody>
-            </table>
-          )}
-          <p class="hint">改過的條目會鎖定（🔒），之後 LLM 只能提建議修改。用到改過條目的頁會提示過時，按「重新翻譯」才重翻。</p>
-          <ClearCache tabId={tabId} />
-        </section>
+    <section aria-label="Series Notes" class="notes">
+      <div class="section-head">
+        <h2>Series Notes</h2>
+        <Button variant="ghost" onClick={onClose}>
+          關閉
+        </Button>
+      </div>
+      {notes.suggestions.length > 0 && (
+        <>
+          <h2>建議修改</h2>
+          <ul aria-label="建議修改">
+            {notes.suggestions.map((s) => (
+              <SuggestionItem key={`${s.原文}/${s.建議譯文}`} suggestion={s} current={translationOf(s.原文)} tabId={tabId} />
+            ))}
+          </ul>
+        </>
       )}
-    </>
+      {notes.entries.length === 0 ? (
+        <Callout>還沒有條目：翻譯時 LLM 會把人名、用語記下來。</Callout>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>原文</th>
+              <th>讀音</th>
+              <th>譯文</th>
+              <th>類別</th>
+              <th />
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {notes.entries.map((entry) =>
+              editing === entry.原文 ? (
+                <tr key={entry.原文}>
+                  <td colSpan={6}>
+                    <span lang="ja">{entry.原文}</span>
+                    <EntryForm
+                      entry={entry}
+                      onDone={(fields) => {
+                        setEditing(undefined);
+                        if (fields) void send({ type: 'panel:editNote', tabId, 原文: entry.原文, fields });
+                      }}
+                    />
+                  </td>
+                </tr>
+              ) : (
+                <EntryRow key={entry.原文} entry={entry} onEdit={() => setEditing(entry.原文)} />
+              ),
+            )}
+          </tbody>
+        </table>
+      )}
+      <p class="hint">改過的條目會鎖定（🔒），之後 LLM 只能提建議修改。用到改過條目的頁會提示過時，按「重新翻譯」才重翻。</p>
+      <ClearCache tabId={tabId} />
+    </section>
   );
 }

@@ -3,7 +3,7 @@
  * 頁面上的內容與 hover 在 overlay.spec.ts、learning.spec.ts；這裡是記住設定、學習時認頁。
  */
 import type { Page, Worker } from '@playwright/test';
-import { activateOnJumpPlus, expect, openSidePanel, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test } from './fixtures.ts';
 import { overlayTexts, pageMode, shownTranslations } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -52,7 +52,7 @@ test('學習時重新擷取同一頁不會重翻；翻頁後翻新的一頁、�
 
   // 重新擷取：頁面上沒蓋東西，截到原稿也認得出同一頁
   const captures = await captureCount(sw);
-  await panel.getByRole('button', { name: '重新擷取' }).click();
+  await chooseFromPanelMenu(panel, '重新擷取頁面');
   await expect.poll(() => captureCount(sw)).toBeGreaterThan(captures);
   await page.waitForTimeout(1_000);
   expect(await translateCalls(sw)).toBe(1);

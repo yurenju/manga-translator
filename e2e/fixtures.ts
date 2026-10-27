@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, test as base, type BrowserContext, type Page, type Worker } from '@playwright/test';
+import { chromium, test as base, type BrowserContext, type Locator, type Page, type Worker } from '@playwright/test';
 import type { Message, PipelineConfig, TestConfig } from '../src/shared/messages.ts';
 import { startMockSite, type MockSite } from './mock-site/server.ts';
 
@@ -153,6 +153,23 @@ export async function testActivate(fromExtensionPage: Page, tabId: number): Prom
     (message) => chrome.runtime.sendMessage(message),
     { type: 'test:activate', tabId } satisfies Message,
   );
+}
+
+/**
+ * side panel 頂部的 ⚙ 選單（#77）：自動翻譯、重新擷取頁面、Series Notes、API key 與模型都收在裡面。
+ * 已經展開就不再點（再點會收起）。
+ */
+export async function openPanelMenu(panel: Page): Promise<Locator> {
+  const toggle = panel.getByRole('button', { name: '設定', exact: true });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const menu = panel.getByRole('group', { name: '設定選單' });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** 從 ⚙ 選單按一項（重新擷取頁面、Series Notes、API key 與模型）；按了選單就收起。 */
+export async function chooseFromPanelMenu(panel: Page, item: string): Promise<void> {
+  await (await openPanelMenu(panel)).getByRole('button', { name: item }).click();
 }
 
 /**

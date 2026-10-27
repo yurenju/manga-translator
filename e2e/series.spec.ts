@@ -14,14 +14,19 @@ test.use({ viewport: null });
 /** 第一次載入模型（從 mock site 下載＋wasm 編譯）加上兩頁 OCR。 */
 const TRANSCRIPT_TIMEOUT = 60_000;
 
-const seriesSelect = (panel: Page) => panel.getByRole('combobox', { name: 'Series', exact: true });
-const selectedSeries = (panel: Page) => seriesSelect(panel).locator('option:checked');
+const footer = (panel: Page) => panel.getByRole('contentinfo', { name: '狀態列' });
+/** 底部那一行「系列＋名稱＋鉛筆」；平常只顯示名稱。 */
+const seriesRow = (panel: Page) => footer(panel).getByRole('group', { name: '系列' });
+/** 點鉛筆展開編輯區（改名、切換、新增、合併都在裡面）。 */
+const openSeriesEditor = (panel: Page) => footer(panel).getByRole('button', { name: '改系列名稱' }).click();
+const seriesSelect = (panel: Page) => footer(panel).getByRole('combobox', { name: 'Series', exact: true });
 
 async function createSeries(panel: Page, name: string): Promise<void> {
+  await openSeriesEditor(panel);
   await seriesSelect(panel).selectOption({ label: '新增 Series…' });
   await panel.getByRole('textbox', { name: 'Series 名稱' }).fill(name);
   await panel.getByRole('button', { name: '建立' }).click();
-  await expect(selectedSeries(panel)).toHaveText(name);
+  await expect(seriesRow(panel)).toContainText(name);
 }
 
 /** 停止 → 重新整理 → 再啟動（新的一次啟動，要靠網址模式預選）。 */
@@ -43,12 +48,12 @@ const seriesNamed = async (sw: Worker, name: string) => (await readStore<Series>
 
 test('選 Series 後重新整理再啟動，自動預選同一部 Series', async ({ context, sw, extensionId, mockSite }) => {
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await expect(selectedSeries(panel)).toHaveText(/^未歸類（未命名・127\.0\.0\.1・/);
+  await expect(seriesRow(panel)).toContainText(/未歸類（未命名・127\.0\.0\.1・/);
 
   await createSeries(panel, '火ノ丸相撲');
   await stopReloadActivate(page, panel, tabId);
 
-  await expect(selectedSeries(panel)).toHaveText('火ノ丸相撲');
+  await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
   // 預選到的不會再建 Provisional Series：只有第一次啟動那一個＋火ノ丸相撲
   expect(await readStore<Series>(sw, 'series')).toHaveLength(2);
 });
@@ -59,8 +64,9 @@ test('同網站的另一個網址不會被預選，建立 Provisional Series', a
 
   const other = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: new URL('episode-2/', mockSite.jumpPlusUrl).href });
 
-  await expect(selectedSeries(other.panel)).toHaveText(/^未歸類（/);
+  await expect(seriesRow(other.panel)).toContainText(/未歸類（/);
   // 「火ノ丸相撲」仍在選單裡，而且是最近用過的，排在最上面
+  await openSeriesEditor(other.panel);
   await expect(seriesSelect(other.panel).locator('option').first()).toHaveText('火ノ丸相撲');
 });
 
@@ -75,15 +81,17 @@ test.describe('歸類（FakeTranslator）', () => {
     const [provisional] = await readStore<Series>(sw, 'series');
     const calls = await sw.evaluate(() => globalThis.__translateCalls ?? 0);
 
-    await panel.getByRole('button', { name: '改名' }).click();
+    // 平常只是文字；點鉛筆才出現輸入框
+    await expect(footer(panel).getByRole('textbox')).toHaveCount(0);
+    await openSeriesEditor(panel);
     await panel.getByRole('textbox', { name: '新名稱' }).fill('火ノ丸相撲');
     await panel.getByRole('button', { name: '儲存' }).click();
-    await expect(selectedSeries(panel)).toHaveText('火ノ丸相撲');
+    await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
     expect(await seriesNamed(sw, '火ノ丸相撲')).toEqual({ ...provisional, name: '火ノ丸相撲', provisional: false });
 
     await stopReloadActivate(page, panel, tabId);
 
-    await expect(selectedSeries(panel)).toHaveText('火ノ丸相撲');
+    await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
     await expect(statusLines.filter({ hasText: /^快取・/ })).toHaveCount(2, { timeout: 15_000 });
     expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(calls);
   });
@@ -106,10 +114,11 @@ test.describe('歸類（FakeTranslator）', () => {
     expect((await readStore<PageTranslation>(sw, 'pageTranslations')).filter((t) => t.seriesId === provisionalId)).toHaveLength(2);
     const calls = await sw.evaluate(() => globalThis.__translateCalls ?? 0);
 
+    await openSeriesEditor(other.panel);
     await other.panel.getByRole('combobox', { name: '合併進' }).selectOption({ label: '火ノ丸相撲' });
     await other.panel.getByRole('button', { name: '合併' }).click();
 
-    await expect(selectedSeries(other.panel)).toHaveText('火ノ丸相撲');
+    await expect(seriesRow(other.panel)).toContainText('火ノ丸相撲');
     await expect.poll(async () => (await readStore<Series>(sw, 'series')).some((s) => s.id === provisionalId)).toBe(false);
     const cached = await readStore<PageTranslation>(sw, 'pageTranslations');
     expect(cached.filter((t) => t.seriesId === provisionalId)).toEqual([]);

@@ -8,7 +8,7 @@ import type { NotesSuggestion } from '../src/shared/series-notes.ts';
 import type { PageTranslation } from '../src/shared/page-text.ts';
 import type { Series } from '../src/shared/series.ts';
 import type { NotesEntry } from '../src/shared/translator.ts';
-import { activateOnJumpPlus, configuredServiceWorker, expect, launchWithExtension, openSidePanel, readStore, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, configuredServiceWorker, expect, launchWithExtension, openSidePanel, readStore, test } from './fixtures.ts';
 
 const パン = { 原文: 'パン', 讀音: 'ぱん', 譯文: '麵包', 類別: '用語' };
 const 霧島湊 = { 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文: '霧島湊', 類別: '人名' };
@@ -26,7 +26,7 @@ const staleHint = (panel: Page) => panel.getByRole('group', { name: '過時提�
 const notesSection = (panel: Page) => panel.getByRole('region', { name: 'Series Notes' });
 
 async function openNotes(panel: Page): Promise<void> {
-  await panel.getByRole('button', { name: 'Series Notes' }).click();
+  await chooseFromPanelMenu(panel, 'Series Notes');
   await expect(notesSection(panel)).toBeVisible();
 }
 
@@ -112,7 +112,7 @@ test('匯出再匯入到乾淨的 profile：Notes 與快取一致，匯出檔沒
   // Notes 在背景整理（ADR 0005）：寫進去之後再匯出
   await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');
   const API_KEY = 'sk-ant-e2e-export-must-not-contain-this-key';
-  await panel.getByRole('button', { name: '⚙ 設定' }).click();
+  await chooseFromPanelMenu(panel, 'API key 與模型');
   await panel.getByLabel('Claude API key').fill(API_KEY);
   await panel.getByRole('button', { name: '儲存' }).click();
   await expect(panel.getByText(/末四碼/)).toBeVisible();
@@ -127,7 +127,7 @@ test('匯出再匯入到乾淨的 profile：Notes 與快取一致，匯出檔沒
   try {
     const cleanSw = await configuredServiceWorker(clean, mockSite);
     const cleanPanel = await openSidePanel(clean, new URL(cleanSw.url()).host);
-    await cleanPanel.getByRole('button', { name: '⚙ 設定' }).click();
+    await chooseFromPanelMenu(cleanPanel, 'API key 與模型');
     await cleanPanel.getByLabel('匯入 JSON').setInputFiles(file);
     await expect(cleanPanel.getByText('匯入完成')).toBeVisible();
 
