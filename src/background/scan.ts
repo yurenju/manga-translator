@@ -22,8 +22,8 @@ export interface ScannerDeps {
   /** tab 是它視窗裡的作用中 tab 就回傳 windowId；否則 undefined（captureVisibleTab 只截得到作用中 tab）。 */
   getVisibleWindowId(tabId: number): Promise<number | undefined>;
   /**
-   * 截圖前：藏起疊在 Page 上的網站元素（工具列、翻頁感應區，#59），hideOverlay 時也藏自己的覆蓋層（shadow host）；
-   * 等到瀏覽器重繪完才 resolve（spec #27 第 3.2 節）。
+   * 截圖前：讓頁面持續重繪（#60）、藏起疊在 Page 上的網站元素（工具列、翻頁感應區，#59），hideOverlay 時
+   * 也藏自己的覆蓋層（shadow host）；等到瀏覽器重繪完才 resolve（spec #27 第 3.2 節）。
    */
   prepareCapture(tabId: number, hideOverlay: boolean): Promise<void>;
   /** 截完立刻還原。stable＝false：藏起來的元素在截圖期間被換掉，截圖不能用。 */
@@ -125,7 +125,7 @@ export function createScanner(deps: ScannerDeps) {
         trace('scan:notActiveTab', { tabId });
         return;
       }
-      // 截圖會截到自己的覆蓋層，hash 就跟原圖對不上；所以截圖期間先藏起來。真實 Chrome 截一次要 1～2 秒，
+      // 截圖會截到自己的覆蓋層，hash 就跟原圖對不上；所以截圖期間先藏起來。真實 Chrome 截一次約 0.25 秒（#60），
       // 藏著的這段時間中文會閃回日文；已經記過帶覆蓋層樣子的 Page 就不藏，改用那個樣子認。網站疊在 Page 上的
       // 元素（工具列等）不管哪一種都藏（#59）。
       const keep = !forceHide && canKeepOverlay(tabId, before.candidates);
@@ -199,7 +199,7 @@ export function createScanner(deps: ScannerDeps) {
 
   /**
    * 同一個 tab 已經有排著、還沒開始的掃描就併進去：快速連按翻頁時每個訊號各排一次，停下後會一張接一張
-   * 截上好幾秒（真實 Chrome 一次 1～2 秒，#27 除錯）。還沒開始的那次會量到最新的版面，所以合併不會漏掉翻頁。
+   * 截上好幾秒（真實 Chrome 一次約 0.25 秒，#60 之前要 1～2 秒）。還沒開始的那次會量到最新的版面，所以合併不會漏掉翻頁。
    */
   function scan(tabId: number): Promise<void> {
     const pending = pendingScans.get(tabId);

@@ -5,6 +5,7 @@ import { createOverlay, HOST_ATTRIBUTE } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
 import { pageCandidateRejection } from './page-candidates.ts';
 import { watchPageTurns } from './page-turn.ts';
+import { stopRepaint } from './repaint.ts';
 
 /**
  * 由 SW 以 scripting.executeScript 動態注入（沒有靜態 content_scripts）。
@@ -169,6 +170,7 @@ if (!globalThis.__mangaTranslator) {
   function stop() {
     chrome.runtime.onMessage.removeListener(onMessage);
     stopWatching();
+    stopRepaint();
     overlay.clear();
     anchors.clear();
     globalThis.__mangaTranslator = undefined;
