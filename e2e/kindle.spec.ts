@@ -31,9 +31,12 @@ function kindleOverlay(page: Page): Promise<KindleOverlay> {
       const r = el.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     };
-    const img = document.querySelector<HTMLImageElement>('#page')!;
+    // 多張 img 輪流用時（buffers）取看得到的那張；藏起來的 img 上的譯文也要看不到才算
+    const img = [...document.querySelectorAll<HTMLImageElement>('#zoom > img')].find((el) => el.checkVisibility({ visibilityProperty: true }))!;
     const texts = [...document.querySelectorAll('[data-manga-translator-overlay]')].flatMap((host) =>
-      [...host.shadowRoot!.querySelectorAll('[data-balloon-id]')].map((el) => ({ text: el.textContent ?? '', rect: rectOf(el) })),
+      [...host.shadowRoot!.querySelectorAll('[data-balloon-id]')]
+        .filter((el) => el.checkVisibility({ visibilityProperty: true }))
+        .map((el) => ({ text: el.textContent ?? '', rect: rectOf(el) })),
     );
     return { texts, img: { ...rectOf(img), naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight } };
   });
@@ -152,6 +155,29 @@ test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中�
   });
   await expect.poll(() => overlayHostCount(page)).toBe(1);
   await expectAligned(page, 'p07-spread', '重掛後');
+});
+
+test('多張 img 輪流用（visibility 切換）：翻頁後藏起來的那張上的舊譯文看不到，來回翻都只有目前的 Spread', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(FIRST_SPREAD_TIMEOUT + 3 * SPREAD_TIMEOUT);
+  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.kindleUrl}?buffers=3` });
+  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+
+  await turnTo(page, 'ArrowLeft', 1);
+  await waitForOverlay(page, 'p08-action', SPREAD_TIMEOUT);
+  expect((await overlaidTexts(page, 'p07-spread')).length, '翻到 p08 後還看得到 p07 的譯文').toBe(0);
+  await expectAligned(page, 'p08-action', '翻頁後');
+
+  await turnTo(page, 'ArrowLeft', 2);
+  await waitForOverlay(page, 'p01-basic', SPREAD_TIMEOUT);
+  expect((await overlaidTexts(page, 'p07-spread')).length, '翻到 p01 後還看得到 p07 的譯文').toBe(0);
+  expect((await overlaidTexts(page, 'p08-action')).length, '翻到 p01 後還看得到 p08 的譯文').toBe(0);
+
+  // 翻回來：p08 畫進又一張 img，從記住的結果重新覆蓋
+  await turnTo(page, 'ArrowRight', 1);
+  await waitForOverlay(page, 'p08-action', SPREAD_TIMEOUT);
+  expect((await overlaidTexts(page, 'p01-basic')).length, '翻回 p08 後還看得到 p01 的譯文').toBe(0);
+  expect((await overlaidTexts(page, 'p07-spread')).length, '翻回 p08 後還看得到 p07 的譯文').toBe(0);
+  await expectAligned(page, 'p08-action', '翻回來後');
 });
 
 /** 仿 Kindle 工具列上的文字（e2e/mock-site/kindle.ts）：截到工具列的話 OCR 會讀到。 */
