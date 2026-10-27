@@ -108,24 +108,127 @@ const INK_PER_CELL = 0.54;
 const INK_PER_EM = 0.9;
 /** 保守係數：比估出來的原作字級小一點，之後可再調。 */
 const FONT_ESTIMATE_FACTOR = 0.9;
+/** 每框的字級夾在整頁中位數 ±這個比例內（守住「同一頁大小一致」，#81）。 */
+const PAGE_FONT_SPREAD = 0.25;
 
-/** 原文佔幾格：連續的點（...、・・・ 或 …）算 2 格（直書「……」），空白不算。 */
+/** 佔幾格：連續的點（...、・・・ 或 …）算 2 格（直書「……」），空白不算。 */
 const cellCount = (text: string) => [...text.replace(/[.・]{2,}|…+/g, '……').replace(/\s/g, '')].length;
 
+/** √(文字框面積 ÷ 字數)：一個字分到的格子邊長；沒有字或沒有面積就是 undefined。 */
+function cellSize(text: Box, content: string): number | undefined {
+  const count = cellCount(content);
+  return text.w * text.h > 0 && count > 0 ? Math.sqrt((text.w * text.h) / count) : undefined;
+}
+
+const median = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length / 2;
+  return sorted.length % 2 ? sorted[Math.floor(mid)]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+};
+
 /**
- * 這一頁的起始字級（Page 像素）：從每個 Balloon 的文字框與原文估原作字級，取整頁中位數。
- * 沒有原文或文字框沒有面積的不算；整頁都沒得估就用 START_PX。
+ * 每個 Balloon 的起始字級（Page 像素）：用文字框與譯文字數估「把譯文撐滿文字框」的字級（中文比日文短，
+ * 用原文字數估會偏小，#81），再夾在整頁中位數 ±PAGE_FONT_SPREAD。估不出的框用整頁中位數；整頁都沒得估就用 START_PX。
  */
-export function estimatePageFontPx(balloons: { text: Box; 原文: string }[]): number {
-  const cells = balloons
-    .map(({ text, 原文 }) => ({ area: text.w * text.h, count: cellCount(原文) }))
-    .filter(({ area, count }) => area > 0 && count > 0)
-    .map(({ area, count }) => Math.sqrt(area / count))
-    .sort((a, b) => a - b);
-  if (cells.length === 0) return START_PX;
-  const mid = cells.length / 2;
-  const median = cells.length % 2 ? cells[Math.floor(mid)]! : (cells[mid - 1]! + cells[mid]!) / 2;
-  return (median * INK_PER_CELL * FONT_ESTIMATE_FACTOR) / INK_PER_EM;
+export function estimateFontPx(balloons: { text: Box; 譯文: string }[]): number[] {
+  const sizes = balloons.map(({ text, 譯文 }) => {
+    const cell = cellSize(text, 譯文);
+    return cell === undefined ? undefined : (cell * INK_PER_CELL * FONT_ESTIMATE_FACTOR) / INK_PER_EM;
+  });
+  const known = sizes.filter((size) => size !== undefined);
+  if (known.length === 0) return balloons.map(() => START_PX);
+  const page = median(known);
+  return sizes.map((size) => (size === undefined ? page : Math.min(Math.max(size, page * (1 - PAGE_FONT_SPREAD)), page * (1 + PAGE_FONT_SPREAD))));
+}
+
+/** 原作的字距 ≈ 字寬 × 這個比例（#81 量了好幾本，都在 1.15～1.24）。 */
+const PITCH_PER_INK = 1.21;
+
+/** 原文排成幾行：一行放 ⌊文字框沿著行的長度 ÷ 原作字距⌋ 個字。估不出就當 1 行。 */
+export function estimateOriginalLines(text: Box, 原文: string, vertical: boolean): number {
+  const cell = cellSize(text, 原文);
+  if (cell === undefined) return 1;
+  const perLine = Math.max(1, Math.floor((vertical ? text.h : text.w) / (cell * INK_PER_CELL * PITCH_PER_INK)));
+  return Math.ceil(cellCount(原文) / perLine);
+}
+
+const segmenter = new Intl.Segmenter('zh-Hant', { granularity: 'word' });
+/** 不能放行首（黏到前一段）：標點、刪節號、破折號、右括號。 */
+const NO_LINE_START = /^[，。、！？；：…—～）」』》〉,.!?;:~)\]]/;
+/** 不能放行尾（黏到下一段）：左括號結尾的。 */
+const NO_LINE_END = /[（「『《〈(\[]$/;
+/** 整個詞是數字、「第」＋數字或英數字的，跟後面的量詞黏在一起（四個人、10級、B級、第一層）。 */
+const NUMBER = /^(第?[0-9０-９一二三四五六七八九十百千兩幾]*|[0-9A-Za-z０-９]+)$/;
+/** 斷在這些後面最自然。 */
+const PUNCTUATION_END = /[，。、！？；：…—～」』）,.!?;:~)]$/;
+/**
+ * 斷點的代價（單位跟行長平方差一樣是「格²」）：不在標點後斷 BREAK_COST；斷點一邊是單字再加 SINGLE_SIDE_COST，
+ * 兩邊都是單字改加 SINGLE_BOTH_COST（多半是斷詞器不認得的詞，如「地｜城」）。行數每偏離原文一行 LINE_COUNT_COST。
+ */
+const BREAK_COST = 1.5;
+const SINGLE_SIDE_COST = 0.75;
+const SINGLE_BOTH_COST = 3;
+const LINE_COUNT_COST = 2;
+
+function breakCost(before: string, after: string): number {
+  if (PUNCTUATION_END.test(before)) return 0;
+  const singles = [before, after].filter((unit) => cellCount(unit) === 1).length;
+  return BREAK_COST + [0, SINGLE_SIDE_COST, SINGLE_BOTH_COST][singles]!;
+}
+
+/** 斷成不能再切的單位：詞界，再套避頭尾與數量詞黏合；空白跟著前一個詞（英文字之間的空白保留，句首的丟掉）。 */
+function lineUnits(text: string): string[] {
+  const units: string[] = [];
+  for (const { segment } of segmenter.segment(text)) {
+    const last = units.at(-1);
+    if (last === undefined) {
+      if (!/^\s+$/.test(segment)) units.push(segment);
+    } else if (/^\s+$/.test(segment) || NO_LINE_START.test(segment) || NO_LINE_END.test(last) || NUMBER.test(last)) units[units.length - 1] = last + segment;
+    else units.push(segment);
+  }
+  return units;
+}
+
+/** 把單位排成剛好 n 行：成本＝各行長度離平均的平方和＋每個斷點的 breakCost，用 DP 取最小。 */
+function bestLines(units: string[], n: number): { cost: number; lines: string[] } {
+  const lengths = units.map(cellCount);
+  const average = lengths.reduce((a, b) => a + b, 0) / n;
+  // best[k][i]：前 i 個單位排成 k 行的最小成本，與最後一行從哪個單位開始
+  const best: { cost: number; from: number }[][] = Array.from({ length: n + 1 }, () => []);
+  best[0]![0] = { cost: 0, from: 0 };
+  for (let k = 1; k <= n; k++)
+    for (let i = k; i <= units.length; i++)
+      for (let j = k - 1; j < i; j++) {
+        const prev = best[k - 1]![j];
+        if (!prev) continue;
+        const length = lengths.slice(j, i).reduce((a, b) => a + b, 0);
+        const cost = prev.cost + (length - average) ** 2 + (i < units.length ? breakCost(units[i - 1]!, units[i]!) : 0);
+        if (!best[k]![i] || cost < best[k]![i]!.cost) best[k]![i] = { cost, from: j };
+      }
+  const lines: string[] = [];
+  for (let k = n, i = units.length; k > 0; k--) {
+    const { from } = best[k]![i]!;
+    lines.unshift(units.slice(from, i).join(''));
+    i = from;
+  }
+  return { cost: best[n]![units.length]!.cost, lines };
+}
+
+/**
+ * 譯文斷成幾行（#81）：只在詞與詞之間斷、守避頭尾，行數在原文行數 ±1 裡挑；每偏離一行加 LINE_COUNT_COST，
+ * 所以能斷在標點後、或各行比較平均時，寧可多一行或少一行。單位比這些行數都少，就一個單位一行。
+ */
+export function breakLines(譯文: string, targetLines: number): string[] {
+  const units = lineUnits(譯文);
+  if (units.length <= 1) return [units.join('')];
+  const counts = [targetLines - 1, targetLines, targetLines + 1].filter((n) => n >= 1 && n <= units.length);
+  let chosen: { cost: number; lines: string[] } = { cost: Infinity, lines: units };
+  for (const n of counts.length > 0 ? counts : [units.length]) {
+    const { cost, lines } = bestLines(units, n);
+    const total = cost + Math.abs(n - targetLines) * LINE_COUNT_COST;
+    if (total < chosen.cost) chosen = { cost: total, lines };
+  }
+  return chosen.lines;
 }
 
 /** 最小畫面字級（畫面 px）。Jump+ 顯示倍率約 0.49×，只看 Page 像素的話 14px 在畫面上只剩約 7px。 */
@@ -162,7 +265,7 @@ function sizesDownTo(start: number, floor: number): number[] {
 
 /**
  * 三階段：1. fit1 內從 startPx 縮到 14px；2. 擴到 fit2 再從 startPx 縮到 12px；3. 10px 並截斷。
- * startPx 是 estimatePageFontPx 估的這頁字級，沒有就 26px。
+ * startPx 是 estimateFontPx 估的這框字級，沒有就 26px。
  * 每一階的下限都不小於 minLayerPx（最小畫面字級換算回 Page 像素）。
  */
 export function fitText(target: FitTarget, regions: { fit1: Box; fit2: Box }, minLayerPx: number, startPx = START_PX): FitResult {
