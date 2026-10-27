@@ -10,7 +10,7 @@ v1 的流水線（擷取 → 切單頁 → 偵測 Balloon / Loose Text → OCR �
 | 切單頁 | offscreen document | 一律先切成單頁；網站差異留給 adapter |
 | 偵測 Balloon / Loose Text、OCR | offscreen document，WebGPU，退回 wasm | 模型常駐在 offscreen document，閒置一段時間後釋放 |
 | 閱讀順序 | offscreen document，確定性程式碼（flood fill 找 Panel＋XY-cut） | LLM 不改動順序 |
-| 讀音＋翻譯 | offscreen document 呼叫 LLM API | 每個 Page 一次呼叫，用 structured output 回傳 `{id, 讀音, 譯文, unreadable}`；Series Notes 放在 system prompt＋cache |
+| 讀音＋翻譯 | offscreen document 呼叫 LLM API | 每個 Page 一次呼叫，用 structured output 回傳 `{id, 讀音, 譯文, unreadable}`；Series Notes 放在 system prompt＋cache。（[ADR 0005](0005-translation-and-notes-in-separate-calls.md)：翻譯另帶 Prior Pages，Series Notes 改由背景的第二次呼叫維護） |
 | 原地覆蓋 | content script | 座標一律來自本機 detector，LLM 只透過 id 對應 |
 | 顯示 | side panel | 只負責顯示，不參與執行（side panel 關掉時仍可預翻） |
 
