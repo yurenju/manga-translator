@@ -3,7 +3,7 @@
  * TranslateInput 沒有座標，所以用原文相似度（1 − 字元編輯距離 / 長度）把 OCR 結果對回 ground truth。
  */
 import { normalizeText } from './series-notes.ts';
-import type { NotesChanges, TranslateInput, TranslateOutput, Translator } from './translator.ts';
+import type { NotesChanges, NotesInput, NotesOutput, TranslateInput, TranslateOutput, Translator } from './translator.ts';
 
 /** FakeTranslator 的模型與 prompt 版本（寫進快取、過時提示比對用）。 */
 export const FAKE_VERSION = { model: 'fake', promptVersion: 'fake' };
@@ -41,7 +41,7 @@ function similarity(a: string, b: string): number {
 export interface FakeTranslatorOptions {
   /** 這些 ground truth 原文回傳 unreadable（模擬 Claude 判定 OCR 亂碼）。 */
   unreadableTexts?: readonly string[];
-  /** 這些條目在某頁的 Balloon 原文裡出現、而且送來的 Notes 還沒有時，當成那頁新增的條目回傳（#37 的 e2e）。 */
+  /** 這些條目在某頁的 Balloon 原文裡出現、而且送來的 Notes 還沒有時，當成那頁新增的條目由 proposeNotes 回傳（#37 的 e2e）。 */
   notes?: NotesChanges['added'];
 }
 
@@ -49,7 +49,7 @@ export interface FakeTranslatorOptions {
  * 設定的條目出現在這頁的 Balloon 裡時：Notes 還沒有就新增；已經有了就把空欄位補上（filled），
  * 譯文不同就提建議（#38：模擬 LLM 想改人改過的條目）。
  */
-function notesChanges(notes: NotesChanges['added'], input: TranslateInput): NotesChanges {
+function notesChanges(notes: NotesChanges['added'], input: NotesInput): NotesChanges {
   const changes: NotesChanges = { added: [], filled: [], suggestions: [] };
   for (const n of notes) {
     if (!input.items.some((i) => i.kind === 'balloon' && normalizeText(i.原文).includes(normalizeText(n.原文)))) continue;
@@ -64,6 +64,8 @@ function notesChanges(notes: NotesChanges['added'], input: TranslateInput): Note
   }
   return changes;
 }
+
+const NO_COST = { usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 }, model: FAKE_VERSION.model, latencyMs: 0 };
 
 export function createFakeTranslator(
   pages: readonly { texts: readonly GroundTruthText[] }[],
@@ -89,11 +91,11 @@ export function createFakeTranslator(
             ? { id: item.id, 讀音: best.reading, 譯文: best.zh, unreadable: false }
             : { id: item.id, 讀音: '', 譯文: NO_MATCH, unreadable: false };
         }),
-        notes_changes: notesChanges(notes, input),
-        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
-        model: FAKE_VERSION.model,
-        latencyMs: 0,
+        ...NO_COST,
       };
+    },
+    async proposeNotes(input: NotesInput): Promise<NotesOutput> {
+      return { notes_changes: notesChanges(notes, input), ...NO_COST };
     },
   };
 }

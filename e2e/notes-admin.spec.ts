@@ -41,10 +41,23 @@ async function editNote(panel: Page, 原文: string, fields: Record<string, stri
 const entryOf = async (sw: Parameters<typeof readStore>[0], 原文: string) =>
   (await readStore<NotesEntry>(sw, 'seriesNotes')).find((e) => e.原文 === 原文);
 
+/**
+ * 快取記的是翻譯（①）送出時 Notes 裡的條目（ADR 0005），第 1 頁翻譯時パン還不在 Notes 裡。
+ * 等背景整理（②）把パン寫進 Notes，再重新翻譯 p01，讓它的快取記下用到パン。
+ */
+async function retranslateWithパン(sw: Parameters<typeof readStore>[0], panel: Page): Promise<void> {
+  await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');
+  await panel.getByRole('contentinfo', { name: '狀態列' }).getByRole('button', { name: '重新翻譯' }).click();
+  await expect
+    .poll(async () => (await readStore<PageTranslation>(sw, 'pageTranslations')).flatMap((t) => t.usedNotes.map((u) => u.原文)), { timeout: PAGE_TIMEOUT })
+    .toEqual(['パン']);
+}
+
 test('編輯條目後變 locked：之後 LLM 只能提建議，接受建議後改成建議的譯文', async ({ context, sw, extensionId, mockSite }) => {
   test.setTimeout(FIRST_PAGE_TIMEOUT + 2 * PAGE_TIMEOUT);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  await retranslateWithパン(sw, panel);
   await openNotes(panel);
   await expect(notesSection(panel).getByRole('row', { name: /パン/ })).toContainText('麵包');
 
@@ -68,6 +81,7 @@ test('改了某頁用到的條目譯文，回到那頁出現過時提示；只�
   test.setTimeout(FIRST_PAGE_TIMEOUT + 4 * PAGE_TIMEOUT);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  await retranslateWithパン(sw, panel);
 
   // p02 新增了霧島湊；回到 p01（快取）不算過時
   await page.keyboard.press('ArrowLeft');
@@ -95,6 +109,8 @@ test('匯出再匯入到乾淨的 profile：Notes 與快取一致，匯出檔沒
   test.setTimeout(FIRST_PAGE_TIMEOUT * 2);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  // Notes 在背景整理（ADR 0005）：寫進去之後再匯出
+  await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');
   const API_KEY = 'sk-ant-e2e-export-must-not-contain-this-key';
   await panel.getByRole('button', { name: '⚙ 設定' }).click();
   await panel.getByLabel('Claude API key').fill(API_KEY);

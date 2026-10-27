@@ -13,16 +13,19 @@
  * - 自動翻譯關著時新 Page 停在 pending，按「翻譯此頁」才排。快取命中照樣直接顯示（不算翻譯）。
  * - 429 依 retry-after 退避重試在 Translator 裡（claude-translator.ts）；重試後仍失敗就帶 translateError，按「重試」重送 LLM。
  *
- * Series Notes（#37；順序在 notes-ledger.ts）：送出 LLM 時帶這個 Series 的 Notes 快照，回來後依送出順序套用
- * notes_changes，再寫快取。同一次排程裡同一個 anchor 的 Page（Spread 的兩頁）是一個 SnapshotGroup，共用一份快照。
- * 沒有 Series 時不帶 Notes 也不套用。
+ * Series Notes（#37、ADR 0005；順序在 notes-ledger.ts）：翻譯（①）帶這個 Series 的 Notes 快照，回來就寫快取、顯示；
+ * 接著在背景整理 Notes（②），依 ② 送出順序套用。同一次排程裡同一個 anchor 的 Page（Spread 的兩頁）是一個
+ * SnapshotGroup，共用 ② 的快照。沒有 Series 時不帶 Notes 也不整理。
+ *
+ * Prior Pages（ADR 0005）：每個 tab 記住讀者依序看過的頁（命中快取的也算），① 帶這一批之前最近看過的 2 頁中
+ * 已經翻好的。不等還沒翻完的頁。Series 換了就清空；同 origin 重新整理（換話）保留，停止或關 tab 才忘掉。
  */
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
-import type { PageText } from '../shared/page-text.ts';
+import { pageLines, type PageText } from '../shared/page-text.ts';
 import type { SeriesNotes, TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { Translator } from '../shared/translator.ts';
+import type { TranslatedLine, PriorPage, Translator } from '../shared/translator.ts';
 import { createNotesLedger, newSnapshotGroup, type NotesStore, type SnapshotGroup } from './notes-ledger.ts';
 import { createPageTranslation, type PageCache, type Transcript } from './page-translation.ts';
 import { createTranslationQueue, type QueuedJob } from './translation-queue.ts';
@@ -57,6 +60,24 @@ const trace = createTrace('sw');
 /** 工作的 priority：可見頁 > 預翻頁（v1 只有可見頁，spec 第 10 節）。 */
 export const PRIORITY_VISIBLE = 1;
 
+/** Prior Pages 帶幾頁（ADR 0005）。 */
+export const PRIOR_PAGES = 2;
+/** 每個 tab 記住最近看過的幾頁：Prior Pages 加上一批畫面上的頁（Spread 兩頁）就夠了，多留一點餘裕。 */
+const SEEN_LIMIT = 8;
+
+/** 讀者看過的一頁。同一頁再看一次時移到最後（同一個物件）。 */
+interface SeenPage {
+  pageHash: string;
+  /** 翻好了才有（翻譯完成或命中快取）。 */
+  lines?: TranslatedLine[];
+}
+
+/** 一個 tab 在一部 Series 裡依序看過的頁（舊的在前）。 */
+interface SeenPages {
+  seriesId: string | undefined;
+  pages: SeenPage[];
+}
+
 /** 一個 tab 這次啟動看過的一個 Page（以 hash 認）。 */
 interface PageRecord {
   pageHash: string;
@@ -84,8 +105,10 @@ interface Job extends QueuedJob {
   record: PageRecord;
   /** 進到 LLM 段才有。 */
   translator?: Translator;
-  /** 共用 Notes 快照的那一組（同一次排程裡同一個 anchor）。 */
+  /** 共用 ② 的 Notes 快照的那一組（同一次排程裡同一個 anchor）。 */
   group: SnapshotGroup;
+  /** 排程時這一批之前最近看過的頁；送出 ① 時才看哪些已經翻好。 */
+  prior: SeenPage[];
   resolve(): void;
 }
 
@@ -107,6 +130,7 @@ interface JobSpec {
   batch: number;
   index: number;
   group: SnapshotGroup;
+  prior: SeenPage[];
 }
 
 export function createTranscriber(deps: TranscriberDeps) {
@@ -115,6 +139,7 @@ export function createTranscriber(deps: TranscriberDeps) {
   const tabs = new Map<number, TabState>();
   const views = new Map<number, PageView[]>();
   const autoTranslate = new Map<number, boolean>();
+  const seen = new Map<number, SeenPages>();
   let batches = 0;
 
   const isCurrent = (tab: TabState) => tabs.get(tab.tabId) === tab;
@@ -131,6 +156,38 @@ export function createTranscriber(deps: TranscriberDeps) {
       finish(job, undefined);
     },
   });
+
+  /**
+   * 這一批畫面上的頁依閱讀順序記成最近看過的。Series 換了就從頭記；沒有 Series 也從頭記（分不出是不是同一部作品）。
+   * 已經翻好、還在記憶體裡的頁補上原文與譯文（例如一直在畫面上、被擠出紀錄的頁）。
+   */
+  function see(tab: TabState, seriesId: string | undefined, pages: readonly { pageHash: string }[]): void {
+    let history = seen.get(tab.tabId);
+    if (!history || seriesId === undefined || history.seriesId !== seriesId) seen.set(tab.tabId, (history = { seriesId, pages: [] }));
+    for (const { pageHash } of pages) {
+      const page = findSamePage(history.pages, pageHash) ?? { pageHash };
+      history.pages = [...history.pages.filter((p) => p !== page), page];
+      const record = findSamePage(tab.records, pageHash);
+      if (record && !page.lines) remember(tab.tabId, pageHash, record.transcript);
+    }
+    history.pages = history.pages.slice(-SEEN_LIMIT);
+  }
+
+  /** 畫面上這一批之前最近看過的頁（還沒翻好的也算位置，送出時才略過）。 */
+  function priorOf(tab: TabState): SeenPage[] {
+    const pages = seen.get(tab.tabId)?.pages ?? [];
+    return pages.filter((p) => findSamePage(tab.pages, p.pageHash) === undefined).slice(-PRIOR_PAGES);
+  }
+
+  /** 送出 ① 的這一刻已經翻好的 Prior Pages。 */
+  const priorPages = (job: Job): PriorPage[] => job.prior.flatMap((p) => (p.lines ? [p.lines] : []));
+
+  /** 這頁翻好了（翻譯完成或命中快取）：記下它的原文與譯文，之後的頁拿來當 Prior Pages。 */
+  function remember(tabId: number, pageHash: string, transcript: Transcript): void {
+    if (transcript.state !== 'done' || !transcript.translated) return;
+    const page = findSamePage(seen.get(tabId)?.pages ?? [], pageHash);
+    if (page) page.lines = pageLines(transcript.text);
+  }
 
   function publish(tab: TabState): void {
     if (!isCurrent(tab)) return;
@@ -154,7 +211,10 @@ export function createTranscriber(deps: TranscriberDeps) {
   /** 工作結束；transcript undefined＝沒做就放掉（已停止、被丟掉，或還沒排就翻走）。 */
   function finish(job: Job, transcript: Transcript | undefined): void {
     const { tab, record } = job;
-    if (transcript) record.transcript = transcript;
+    if (transcript) {
+      record.transcript = transcript;
+      remember(tab.tabId, record.pageHash, transcript);
+    }
     record.job = undefined;
     job.resolve();
     prune(tab);
@@ -220,6 +280,7 @@ export function createTranscriber(deps: TranscriberDeps) {
         seriesId: record.seriesId,
         pageHash: record.pageHash,
         group: job.group,
+        priorPages: priorPages(job),
       }),
     );
   }
@@ -270,11 +331,14 @@ export function createTranscriber(deps: TranscriberDeps) {
     publish(tab);
 
     const seriesId = await deps.getSeriesId(tabId);
+    // 先記下這一批（Series 換了就清空），Prior Pages 本來就不含畫面上的頁
+    if (isCurrent(tab)) see(tab, seriesId, pages);
+    const prior = priorOf(tab);
     // 查快取期間佔住這頁，同一頁又出現時不會重複排
     const groupOf = snapshotGroups();
     const jobs = newPages.map(({ record, index }) => {
       record.seriesId = seriesId;
-      return newJob({ tab, record, batch, index, group: groupOf(record) });
+      return newJob({ tab, record, batch, index, group: groupOf(record), prior });
     });
     const lookups = await Promise.all(jobs.map((job) => pageTranslation.lookup(seriesId, job.record.pageHash)));
     // 快取都查完才依閱讀順序排：佇列一有工作就開始跑，Spread 的左頁先查完也不能比右頁先送出 LLM（spec 第 3.4 節）
@@ -306,15 +370,16 @@ export function createTranscriber(deps: TranscriberDeps) {
     if (pageHash !== undefined) for (const record of visible) if (record.transcript.state === 'done') record.text ??= record.transcript.text;
     const batch = ++batches;
     const groupOf = snapshotGroups();
+    const prior = priorOf(tab);
     const started: PageRecord[] = [];
     for (const [index, record] of visible.entries()) {
       if (record.job) continue;
       if (record.transcript.state === 'pending') {
         record.transcript = { state: 'analyzing' };
-        enqueueLocal(newJob({ tab, record, batch, index, group: groupOf(record) }));
+        enqueueLocal(newJob({ tab, record, batch, index, group: groupOf(record), prior }));
       } else if (translator && record.transcript.state === 'done' && record.text) {
         record.transcript = { ...record.transcript, translating: true };
-        const job = newJob({ tab, record, batch, index, group: groupOf(record) });
+        const job = newJob({ tab, record, batch, index, group: groupOf(record), prior });
         job.translator = translator;
         queue.enqueueLlm(job);
       } else continue;
@@ -362,6 +427,8 @@ export function createTranscriber(deps: TranscriberDeps) {
    */
   function reassignSeries(tabId: number, seriesId: string): void {
     for (const record of tabs.get(tabId)?.records ?? []) record.seriesId = seriesId;
+    const history = seen.get(tabId);
+    if (history) history.seriesId = seriesId;
   }
 
   /**
@@ -399,11 +466,25 @@ export function createTranscriber(deps: TranscriberDeps) {
     return next;
   }
 
-  /** 停止或關 tab：同 resetPages，設定也回到預設。 */
+  /** 停止或關 tab：同 resetPages，設定與看過的頁也忘掉。 */
   function clear(tabId: number): void {
     autoTranslate.delete(tabId);
+    seen.delete(tabId);
     resetPages(tabId);
   }
 
-  return { update, translate, setAutoTranslate, isAutoTranslate, get, resetPages, reassignSeries, notesChanged, updateNotes, clear };
+  return {
+    update,
+    translate,
+    setAutoTranslate,
+    isAutoTranslate,
+    get,
+    resetPages,
+    reassignSeries,
+    notesChanged,
+    updateNotes,
+    clear,
+    /** 背景整理 Notes（②）都做完時 resolve（測試用）。 */
+    notesSettled: pageTranslation.notesSettled,
+  };
 }

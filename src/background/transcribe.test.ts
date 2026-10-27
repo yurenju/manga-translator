@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
 import { editEntry, type NotesSuggestion, type SeriesNotes } from '../shared/series-notes.ts';
-import type { NotesChanges, NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import type { NotesChanges, NotesEntry, NotesInput, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createClaudeTranslator } from '../offscreen/claude-translator.ts';
 import { createTranscriber, type NotesStore, type PageCache, type TranscriberDeps } from './transcribe.ts';
 
@@ -89,13 +89,22 @@ function setup(overrides: Partial<TranscriberDeps> = {}) {
   return { transcriber: createTranscriber(deps), published, deps };
 }
 
+const noChanges = (): NotesChanges => ({ added: [], filled: [], suggestions: [] });
+
+/** ② 什麼都不改。 */
+const noNotes: Pick<Translator, 'proposeNotes'> = {
+  async proposeNotes() {
+    return { notes_changes: noChanges(), usage: { inputTokens: 500, outputTokens: 80, cacheReadTokens: 0, costUsd: 0.0001 }, model: 'claude-haiku-5-5', latencyMs: 1500 };
+  },
+};
+
 function translatorReturning(zh: string, calls: TranslateInput[] = []): Translator {
   return {
+    ...noNotes,
     async translatePage(input) {
       calls.push(input);
       return {
         items: input.items.map((i) => ({ id: i.id, 讀音: `${i.id}-讀音`, 譯文: `${zh}-${i.id}`, unreadable: false })),
-        notes_changes: { added: [], filled: [], suggestions: [] },
         usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 700, costUsd: 0.000137 },
         model: 'claude-haiku-5-5',
         latencyMs: 2300,
@@ -109,7 +118,6 @@ const translatedOutput = (): TranslateOutput => ({
     { id: 'b1', 讀音: 'きょうは', 譯文: '今天', unreadable: false },
     { id: 'l1', 讀音: 'どん', 譯文: '咚', unreadable: false },
   ],
-  notes_changes: { added: [], filled: [], suggestions: [] },
   usage: { inputTokens: 1200, outputTokens: 300, cacheReadTokens: 0, costUsd: 0.0003 },
   model: 'claude-haiku-5-5',
   latencyMs: 2300,
@@ -129,6 +137,7 @@ describe('逐字稿：本機流水線＋Translator', () => {
   it('有 Translator 時依閱讀順序送出原文，讀音與譯文換成它的結果', async () => {
     let input: TranslateInput | undefined;
     const translator: Translator = {
+      ...noNotes,
       async translatePage(i) {
         input = i;
         return {
@@ -136,7 +145,6 @@ describe('逐字稿：本機流水線＋Translator', () => {
             { id: 'b1', 讀音: 'きょうは', 譯文: '今天', unreadable: false },
             { id: 'l1', 讀音: 'どん', 譯文: '咚', unreadable: true },
           ],
-          notes_changes: { added: [], filled: [], suggestions: [] },
           usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
           model: 'fake',
           latencyMs: 0,
@@ -149,6 +157,7 @@ describe('逐字稿：本機流水線＋Translator', () => {
 
     expect(input).toEqual({
       seriesNotes: [],
+      priorPages: [],
       items: [
         { id: 'b1', kind: 'balloon', 原文: '今日は', orientation: 'vertical' },
         { id: 'l1', kind: 'loose', 原文: 'ドン', orientation: 'horizontal' },
@@ -162,7 +171,7 @@ describe('逐字稿：本機流水線＋Translator', () => {
   });
 
   it('Translator 失敗時保留 kuromoji 讀音、標示未翻譯，並帶上錯誤訊息', async () => {
-    const translator: Translator = { translatePage: async () => Promise.reject(new Error('Claude API 429：slow down')) };
+    const translator: Translator = { ...noNotes, translatePage: async () => Promise.reject(new Error('Claude API 429：slow down')) };
     const { transcriber, published } = setup({ getTranslator: () => translator });
 
     await transcriber.update(1, [thumb('a1')], capture);
@@ -268,7 +277,7 @@ describe('翻譯此頁', () => {
     const { transcriber } = setup({ getTranslator: () => translator });
     await transcriber.update(1, [thumb('a1')], capture);
 
-    translator = { translatePage: async () => Promise.reject(new Error('Claude API 500：boom')) };
+    translator = { ...noNotes, translatePage: async () => Promise.reject(new Error('Claude API 500：boom')) };
     await transcriber.translate(1);
 
     expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false, translateError: 'Claude API 500：boom' });
@@ -299,6 +308,7 @@ describe('翻譯此頁', () => {
   it('翻譯中又有新的擷取時，舊的翻譯結果丟掉', async () => {
     let finish: (() => void) | undefined;
     const slow: Translator = {
+      ...noNotes,
       translatePage: (input) =>
         new Promise((resolve) => {
           finish = () => void translatorReturning('舊').translatePage(input).then(resolve);
@@ -322,7 +332,7 @@ describe('翻譯此頁', () => {
 
 describe('翻譯快取', () => {
   function countingTranslator() {
-    const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
+    const translator = { ...noNotes, translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
     return translator;
   }
 
@@ -409,7 +419,7 @@ describe('翻譯快取', () => {
   it('沒有 Translator（未翻譯）或翻譯失敗時不寫快取', async () => {
     const cache = memoryCache();
     await setup({ cache }).transcriber.update(1, [thumb('a1')], capture);
-    const failing: Translator = { translatePage: async () => Promise.reject(new Error('429')) };
+    const failing: Translator = { ...noNotes, translatePage: async () => Promise.reject(new Error('429')) };
     await setup({ cache, getTranslator: () => failing }).transcriber.update(1, [thumb('a2')], capture);
 
     expect(cache.saved).toEqual([]);
@@ -509,7 +519,7 @@ describe('翻譯佇列（#34）', () => {
   });
 
   it('翻走再翻回來：命中快取（狀態是「快取」），不再翻譯', async () => {
-    const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
+    const translator = { ...noNotes, translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
     const { transcriber } = setup({ getTranslator: () => translator });
     await transcriber.update(1, [thumb('a1')], capture);
     await transcriber.update(1, [thumb('a2')], capture);
@@ -534,7 +544,7 @@ describe('翻譯佇列（#34）', () => {
   });
 
   it('Series 換了 ID（reassignSeries，#36 合併）：之後重新翻譯寫進新的 ID', async () => {
-    const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
+    const translator = { ...noNotes, translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
     const cache = memoryCache();
     const { transcriber } = setup({ getTranslator: () => translator, cache });
     await transcriber.update(1, [thumb('a1')], capture);
@@ -547,7 +557,7 @@ describe('翻譯佇列（#34）', () => {
   });
 
   it('同 origin 重新整理（resetPages）：同一頁重新從快取拿，自動翻譯設定保留', async () => {
-    const translator = { translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
+    const translator = { ...noNotes, translatePage: vi.fn(async () => translatedOutput()) } satisfies Translator;
     const { transcriber, published } = setup({ getTranslator: () => translator });
     await transcriber.update(1, [thumb('a1')], capture);
     await transcriber.setAutoTranslate(1, false);
@@ -564,6 +574,7 @@ describe('翻譯佇列（#34）', () => {
   it('LLM 段併發 2；等 LLM 時本機段繼續做下一頁', async () => {
     const llmCalls: (() => void)[] = [];
     const translator: Translator = {
+      ...noNotes,
       translatePage: (input) =>
         new Promise((resolve) => llmCalls.push(() => void translatorReturning('x').translatePage(input).then(resolve))),
     };
@@ -594,6 +605,7 @@ describe('翻譯佇列（#34）', () => {
     let llmInFlight = 0;
     let llmMax = 0;
     const translator: Translator = {
+      ...noNotes,
       async translatePage(input) {
         llmMax = Math.max(llmMax, ++llmInFlight);
         await flush();
@@ -653,7 +665,7 @@ describe('翻譯佇列（#34）', () => {
   });
 
   it('429 重試後仍失敗：顯示錯誤；按「重試」只重送 LLM、不重跑本機流水線', async () => {
-    let translator: Translator = { translatePage: async () => Promise.reject(new Error('Claude API 429：rate limited')) };
+    let translator: Translator = { ...noNotes, translatePage: async () => Promise.reject(new Error('Claude API 429：rate limited')) };
     const { transcriber, deps } = setup({ getTranslator: () => translator });
     await transcriber.update(1, [thumb('a1')], capture);
     const failed = transcriber.get(1)[0]!.transcript;
@@ -718,101 +730,319 @@ const note = (原文: string, 譯文: string, more: Partial<NotesEntry> = {}): N
   locked: false,
   ...more,
 });
-const noChanges = (): NotesChanges => ({ added: [], filled: [], suggestions: [] });
 
-/** 每次呼叫依序回傳 changes 裡的一份 notes_changes；inputs 記下每次送出的內容。 */
-function translatorWithNotes(changes: NotesChanges[], inputs: TranslateInput[] = []): Translator {
+/**
+ * ① 回傳「譯-id」；② 每次呼叫依序回傳 changes 裡的一份 notes_changes。
+ * inputs 記下每次 ① 送出的內容，notesInputs 記下每次 ② 送出的內容。
+ */
+function translatorWithNotes(changes: NotesChanges[], inputs: TranslateInput[] = [], notesInputs: NotesInput[] = []): Translator {
   let call = 0;
   return {
-    async translatePage(input) {
-      inputs.push(structuredClone(input));
-      const output = await translatorReturning('譯').translatePage(input);
-      return { ...output, notes_changes: changes[call++] ?? noChanges() };
+    translatePage: (input) => translatorReturning('譯', inputs).translatePage(input),
+    async proposeNotes(input) {
+      notesInputs.push(structuredClone(input));
+      return { ...(await noNotes.proposeNotes(input)), notes_changes: changes[call++] ?? noChanges() };
     },
   };
 }
 
-describe('Series Notes 累積（#37）', () => {
-  it('第 1 頁 LLM 新增的條目存進 Notes，第 2 頁送出時就帶著它', async () => {
+/** ② 由測試一個一個回覆；sent 依 ② 送出順序。 */
+function gatedNotes(sent: { input: NotesInput; reply(changes: NotesChanges): void; fail(): void }[]): Translator {
+  return {
+    translatePage: (input) => translatorReturning('譯').translatePage(input),
+    proposeNotes: (input) =>
+      new Promise((resolve, reject) =>
+        sent.push({
+          input,
+          reply: (changes) => void noNotes.proposeNotes(input).then((output) => resolve({ ...output, notes_changes: changes })),
+          fail: () => reject(new Error('Claude API 500')),
+        }),
+      ),
+  };
+}
+
+const adds = (原文: string, 譯文: string, 讀音 = ''): NotesChanges => ({ ...noChanges(), added: [{ 原文, 讀音, 譯文, 類別: '用語' }] });
+
+describe('Series Notes 累積（#37、ADR 0005）', () => {
+  it('第 1 頁背景整理 Notes（②）新增的條目存進 Notes，第 2 頁翻譯時就帶著它', async () => {
     const inputs: TranslateInput[] = [];
     const notes = memoryNotes();
-    const translator = translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: 'きょう', 譯文: '今天', 類別: '用語' }] }], inputs);
+    const translator = translatorWithNotes([adds('今日', '今天', 'きょう')], inputs);
     const { transcriber } = setup({ getTranslator: () => translator, notes });
 
     await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.notesSettled();
     await transcriber.update(1, [thumb('a2')], capture);
 
     expect(inputs.map((i) => i.seriesNotes)).toEqual([[], [note('今日', '今天', { 讀音: 'きょう' })]]);
     expect(notes.entries).toEqual([note('今日', '今天', { 讀音: 'きょう' })]);
   });
 
-  it('依送出 LLM 的順序套用：後送出的先回來也要等，同一個原文先送出的那頁先贏', async () => {
-    const notes = memoryNotes();
-    const sent: { anchor: string; reply(zh: string): void }[] = [];
-    const translator: Translator = {
-      translatePage: (input) =>
-        new Promise((resolve) =>
-          sent.push({
-            anchor: input.items[0]!.id,
-            reply: (zh) =>
-              void translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: zh, 類別: '用語' }] }])
-                .translatePage(input)
-                .then(resolve),
-          }),
-        ),
+  it('② 送這頁的原文與 ① 的譯文（依閱讀順序，跳過 unreadable），帶送出時的 Notes', async () => {
+    const notesInputs: NotesInput[] = [];
+    const translator = translatorWithNotes([], [], notesInputs);
+    const unreadableLoose: Translator = {
+      ...translator,
+      async translatePage(input) {
+        const output = await translator.translatePage(input);
+        return { ...output, items: output.items.map((i) => (i.id === 'l1' ? { ...i, 讀音: '', 譯文: '', unreadable: true } : i)) };
+      },
     };
-    const { transcriber } = setup({ getTranslator: () => translator, notes });
+    const { transcriber } = setup({ getTranslator: () => unreadableLoose, notes: memoryNotes([note('明日', '明天')]) });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.notesSettled();
+
+    expect(notesInputs).toEqual([{ seriesNotes: [note('明日', '明天')], items: [{ kind: 'balloon', 原文: '今日は', 譯文: '譯-b1' }] }]);
+  });
+
+  it('① 回來就顯示、寫快取，不等 ②', async () => {
+    const cache = memoryCache();
+    const sent: Parameters<typeof gatedNotes>[0] = [];
+    const { transcriber, published } = setup({ getTranslator: () => gatedNotes(sent), cache });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(sent).toHaveLength(1); // ② 還沒回來
+    expect(published.at(-1)![0]!.transcript).toMatchObject({ state: 'done', translated: true, translation: { source: 'translated' } });
+    expect(cache.saved).toHaveLength(1);
+  });
+
+  it('Spread 的第二頁先翻完：馬上顯示，不必等第一頁', async () => {
+    let releaseFirst!: () => void;
+    const firstReturns = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const translator: Translator = {
+      ...noNotes,
+      async translatePage(input) {
+        if (input.items[0]!.原文 === '右') await firstReturns;
+        return translatorReturning('譯').translatePage(input);
+      },
+    };
+    const { transcriber, published } = setup({
+      getTranslator: () => translator,
+      analyze: async (request) => {
+        const text = structuredClone(pageText);
+        text.balloons[0]!.原文 = request.candidate.anchorId === 'a1' ? '右' : '左';
+        return text;
+      },
+    });
 
     const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
-    await vi.waitFor(() => expect(sent).toHaveLength(2));
-    sent[1]!.reply('今兒');
+    await vi.waitFor(() => expect(published.at(-1)![1]!.transcript).toMatchObject({ state: 'done', translated: true }));
+    expect(published.at(-1)![0]!.transcript).toEqual({ state: 'analyzing' });
+
+    releaseFirst();
+    await running;
+  });
+
+  it('依 ② 送出的順序套用：後送出的先回來也要等，同一個原文先送出的那頁先贏', async () => {
+    const notes = memoryNotes();
+    const sent: Parameters<typeof gatedNotes>[0] = [];
+    const { transcriber } = setup({ getTranslator: () => gatedNotes(sent), notes });
+
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    expect(sent).toHaveLength(2);
+    sent[1]!.reply(adds('今日', '今兒'));
     await flush();
     expect(notes.entries).toEqual([]);
 
-    sent[0]!.reply('今天');
-    await running;
+    sent[0]!.reply(adds('今日', '今天'));
+    await transcriber.notesSettled();
     expect(notes.entries).toEqual([note('今日', '今天')]);
     expect(notes.suggestions).toEqual([{ seriesId: 'series-1', 原文: '今日', 建議譯文: '今兒', 來源: { pageHash: HASHES.a2 } }]);
   });
 
-  it('先送出的那頁翻譯失敗：不套用它，也不擋住後面的', async () => {
+  it('② 失敗：跳過、不重試，譯文照常；不擋住後面的', async () => {
     const notes = memoryNotes();
-    const sent: { ok(): void; fail(): void }[] = [];
-    const translator: Translator = {
-      translatePage: (input) =>
-        new Promise((resolve, reject) =>
-          sent.push({
-            ok: () =>
-              void translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] }])
-                .translatePage(input)
-                .then(resolve),
-            fail: () => reject(new Error('Claude API 500')),
-          }),
-        ),
-    };
-    const { transcriber } = setup({ getTranslator: () => translator, notes });
+    const sent: Parameters<typeof gatedNotes>[0] = [];
+    const { transcriber, published } = setup({ getTranslator: () => gatedNotes(sent), notes });
 
-    const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
-    await vi.waitFor(() => expect(sent).toHaveLength(2));
-    sent[1]!.ok();
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    sent[1]!.reply(adds('今日', '今天'));
     sent[0]!.fail();
-    await running;
+    await transcriber.notesSettled();
 
+    expect(sent).toHaveLength(2);
     expect(notes.entries).toEqual([note('今日', '今天')]);
+    expect(published.at(-1)!.map((p) => p.transcript.state === 'done' && p.transcript.translated)).toEqual([true, true]);
   });
 
-  it('快取記錄這頁原文裡出現的條目（usedNotes，含這頁剛新增的），其他條目不記', async () => {
+  it('① 失敗就不送 ②', async () => {
+    const translator: Translator = { ...noNotes, proposeNotes: vi.fn(noNotes.proposeNotes), translatePage: async () => Promise.reject(new Error('Claude API 500')) };
+    const { transcriber } = setup({ getTranslator: () => translator });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.notesSettled();
+
+    expect(translator.proposeNotes).not.toHaveBeenCalled();
+  });
+
+  it('快取記錄 ① 送出時 Notes 裡、這頁原文出現的條目（usedNotes），這頁 ② 才新增的不算', async () => {
     const cache = memoryCache();
     const notes = memoryNotes([note('ドン', '咚', { 類別: '狀聲詞' }), note('明日', '明天')]);
-    const translator = translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: 'きょう', 譯文: '今天', 類別: '用語' }] }]);
+    const translator = translatorWithNotes([adds('今日', '今天', 'きょう')]);
     const { transcriber } = setup({ getTranslator: () => translator, notes, cache });
 
     await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.notesSettled();
 
-    expect(cache.saved[0]!.usedNotes).toEqual([
-      { 原文: 'ドン', 譯文: '咚' },
-      { 原文: '今日', 譯文: '今天' },
+    expect(cache.saved[0]!.usedNotes).toEqual([{ 原文: 'ドン', 譯文: '咚' }]);
+    expect(notes.entries).toContainEqual(note('今日', '今天', { 讀音: 'きょう' }));
+  });
+});
+
+describe('Prior Pages（ADR 0005）', () => {
+  /** 原文標上是哪個 anchor，看 Prior Pages 帶了哪幾頁。 */
+  const analyzeByAnchor = async (request: AnalyzeRequest): Promise<PageText> => {
+    const text = structuredClone(pageText);
+    text.balloons[0]!.原文 = request.candidate.anchorId;
+    return text;
+  };
+  /** 每次 ① 送出時帶的 Prior Pages，只看每頁第一句的原文。 */
+  const priorOf = (inputs: TranslateInput[]) => inputs.map((i) => i.priorPages.map((p) => p[0]!.原文));
+
+  it('帶這一批之前最近看過的 2 頁，依看過的順序；每句只有 kind、原文、譯文', async () => {
+    const inputs: TranslateInput[] = [];
+    const { transcriber } = setup({ analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
+
+    for (const anchor of ['a1', 'a2', 'a3', 'a4']) await transcriber.update(1, [thumb(anchor)], capture);
+
+    expect(priorOf(inputs)).toEqual([[], ['a1'], ['a1', 'a2'], ['a2', 'a3']]);
+    expect(inputs[1]!.priorPages).toEqual([
+      [
+        { kind: 'balloon', 原文: 'a1', 譯文: '譯-b1' },
+        { kind: 'loose', 原文: 'ドン', 譯文: '譯-l1' },
+      ],
     ]);
+  });
+
+  it('依讀者看過的順序：往回翻時，前頁是剛剛看的那頁', async () => {
+    const inputs: TranslateInput[] = [];
+    const cache = memoryCache();
+    const { transcriber } = setup({ cache, analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
+
+    for (const anchor of ['a3', 'a2']) await transcriber.update(1, [thumb(anchor)], capture);
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(priorOf(inputs)).toEqual([[], ['a3'], ['a3', 'a2']]);
+  });
+
+  it('同一批（Spread 的兩頁）互相不當 Prior Pages', async () => {
+    const inputs: TranslateInput[] = [];
+    const { transcriber } = setup({ analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2'), thumb('a3')], capture);
+
+    expect(priorOf(inputs)).toEqual([[], ['a1'], ['a1']]);
+  });
+
+  it('命中快取的頁也算看過', async () => {
+    const inputs: TranslateInput[] = [];
+    const cache = memoryCache();
+    const first = setup({ cache, analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([]) });
+    await first.transcriber.update(1, [thumb('a1')], capture);
+
+    const { transcriber } = setup({ cache, analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2')], capture);
+
+    expect(priorOf(inputs)).toEqual([['a1']]);
+  });
+
+  it('前頁還沒翻完就不等，只帶已經翻好的', async () => {
+    const inputs: TranslateInput[] = [];
+    let releaseFirst!: () => void;
+    const firstReturns = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const translator = translatorWithNotes([], inputs);
+    const { transcriber } = setup({
+      analyze: analyzeByAnchor,
+      getTranslator: () => ({
+        ...translator,
+        async translatePage(input) {
+          const output = await translator.translatePage(input);
+          if (input.items[0]!.原文 === 'a1') await firstReturns;
+          return output;
+        },
+      }),
+    });
+
+    const firstRunning = transcriber.update(1, [thumb('a1')], capture);
+    await vi.waitFor(() => expect(inputs).toHaveLength(1));
+    // 翻走：a1 已開始，照樣做完
+    await transcriber.update(1, [thumb('a2')], capture);
+    releaseFirst();
+    await firstRunning;
+    await transcriber.update(1, [thumb('a3')], capture);
+
+    expect(priorOf(inputs)).toEqual([[], [], ['a1', 'a2']]);
+  });
+
+  it('跳過 unreadable 的句子；整頁都 unreadable 的頁送空的', async () => {
+    const inputs: TranslateInput[] = [];
+    const translator = translatorWithNotes([], inputs);
+    const { transcriber } = setup({
+      analyze: analyzeByAnchor,
+      getTranslator: () => ({
+        ...translator,
+        async translatePage(input) {
+          const output = await translator.translatePage(input);
+          return { ...output, items: output.items.map((i) => (i.id === 'l1' ? { ...i, 讀音: '', 譯文: '', unreadable: true } : i)) };
+        },
+      }),
+    });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2')], capture);
+
+    expect(inputs[1]!.priorPages).toEqual([[{ kind: 'balloon', 原文: 'a1', 譯文: '譯-b1' }]]);
+  });
+
+  it('Series 換了就清空；同一部 Series 同 origin 重新整理（換話）保留；停止就忘掉', async () => {
+    const inputs: TranslateInput[] = [];
+    let seriesId = 'series-1';
+    const { transcriber } = setup({ analyze: analyzeByAnchor, getSeriesId: async () => seriesId, getTranslator: () => translatorWithNotes([], inputs) });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    transcriber.resetPages(1);
+    await transcriber.update(1, [thumb('a2')], capture);
+    seriesId = 'series-2';
+    await transcriber.update(1, [thumb('a3')], capture);
+    transcriber.clear(1);
+    await transcriber.update(1, [thumb('a4')], capture);
+
+    expect(priorOf(inputs)).toEqual([[], ['a1'], [], []]);
+  });
+
+  it('沒有 Series 時不帶（分不出前頁是不是同一部作品）', async () => {
+    const inputs: TranslateInput[] = [];
+    const { transcriber } = setup({ analyze: analyzeByAnchor, getSeriesId: async () => undefined, getTranslator: () => translatorWithNotes([], inputs) });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2')], capture);
+
+    expect(priorOf(inputs)).toEqual([[], []]);
+  });
+
+  it('每個 tab 各自記', async () => {
+    const inputs: TranslateInput[] = [];
+    const { transcriber } = setup({ analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(2, [thumb('a2')], capture);
+
+    expect(priorOf(inputs)).toEqual([[], []]);
+  });
+
+  it('重新翻譯：同樣帶畫面上這一批之前最近看過的頁', async () => {
+    const inputs: TranslateInput[] = [];
+    const { transcriber } = setup({ analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2'), thumb('a3')], capture);
+
+    await transcriber.translate(1, HASHES.a3);
+
+    expect(priorOf(inputs).at(-1)).toEqual(['a1']);
   });
 });
 
@@ -855,10 +1085,7 @@ describe('Spread（#35）', () => {
         text.balloons[0]!.原文 = request.subRect === RIGHT ? '右' : '左';
         return text;
       },
-      getTranslator: () => {
-        const translator = translatorReturning('譯');
-        return { translatePage: (input) => (calls.push(input), translator.translatePage(input)) };
-      },
+      getTranslator: () => translatorReturning('譯', calls),
     });
 
     const running = transcriber.update(1, spread(), capture);
@@ -869,18 +1096,12 @@ describe('Spread（#35）', () => {
     expect(calls.map((input) => input.items[0]!.原文)).toEqual(['右', '左']);
   });
 
-  it('兩頁拿到同一份 Notes 快照：右頁的變更在左頁送出前就套用了，左頁仍送右頁送出時的 Notes；左頁看不到的新增不變成建議', async () => {
-    const inputs: TranslateInput[] = [];
+  it('兩頁的 ② 拿到同一份 Notes 快照：右頁的變更在左頁送出前就套用了，左頁仍送右頁送出時的 Notes；左頁看不到的新增不變成建議', async () => {
+    const notesInputs: NotesInput[] = [];
     const notes = memoryNotes([note('明日', '明天')]);
     let releaseLeft!: () => void;
     const leftAnalyzed = new Promise<void>((resolve) => (releaseLeft = resolve));
-    const translator = translatorWithNotes(
-      [
-        { ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] },
-        { ...noChanges(), added: [{ 原文: '今日', 讀音: 'きょう', 譯文: '今兒', 類別: '用語' }] },
-      ],
-      inputs,
-    );
+    const translator = translatorWithNotes([adds('今日', '今天'), adds('今日', '今兒', 'きょう')], [], notesInputs);
     const { transcriber } = setup({
       notes,
       getTranslator: () => translator,
@@ -894,8 +1115,9 @@ describe('Spread（#35）', () => {
     await vi.waitFor(() => expect(notes.entries).toHaveLength(2));
     releaseLeft();
     await running;
+    await transcriber.notesSettled();
 
-    expect(inputs.map((i) => i.seriesNotes)).toEqual([[note('明日', '明天')], [note('明日', '明天')]]);
+    expect(notesInputs.map((i) => i.seriesNotes)).toEqual([[note('明日', '明天')], [note('明日', '明天')]]);
     // 套用仍依送出順序：右頁先贏。左頁的快照裡沒有右頁剛新增的條目，給不同譯名不算想改它：丟掉，空欄位照補
     expect(notes.entries).toEqual([note('明日', '明天'), note('今日', '今天', { 讀音: 'きょう' })]);
     expect(notes.suggestions).toEqual([]);
@@ -903,10 +1125,11 @@ describe('Spread（#35）', () => {
 
   it('不同 anchor 的兩頁不共用快照：後送出的帶著前一頁套用後的 Notes', async () => {
     const inputs: TranslateInput[] = [];
+    const notesInputs: NotesInput[] = [];
     const notes = memoryNotes();
     let releaseSecond!: () => void;
     const secondAnalyzed = new Promise<void>((resolve) => (releaseSecond = resolve));
-    const translator = translatorWithNotes([{ ...noChanges(), added: [{ 原文: '今日', 讀音: '', 譯文: '今天', 類別: '用語' }] }], inputs);
+    const translator = translatorWithNotes([adds('今日', '今天')], inputs, notesInputs);
     const { transcriber } = setup({
       notes,
       getTranslator: () => translator,
@@ -920,8 +1143,10 @@ describe('Spread（#35）', () => {
     await vi.waitFor(() => expect(notes.entries).toHaveLength(1));
     releaseSecond();
     await running;
+    await transcriber.notesSettled();
 
     expect(inputs.map((i) => i.seriesNotes)).toEqual([[], [note('今日', '今天')]]);
+    expect(notesInputs.map((i) => i.seriesNotes)).toEqual([[], [note('今日', '今天')]]);
   });
 });
 
@@ -975,6 +1200,7 @@ describe('過時提示（#38）', () => {
     const cache = memoryCache();
     const version = { model: 'claude-haiku-5-5', promptVersion: 'v2' };
     const dated: Translator = {
+      ...noNotes,
       async translatePage(input) {
         return { ...(await translatorReturning('譯').translatePage(input)), model: 'claude-haiku-5-5-20261001' };
       },

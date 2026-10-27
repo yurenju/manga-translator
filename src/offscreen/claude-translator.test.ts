@@ -1,15 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { TranslateInput } from '../shared/translator.ts';
+import type { NotesInput, TranslateInput } from '../shared/translator.ts';
 import { CLAUDE_MODEL, costUsd, createClaudeTranslator, type ClaudeDeps } from './claude-translator.ts';
 
 const input: TranslateInput = {
   seriesNotes: [
     { seriesId: 's1', 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文: '霧島湊', 類別: '人名', locked: false },
   ],
+  priorPages: [],
   items: [
     { id: 'b1', kind: 'balloon', 原文: 'おはよう！今日は早いね', orientation: 'vertical' },
     { id: 'l1', kind: 'loose', 原文: 'ドドドド', orientation: 'vertical' },
   ],
+};
+
+const notesInput: NotesInput = {
+  seriesNotes: input.seriesNotes,
+  items: [{ kind: 'balloon', 原文: '湊、パン屋に行こう', 譯文: '湊，去麵包店吧' }],
 };
 
 /** structured outputs 回來的 JSON（text 區塊裡的字串）。 */
@@ -18,9 +24,12 @@ const answer = {
     { id: 'b1', reading: 'おはよう！きょうははやいね', zh: '早安！今天好早喔', unreadable: false },
     { id: 'l1', reading: 'どどどど', zh: '', unreadable: true },
   ],
+};
+
+const notesAnswer = {
   notes_changes: {
-    added: [{ ja: 'パン屋', reading: 'ぱんや', zh: '麵包店', category: '地名', note: '', selfRef: '', tone: '', address: '' }],
-    filled: [{ ja: '霧島湊', reading: '', zh: '', category: '', note: '', selfRef: '僕', tone: '', address: '' }],
+    added: [{ ja: 'パン屋', reading: 'ぱんや', zh: '麵包店', category: '地名', note: '' }],
+    filled: [{ ja: '霧島湊', reading: '', zh: '', category: '', note: '主角' }],
     suggestions: [{ ja: '霧島湊', zh: '霧島港', reason: '' }],
   },
 };
@@ -31,13 +40,17 @@ function response(body: unknown, init: { status?: number; headers?: Record<strin
   return new Response(JSON.stringify(body), { status: init.status ?? 200, headers: { 'content-type': 'application/json', ...init.headers } });
 }
 
-const ok = () =>
+const ok = () => response({ model: CLAUDE_MODEL, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(answer) }], usage });
+
+const okNotes = () =>
   response({
     model: CLAUDE_MODEL,
     stop_reason: 'end_turn',
-    content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(answer) }],
+    content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: JSON.stringify(notesAnswer) }],
     usage,
   });
+
+const body = (call: { init: RequestInit }) => JSON.parse(call.init.body as string);
 
 function setup(responses: (() => Response)[], overrides: Partial<ClaudeDeps> = {}) {
   const calls: { url: string; init: RequestInit }[] = [];
@@ -59,7 +72,7 @@ function setup(responses: (() => Response)[], overrides: Partial<ClaudeDeps> = {
 }
 
 describe('Claude 翻譯：request', () => {
-  it('從瀏覽器直接呼叫 Messages API：Haiku 5.5、effort low、structured outputs、不關 thinking、不送 sampling 參數', async () => {
+  it('從瀏覽器直接呼叫 Messages API：Haiku 5.5、effort low、structured outputs、關 thinking、不送 sampling 參數', async () => {
     const { translator, calls } = setup([ok]);
 
     await translator.translatePage(input);
@@ -78,7 +91,8 @@ describe('Claude 翻譯：request', () => {
     expect(body.model).toBe('claude-haiku-5-5');
     expect(body.output_config.effort).toBe('low');
     expect(body.output_config.format.type).toBe('json_schema');
-    expect(body).not.toHaveProperty('thinking');
+    expect(Object.keys(body.output_config.format.schema.properties)).toEqual(['items']); // 只回譯文，Notes 由 ② 整理
+    expect(body.thinking).toEqual({ type: 'disabled' });
     expect(body).not.toHaveProperty('temperature');
     expect(body).not.toHaveProperty('stream');
   });
@@ -96,11 +110,41 @@ describe('Claude 翻譯：request', () => {
     expect(body.system[1].text).not.toContain('s1'); // seriesId 不必送
     expect(body.messages).toHaveLength(1); // 不帶前一頁的對話
     expect(body.messages[0].role).toBe('user');
+    expect(body.messages[0].content).toHaveLength(1); // 沒有 Prior Pages
     const sent = JSON.parse(body.messages[0].content[0].text);
     expect(sent).toEqual([
       { id: 'b1', kind: 'balloon', ja: 'おはよう！今日は早いね' },
       { id: 'l1', kind: 'loose', ja: 'ドドドド' },
     ]);
+  });
+
+  it('Prior Pages 放在 user message 這頁原文的前面，每句只送 kind、原文、譯文', async () => {
+    const { translator, calls } = setup([ok]);
+    const prior = [
+      [{ kind: 'balloon' as const, 原文: '個性を大事に', 譯文: '重視個性' }],
+      [{ kind: 'loose' as const, 原文: 'ガラッ', 譯文: '喀啦' }],
+    ];
+
+    await translator.translatePage({ ...input, priorPages: prior });
+
+    const content = body(calls[0]!).messages[0].content;
+    expect(content).toHaveLength(2);
+    expect(content[0].text).toMatch(/^context/);
+    expect(JSON.parse(content[0].text.slice(content[0].text.indexOf('\n') + 1))).toEqual([
+      [{ kind: 'balloon', ja: '個性を大事に', zh: '重視個性' }],
+      [{ kind: 'loose', ja: 'ガラッ', zh: '喀啦' }],
+    ]);
+    expect(content[1].text).toContain('おはよう！今日は早いね');
+  });
+
+  it('Prior Pages 不同，system 仍逐字相同（prompt cache 照樣命中）', async () => {
+    const { translator, calls } = setup([ok, ok]);
+
+    await translator.translatePage(input);
+    await translator.translatePage({ ...input, priorPages: [[{ kind: 'balloon', 原文: '前', 譯文: '前' }]] });
+
+    const [a, b] = calls.map(body);
+    expect(a.system).toEqual(b.system);
   });
 
   it('同樣的 Series Notes 每頁送出的 system 逐字相同（prompt cache 才會命中）', async () => {
@@ -138,18 +182,6 @@ describe('Claude 翻譯：structured output 回應解析', () => {
     expect(output.model).toBe('claude-haiku-5-5');
   });
 
-  it('notes_changes 轉成新增／補空欄位／建議修改三種；空字串代表沒有這個欄位', async () => {
-    const { translator } = setup([ok]);
-
-    const output = await translator.translatePage(input);
-
-    expect(output.notes_changes).toEqual({
-      added: [{ 原文: 'パン屋', 讀音: 'ぱんや', 譯文: '麵包店', 類別: '地名' }],
-      filled: [{ 原文: '霧島湊', fields: { 自稱: '僕' } }],
-      suggestions: [{ 原文: '霧島湊', 建議譯文: '霧島港' }],
-    });
-  });
-
   it('記錄延遲、token 用量（input 含快取的部分）與費用', async () => {
     const { translator } = setup([ok]);
 
@@ -185,6 +217,63 @@ describe('Claude 翻譯：structured output 回應解析', () => {
     ]);
 
     await expect(translator.translatePage(input)).rejects.toThrow(/格式/);
+  });
+});
+
+describe('Claude 整理 Notes（②）', () => {
+  it('不關 thinking；只回 notes_changes；送這頁的原文與 ① 的譯文，Series Notes 在 system 第二段', async () => {
+    const { translator, calls } = setup([okNotes]);
+
+    await translator.proposeNotes(notesInput);
+
+    const sent = body(calls[0]!);
+    expect(sent.model).toBe('claude-haiku-5-5');
+    expect(sent).not.toHaveProperty('thinking');
+    expect(sent.output_config.effort).toBe('low');
+    expect(Object.keys(sent.output_config.format.schema.properties)).toEqual(['notes_changes']);
+    expect(sent.system).toHaveLength(2);
+    expect(sent.system[1].text).toContain('霧島湊');
+    expect(JSON.parse(sent.messages[0].content[0].text)).toEqual([{ kind: 'balloon', ja: '湊、パン屋に行こう', zh: '湊，去麵包店吧' }]);
+  });
+
+  it('LLM 不填自稱、語氣、稱呼：schema 裡沒有這些欄位', async () => {
+    const { translator, calls } = setup([okNotes]);
+
+    await translator.proposeNotes(notesInput);
+
+    const fields = body(calls[0]!).output_config.format.schema.properties.notes_changes.properties.added.items.properties;
+    expect(Object.keys(fields)).toEqual(['ja', 'reading', 'zh', 'category', 'note']);
+  });
+
+  it('notes_changes 轉成新增／補空欄位／建議修改三種；空字串代表沒有這個欄位', async () => {
+    const { translator } = setup([okNotes]);
+
+    const output = await translator.proposeNotes(notesInput);
+
+    expect(output.notes_changes).toEqual({
+      added: [{ 原文: 'パン屋', 讀音: 'ぱんや', 譯文: '麵包店', 類別: '地名' }],
+      filled: [{ 原文: '霧島湊', fields: { 備註: '主角' } }],
+      suggestions: [{ 原文: '霧島湊', 建議譯文: '霧島港' }],
+    });
+    expect(output.latencyMs).toBe(2300);
+  });
+
+  it('翻譯與整理 Notes 的指示不同，各自的 system 第一段都固定（各自吃得到 prompt cache）', async () => {
+    const { translator, calls } = setup([ok, okNotes, okNotes]);
+
+    await translator.translatePage(input);
+    await translator.proposeNotes(notesInput);
+    await translator.proposeNotes({ ...notesInput, items: [] });
+
+    const [t, n1, n2] = calls.map(body);
+    expect(t.system[0]).not.toEqual(n1.system[0]);
+    expect(n1.system).toEqual(n2.system);
+  });
+
+  it('回應不符合 schema 時視為失敗', async () => {
+    const { translator } = setup([ok]);
+
+    await expect(translator.proposeNotes(notesInput)).rejects.toThrow(/格式/);
   });
 });
 

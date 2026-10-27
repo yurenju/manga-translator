@@ -16,11 +16,12 @@ import type {
   Rect,
   TestConnectionResponse,
   TranslateResponse,
+  ProposeNotesResponse,
 } from '../shared/messages.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
 import type { PageText } from '../shared/page-text.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { TranslateInput, TranslateOutput } from '../shared/translator.ts';
+import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
 import { subImageRect, thumbnailSize, toImageRect, toSubRect } from './crop.ts';
 import { eraseLuminance } from './erase-color.ts';
@@ -201,6 +202,22 @@ async function translate(input: TranslateInput, fake: FakeTranslatorConfig | und
   }
 }
 
+/** ②（ADR 0005）：失敗由 SW 跳過，不重試。 */
+async function proposeNotes(input: NotesInput, fake: FakeTranslatorConfig | undefined): Promise<NotesOutput> {
+  if (__E2E__ && fake) return createFakeTranslator(SYNTHETIC_GROUND_TRUTH, fake).proposeNotes(input);
+  const translator = await claude();
+  if (!translator) throw new NoApiKeyError('尚未設定 API key');
+  trace('notes:request', { input });
+  try {
+    const output = await translator.proposeNotes(input);
+    trace('notes:response', { output });
+    return output;
+  } catch (e) {
+    trace('notes:error', { error: e });
+    throw e;
+  }
+}
+
 async function testConnection(): Promise<TestConnectionResponse> {
   try {
     const translator = await claude();
@@ -234,6 +251,13 @@ chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) =
           error: e instanceof Error ? e.message : String(e),
           ...(e instanceof NoApiKeyError ? { noApiKey: true as const } : {}),
         } satisfies TranslateResponse),
+    );
+    return true;
+  }
+  if (message.type === 'offscreen:proposeNotes') {
+    proposeNotes(message.input, message.fake).then(
+      (output) => sendResponse({ output } satisfies ProposeNotesResponse),
+      (e: unknown) => sendResponse({ error: e instanceof Error ? e.message : String(e) } satisfies ProposeNotesResponse),
     );
     return true;
   }

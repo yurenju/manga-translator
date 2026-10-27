@@ -2,7 +2,7 @@
  * 一個 Page 上的文字：Balloon 與 Loose Text（spec #27 第 4.3 節的 balloons／looseText）。
  * 本機流水線（偵測＋OCR＋閱讀順序）產生座標、原文、順序；讀音與譯文來自 Translator，沒有時用 kuromoji 讀音。
  */
-import type { UsedNote } from './translator.ts';
+import type { TranslatedLine, UsedNote } from './translator.ts';
 
 /**
  * 相對 Page 的 0～1 比例座標（ADR 0003）。跟 shared/messages.ts 的 Rect（畫面 CSS px）是不同東西，
@@ -51,6 +51,17 @@ export interface LooseText {
 export interface PageText {
   balloons: BalloonText[];
   looseText: LooseText[];
+}
+
+/** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */
+export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
+  return [
+    ...balloons.map((b) => ({ ...b, kind: 'balloon' as const })),
+    ...looseText.map((l) => ({ ...l, kind: 'loose' as const })),
+  ]
+    .filter((t) => !t.unreadable)
+    .sort((a, b) => a.order - b.order)
+    .map(({ kind, 原文, 譯文 }) => ({ kind, 原文, 譯文 }));
 }
 
 /**
