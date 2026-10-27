@@ -1,113 +1,77 @@
-import { readFile } from 'node:fs/promises';
-import type { Page } from '@playwright/test';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import type { Page, Worker } from '@playwright/test';
+import type { Message, PageView } from '../src/shared/messages.ts';
+import { readGroundTruth } from '../src/testing/synthetic.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, test } from './fixtures.ts';
 
 /**
  * 用真的視窗（1280×1500）而不是 Playwright 模擬的 viewport：啟動時 side panel 會真的打開、把頁面擠窄，
  * 模擬的 viewport 不會跟著變，量到的 rect 就跟 captureVisibleTab 的截圖對不上（真實 Chrome 沒有這個問題）。
  * 可視高度約 1390 px；仿 Jump+ 每頁顯示 430×625、間隔 16 px，header 下方第 1、2 頁完整可見，第 3 頁只露出上半部。
+ *
+ * 認頁靠 FakeTranslator：它把 OCR 原文對回全部合成頁的 ground truth，所以逐字稿裡出現的譯文屬於哪一張
+ * 合成頁，就知道裁出來的是哪一頁；裁切偏掉時會混進別頁的句子或認不出來。
  */
-test.use({ viewport: null });
+test.use({ viewport: null, fakeTranslator: true });
 
-const SYNTHETIC = new URL('../testdata/synthetic/out/', import.meta.url);
+/** 第一次載入模型（從 mock site 下載＋wasm 編譯）加上兩頁 OCR。 */
+const TRANSCRIPT_TIMEOUT = 60_000;
 
-/** 仿 Jump+ 前三頁；第 3 頁永遠只露出一部分，用來確認縮圖不會誤認成它。 */
+/** 仿 Jump+ 前三頁；第 3 頁永遠只露出一部分，用來確認不會誤認成它。 */
 const FIRST_PAGES = ['p01-basic', 'p02-ruby', 'p03-shapes'];
 
-/**
- * 縮圖跟原合成頁的 dHash 距離在這以內算「內容一致」（256 bits）。
- * 實測同一頁約 21–22（大片白底的相鄰區塊亮度幾乎一樣，縮放雜訊就會翻轉），不同頁 100 以上。
- */
-const SAME_PAGE_MAX_DISTANCE = 40;
+/** 一頁 7 句裡至少要認出這麼多句才算「是這一頁」（截圖裡的 Page 只有原圖約一半大，OCR 偶爾漏一句）。 */
+const MIN_MATCHED_LINES = 5;
 
-async function syntheticDataUrl(id: string): Promise<string> {
-  return `data:image/png;base64,${(await readFile(new URL(`${id}.png`, SYNTHETIC))).toString('base64')}`;
+const pageList = (panel: Page) => panel.getByRole('list', { name: 'Page' });
+
+/** 逐字稿裡出現了哪幾張合成頁的譯文，各幾句。 */
+async function groundTruthHits(panel: Page, name: string): Promise<Record<string, number>> {
+  const text = await pageList(panel).getByRole('listitem', { name }).getByRole('list', { name: '逐字稿' }).innerText();
+  return Object.fromEntries(FIRST_PAGES.map((id) => [id, readGroundTruth(id).texts.filter((t) => text.includes(t.zh)).length]));
 }
 
-async function thumbnails(panel: Page): Promise<string[]> {
-  return panel.getByRole('list', { name: 'Page' }).getByRole('img').evaluateAll((imgs) => imgs.map((i) => (i as HTMLImageElement).src));
-}
-
-/** 在瀏覽器裡算 16×16 dHash 的 Hamming 距離。 */
-async function hashDistance(panel: Page, a: string, b: string): Promise<number> {
-  return panel.evaluate(
-    async ([a, b]) => {
-      const W = 17;
-      const H = 16;
-      // 一步縮到 17×16 會只取樣到零星像素（細線條忽有忽無），所以先縮到 B 倍大，再自己做區塊平均。
-      const B = 8;
-      async function dHash(src: string): Promise<boolean[]> {
-        const img = new Image();
-        img.src = src;
-        await img.decode();
-        const canvas = new OffscreenCanvas(W * B, H * B);
-        const ctx = canvas.getContext('2d')!;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, 0, 0, W * B, H * B);
-        const { data } = ctx.getImageData(0, 0, W * B, H * B);
-        const gray = (x: number, y: number) => {
-          let sum = 0;
-          for (let dy = 0; dy < B; dy++) {
-            for (let dx = 0; dx < B; dx++) {
-              const i = ((y * B + dy) * W * B + x * B + dx) * 4;
-              sum += data[i]! * 0.299 + data[i + 1]! * 0.587 + data[i + 2]! * 0.114;
-            }
-          }
-          return sum / (B * B);
-        };
-        const bits: boolean[] = [];
-        for (let y = 0; y < H; y++) for (let x = 0; x < W - 1; x++) bits.push(gray(x, y) < gray(x + 1, y));
-        return bits;
-      }
-      const [ha, hb] = await Promise.all([dHash(a), dHash(b)]);
-      return ha.filter((bit, i) => bit !== hb[i]).length;
-    },
-    [a, b] as const,
-  );
-}
-
-/** 每張縮圖都跟預期的合成頁最接近，而且距離在門檻內。 */
-async function expectThumbnailsMatch(panel: Page, ids: string[]): Promise<void> {
-  await expect.poll(async () => (await thumbnails(panel)).length).toBe(ids.length);
-  const thumbs = await thumbnails(panel);
-  const originals = await Promise.all(FIRST_PAGES.map(syntheticDataUrl));
-  for (const [i, thumb] of thumbs.entries()) {
-    const distances = await Promise.all(originals.map((o) => hashDistance(panel, thumb, o)));
-    const expected = FIRST_PAGES.indexOf(ids[i]!);
-    expect(distances[expected], `縮圖 ${i} 與 ${ids[i]} 的距離（全部：${distances}）`).toBeLessThanOrEqual(
-      SAME_PAGE_MAX_DISTANCE,
-    );
-    expect(Math.min(...distances)).toBe(distances[expected]);
+/** side panel 依序列出的 Page 正好是 ids：頁首「第 1 頁」…，每頁逐字稿只有那張合成頁的譯文。 */
+async function expectPagesListed(panel: Page, ids: string[]): Promise<void> {
+  const names = ids.map((_, i) => `第 ${i + 1} 頁`);
+  await expect(pageList(panel).getByRole('heading')).toHaveText(names);
+  for (const [i, id] of ids.entries()) {
+    await expect
+      .poll(async () => (await groundTruthHits(panel, names[i]!))[id], { message: `${names[i]} 是 ${id}`, timeout: TRANSCRIPT_TIMEOUT })
+      .toBeGreaterThanOrEqual(MIN_MATCHED_LINES);
+    const others = Object.entries(await groundTruthHits(panel, names[i]!)).filter(([other, n]) => other !== id && n > 0);
+    expect(others, `${names[i]} 混進別頁的句子`).toEqual([]);
   }
 }
 
-test('啟動後 side panel 列出完整可見的 Page 縮圖，只露出一部分的不列', async ({ context, sw, extensionId, mockSite }) => {
+test('啟動後 side panel 列出完整可見的 Page，只露出一部分的不列', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
-  await expectThumbnailsMatch(panel, ['p01-basic', 'p02-ruby']);
+  await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
 });
 
 test('捲動後重新擷取：上下都只露出一部分時只列中間那頁', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await expectThumbnailsMatch(panel, ['p01-basic', 'p02-ruby']);
+  await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
 
   await page.evaluate(() => window.scrollTo(0, 300));
-  await panel.getByRole('button', { name: '重新擷取' }).click();
+  await chooseFromPanelMenu(panel, '重新擷取頁面');
 
-  await expectThumbnailsMatch(panel, ['p02-ruby']);
+  await expectPagesListed(panel, ['p02-ruby']);
 });
 
 test('連續觸發時截圖不超過 2 次/秒', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await expectThumbnailsMatch(panel, ['p01-basic', 'p02-ruby']);
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
 
   // 同一個 tab 還沒開始的掃描會合併，連按 5 次截幾次不一定；所以每次截圖一送出就馬上再按，
   // 下一次掃描排在這次後面、不限速的話會緊接著截。翻頁偵測（#34）也會觸發截圖，所以用相對次數。
   const captureCount = () => sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
-  const button = panel.getByRole('button', { name: '重新擷取' });
+  const rescan = () => chooseFromPanelMenu(panel, '重新擷取頁面');
   for (let i = 0; i < 5; i++) {
     const before = await captureCount();
-    await button.click();
+    await rescan();
     await expect.poll(captureCount, { intervals: [20] }).toBeGreaterThan(before);
   }
 
@@ -115,13 +79,98 @@ test('連續觸發時截圖不超過 2 次/秒', async ({ context, sw, extension
   for (let i = 1; i < log.length; i++) expect(log[i]! - log[i - 1]!).toBeGreaterThanOrEqual(500);
 });
 
+/** 頁首的小圖示（裝飾用、aria-hidden），只拿來數格子。 */
+const pageIcon = (panel: Page, name: string) => pageList(panel).getByRole('listitem', { name }).locator('svg').first();
+
+test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀」，右頁在前；沒有縮圖', async ({ context, sw, extensionId, mockSite }) => {
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+  await expect(pageList(panel).getByRole('img')).toHaveCount(0);
+  // 頁首圖示畫兩格（Spread）
+  await expect(pageIcon(panel, '右頁 · 先讀').locator('rect')).toHaveCount(2);
+});
+
+/** Spread 兩頁都翻好（之後 SW 不會再更新 Page 列表）。 */
+const untilBothTranslated = (panel: Page) =>
+  expect(panel.getByRole('status', { name: '翻譯狀態' })).toHaveText([/^已翻譯・/, /^已翻譯・/], { timeout: TRANSCRIPT_TIMEOUT });
+
+/** 讓 SW 廣播一份改過的 Page 列表給 side panel（模擬 SW 給的順序或欄位不同）。 */
+async function broadcastEditedPages(
+  { sw, panel, tabId }: { sw: Worker; panel: Page; tabId: number },
+  edit: (pages: PageView[]) => PageView[],
+): Promise<void> {
+  await untilBothTranslated(panel);
+  const { pages } = await panel.evaluate((tabId) => chrome.runtime.sendMessage({ type: 'panel:getPages', tabId }), tabId);
+  const message = { type: 'pages:updated', tabId, pages: edit(pages) } satisfies Message;
+  await sw.evaluate((message) => chrome.runtime.sendMessage(message), message);
+}
+
+test('SW 給的 Spread 順序是左頁在前，side panel 仍排成右頁在前', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
+  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+  await untilBothTranslated(panel);
+  const rightFirst = await pageList(panel).getByRole('list', { name: '逐字稿' }).allTextContents();
+
+  await broadcastEditedPages({ sw, panel, tabId }, (pages) => [...pages].reverse());
+  await expect(pageList(panel).getByRole('list', { name: '逐字稿' })).toHaveText(rightFirst);
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+});
+
+test('同一個 anchor 的兩個 Page 沒有 subRect：分不出左右，頁首是「第 N 頁」', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
+  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+
+  await broadcastEditedPages({ sw, panel, tabId }, (pages) => pages.map(({ subRect: _, ...page }) => page));
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
+});
+
+test('單頁的頁首是「第 N 頁」、圖示一格', async ({ context, sw, extensionId, mockSite }) => {
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
+  await expect(pageIcon(panel, '第 1 頁').locator('rect')).toHaveCount(1);
+});
+
+test('去黑邊的單頁（Page 只佔 anchor 的一部分）也是「第 N 頁」，不是右頁', async ({ context, sw, extensionId, mockSite }) => {
+  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+
+  // 仿 Kindle 第 3 個畫面是 p01 單頁，左右有黑邊
+  for (const index of [1, 2]) {
+    await page.keyboard.press('ArrowLeft');
+    await page.locator(`body[data-ready="true"][data-page-index="${index}"]`).waitFor();
+  }
+
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁']);
+});
+
+test('每個 Page 的翻譯狀態在頁首右側，跟標題同一行', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+
+  for (const name of ['第 1 頁', '第 2 頁']) {
+    const item = pageList(panel).getByRole('listitem', { name });
+    const status = item.getByRole('status', { name: '翻譯狀態' });
+    await expect(status).toHaveText(/^已翻譯・fake・/, { timeout: TRANSCRIPT_TIMEOUT });
+    const heading = (await item.getByRole('heading', { name }).boundingBox())!;
+    const box = (await status.boundingBox())!;
+    expect(box.x, `${name} 狀態在標題右邊`).toBeGreaterThan(heading.x + heading.width);
+    expect(box.y, `${name} 狀態跟標題同一行`).toBeLessThan(heading.y + heading.height);
+    expect(box.y + box.height).toBeGreaterThan(heading.y);
+  }
+});
+
 test.describe('DPR 1.5', () => {
   test.use({ realDeviceScaleFactor: 1.5 });
 
   test('裁切位置仍正確', async ({ context, sw, extensionId, mockSite }) => {
+    test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
     const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
     expect(await page.evaluate(() => devicePixelRatio)).toBe(1.5);
-    await expectThumbnailsMatch(panel, ['p01-basic', 'p02-ruby']);
+    await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
   });
 });

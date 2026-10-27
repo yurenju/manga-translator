@@ -1,7 +1,8 @@
 import type { CaptureFinishedResponse, Message, PageCandidate, PageCandidatesResponse, Rect } from '../shared/messages.ts';
+import { loadPageMode, onPageModeChange } from '../shared/page-mode.ts';
 import { createTrace } from '../shared/trace.ts';
 import { createCapturePrep } from './capture.ts';
-import { createOverlay, HOST_ATTRIBUTE, isShown } from './overlay.ts';
+import { createOverlay, HOST_ATTRIBUTE, isShown, untilRepainted } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
 import { pageCandidateRejection } from './page-candidates.ts';
 import { watchPageTurns } from './page-turn.ts';
@@ -100,6 +101,15 @@ if (!globalThis.__naruhodo) {
     },
   });
 
+  // Page Mode 是全域設定，content script 自己讀、自己聽變更（side panel 切換時立刻跟著變）。
+  // 讀到之前不畫覆蓋層：學習時不能先用預設的閱讀閃一下譯文
+  const pageModeLoaded = loadPageMode().then((mode) => overlay.setPageMode(mode));
+  const stopWatchingPageMode = onPageModeChange(pageModeLoaded, (mode) => {
+    overlay.setPageMode(mode);
+    // 切回閱讀：譯文重新出現，跟剛畫好時一樣讓 SW 記下帶覆蓋層的樣子，下次截圖就不必藏
+    if (mode === 'read') void untilRepainted().then(() => send({ type: 'content:overlayShown' }));
+  });
+
   /** 在自己的覆蓋層（shadow host）裡。 */
   const inOverlayHost = (el: Element) => el.closest(`[${HOST_ATTRIBUTE}]`) !== null;
   const capturePrep = createCapturePrep({ overlay, anchors: () => [...anchors.values()], isOwn: inOverlayHost });
@@ -134,10 +144,9 @@ if (!globalThis.__naruhodo) {
       case 'content:showOverlay': {
         // anchor 不在最近一次量到的 Page 裡（已經捲走或換頁）就不覆蓋
         const anchor = anchors.get(message.anchorId);
-        overlay.setEnabled(message.enabled);
         if (anchor instanceof HTMLElement)
-          overlay
-            .show(anchor, message.subRect, message.text, message.pageHash)
+          pageModeLoaded
+            .then(() => overlay.show(anchor, message.subRect, message.text, message.pageHash))
             .then(() => send({ type: 'content:overlayShown' }))
             .catch((e: unknown) => console.warn('overlay failed', e));
         else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });
@@ -156,9 +165,6 @@ if (!globalThis.__naruhodo) {
       case 'content:highlight':
         overlay.highlight(message.line);
         return false;
-      case 'content:setOverlayEnabled':
-        overlay.setEnabled(message.enabled);
-        return false;
       case 'content:stop':
         stop();
         return false;
@@ -171,6 +177,7 @@ if (!globalThis.__naruhodo) {
   function stop() {
     chrome.runtime.onMessage.removeListener(onMessage);
     stopWatching();
+    stopWatchingPageMode();
     stopRepaint();
     overlay.clear();
     anchors.clear();

@@ -35,6 +35,7 @@
 | A3 | 已啟動時再點一次圖示 | trace：第二次的 `activate` 是 `reused: true`、`seriesId` 跟第一次相同；沒有新的 `series:forUrl` |
 | A4 | 在沒有漫畫的普通網頁點圖示 | trace：`scan:noCandidates`；沒有 `console-error`／`exception`。使用者回報：side panel 顯示沒有 Page，不當掉 |
 | A5 | 啟動中重新整理 tab，**不點圖示**，等 10 秒 | 記錄結果即可：同 origin 會重新注入、繼續啟動（`src/background/index.ts` 的 `tabs.onUpdated`），但 Chrome 換頁時會收回 `activeTab`。trace：看有沒有新的 `capture`，或 `console-warn`／`console-error` 出現截圖失敗。使用者回報：有沒有繼續翻譯 |
+| A6 | 看工具列上的外掛圖示（釘選出來），Chrome 外觀分別切淺色與深色主題各看一次；再打開 side panel | 使用者回報：16px icon（藍色對話框裡白色「な」）在淺色與深色工具列上都認得出來；side panel 標題是 logo＋「Naruhodo」 |
 
 ### B. 截圖與 Page 定位
 
@@ -79,6 +80,7 @@
 | E5 | Kindle 跨頁與單頁各看一次 | **使用者回報**：同 E3、E4 |
 | E6 | 滑鼠移到譯文上 | **使用者回報**：tooltip 與 highlight 出現在滑鼠指的那句，side panel 對應的 Line 同步標示 |
 | E7 | 在 Jump+ 用網站的「拡大」 | trace：`overlay:show` 重新排版（新的 `screenScale`）或 `overlay:reattach`。使用者回報：放大後位置仍對 |
+| E8 | 滑鼠移到有振り仮名的那句，再看 side panel 的逐字稿 | **使用者回報**（design tokens，#71）：tooltip 是深色底、ルビ淺朱色；side panel 的ルビ是朱色、按鈕與選取是藍染色，兩邊看起來是同一個產品；網站的 CSS 沒有把 tooltip 的顏色或字型蓋掉 |
 
 ### F. 快取
 
@@ -156,6 +158,7 @@
 session：<YYYYMMDD-HHmmss>
 時間段：A–B 約 hh:mm、D 約 hh:mm、……
 使用者回報：
+- A6：
 - E3：
 - E4：
 - E5：

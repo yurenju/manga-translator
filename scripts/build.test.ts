@@ -32,7 +32,7 @@ describe('正式 build', () => {
     const manifest = await readJson(prodDir, 'manifest.json');
 
     expect(manifest.manifest_version).toBe(3);
-    expect([...manifest.permissions].sort()).toEqual(['activeTab', 'offscreen', 'scripting', 'sidePanel', 'unlimitedStorage']);
+    expect([...manifest.permissions].sort()).toEqual(['activeTab', 'offscreen', 'scripting', 'sidePanel', 'storage', 'unlimitedStorage']);
     expect(manifest.host_permissions).toBeUndefined();
     expect(manifest.optional_host_permissions).toBeUndefined();
     expect(manifest.content_scripts).toBeUndefined();
@@ -109,6 +109,24 @@ describe('正式 build', () => {
 
     expect(manifest.cross_origin_embedder_policy).toEqual({ value: 'require-corp' });
     expect(manifest.cross_origin_opener_policy).toEqual({ value: 'same-origin' });
+  });
+
+  it('外掛 icon 與工具列 icon 都指向打包進去的 16/32/48/128 px PNG', async () => {
+    const manifest = await readJson(prodDir, 'manifest.json');
+    const expected = { '16': 'icons/icon-16.png', '32': 'icons/icon-32.png', '48': 'icons/icon-48.png', '128': 'icons/icon-128.png' };
+
+    expect(manifest.icons).toEqual(expected);
+    expect(manifest.action.default_icon).toEqual(expected);
+    for (const [size, file] of Object.entries(expected)) {
+      const png = await readFile(join(prodDir, file));
+      // PNG 的 IHDR：寬高在第 16、20 byte
+      expect(png.subarray(1, 4).toString()).toBe('PNG');
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([Number(size), Number(size)]);
+    }
+  });
+
+  it('side panel 標題旁的 logo 用同一份 SVG 母檔', async () => {
+    expect(await readText(prodDir, 'icons/naruhodo.svg')).toBe(await readFile('src/icons/naruhodo.svg', 'utf8'));
   });
 
   it('CSP 只多開放編譯 wasm，不開放 eval 與外部 script', async () => {

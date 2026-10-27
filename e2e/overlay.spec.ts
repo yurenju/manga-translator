@@ -4,9 +4,9 @@
  */
 import type { Page, Worker } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, sentOriginals, test } from './fixtures.ts';
 import { WATERMARK_TEXT } from './mock-site/jumpplus.ts';
-import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
+import { overlayHostCount, pageMode, shownErasers, shownTranslations, type ScreenRect } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
 
@@ -80,7 +80,7 @@ async function expectAligned(page: Page, label: string): Promise<void> {
 const hostVisibility = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-naruhodo-overlay]')].map((h) => getComputedStyle(h).visibility));
 
-test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；覆蓋開關', async ({ context, sw, extensionId, mockSite }, testInfo) => {
+test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；Page Mode 切到學習時頁面沒有譯文',async ({ context, sw, extensionId, mockSite }, testInfo) => {
   test.setTimeout(OVERLAY_TIMEOUT + 60_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await waitForOverlay(page);
@@ -107,12 +107,19 @@ test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；
   await page.screenshot({ path: zoomed });
   await testInfo.attach('overlay-zoomed', { path: zoomed, contentType: 'image/png' });
 
-  const toggle = panel.getByRole('checkbox', { name: '覆蓋' });
-  await expect(toggle).toBeChecked();
-  await toggle.uncheck();
-  await expect.poll(() => hostVisibility(page)).toEqual(['hidden', 'hidden']);
-  await toggle.check();
-  await expect.poll(() => hostVisibility(page)).toEqual(['visible', 'visible']);
+  // Page Mode：預設閱讀；學習時頁面上沒有譯文（擦字也拿掉），host 照常顯示（tooltip、高亮框還要用）
+  await expect(pageMode(panel, '閱讀')).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('switch', { name: '覆蓋' })).toHaveCount(0);
+  await expect(shownTranslations(page)).not.toHaveCount(0);
+  await pageMode(panel, '學習').click();
+  await expect(pageMode(panel, '學習')).toHaveAttribute('aria-pressed', 'true');
+  await expect(pageMode(panel, '閱讀')).toHaveAttribute('aria-pressed', 'false');
+  await expect(shownTranslations(page)).toHaveCount(0);
+  await expect(shownErasers(page)).toHaveCount(0);
+  expect(await hostVisibility(page)).toEqual(['visible', 'visible']);
+  await pageMode(panel, '閱讀').click();
+  await expect(shownTranslations(page)).not.toHaveCount(0);
+  await expectAligned(page, '切回閱讀後');
 });
 
 test('主頁面重繪把 host 拿掉後自動掛回；停止後所有 host 消失、position 還原', async ({ context, sw, extensionId, mockSite }) => {
@@ -162,7 +169,7 @@ test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子�
 
   // 覆蓋層顯示中再擷取一次（SW 的 captureVisibleTab）
   const count = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
-  await panel.getByRole('button', { name: '重新擷取' }).click();
+  await chooseFromPanelMenu(panel, '重新擷取頁面');
   await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(count);
   await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
   const captured = (await sw.evaluate(() => globalThis.__captures!.at(-1)!)) as string;
@@ -246,9 +253,9 @@ test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', ()
     test.setTimeout(OVERLAY_TIMEOUT + 30_000);
     const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?watermark=1&stacked=1` });
     await waitForOverlay(page);
-    // 關掉覆蓋開關、點一下觸發重掃：版面已經穩定（截圖時的位置＝現在量到的位置），截圖裡也沒有自己的譯文
-    await panel.getByRole('checkbox', { name: '覆蓋' }).uncheck();
-    await expect.poll(() => hostVisibility(page)).toEqual(['hidden', 'hidden']);
+    // 切到學習、點一下觸發重掃：版面已經穩定（截圖時的位置＝現在量到的位置），截圖裡也沒有自己的譯文
+    await pageMode(panel, '學習').click();
+    await expect(shownTranslations(page)).toHaveCount(0);
     const captures = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
     await page.mouse.click(5, 5);
     await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(captures);

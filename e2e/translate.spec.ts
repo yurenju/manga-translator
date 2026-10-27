@@ -4,7 +4,7 @@
  * 也檢查 key 不經過 content script 與 messaging（spec #27 第 5 節）。
  */
 import type { Page, Worker } from '@playwright/test';
-import { activateOnJumpPlus, expect, openSidePanel, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test } from './fixtures.ts';
 
 test.use({ viewport: null, fakeTranslator: true, requireApiKey: true, unreadableTexts: ['もちろん！'] });
 
@@ -12,7 +12,7 @@ const TRANSCRIPT_TIMEOUT = 60_000;
 const FAKE_KEY = 'sk-ant-e2e-not-a-real-key-WXYZ';
 
 const firstTranscript = (panel: Page) =>
-  panel.getByRole('list', { name: 'Page' }).getByRole('listitem').filter({ has: panel.getByRole('img') }).first().getByRole('list', { name: '逐字稿' });
+  panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: '第 1 頁' }).getByRole('list', { name: '逐字稿' });
 
 /** 在 side panel 裡記下所有 runtime 訊息（SW ↔ offscreen 的 sendMessage 也會廣播到這裡）。 */
 async function recordPanelMessages(panel: Page): Promise<void> {
@@ -73,9 +73,9 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await expect(transcript.getByText('未翻譯').first()).toBeVisible();
   await expect(panel.getByText('尚未設定 API key')).toBeVisible();
 
-  // 設定區：輸入 key，只顯示末四碼
-  await panel.getByRole('button', { name: '設定' }).click();
-  const settings = panel.getByRole('region', { name: '設定' });
+  // ⚙ 選單的「API key 與模型」：輸入 key，只顯示末四碼
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  const settings = panel.getByRole('region', { name: 'API key 與模型' });
   await expect(settings).toContainText('Anthropic Console');
   await expect(settings).toContainText('花費上限');
   await settings.getByLabel('Claude API key').fill(FAKE_KEY);
@@ -102,11 +102,12 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   const unreadable = transcript.getByRole('listitem').filter({ hasText: '無法辨識' });
   await expect(unreadable).toHaveCount(1);
   await expect(unreadable).toContainText('もちろん');
-  const original = unreadable.locator('.original');
+  const original = unreadable.locator('[lang="ja"]');
   await expect(original).toHaveCSS('text-decoration-line', 'line-through');
-  await expect(original).toHaveCSS('color', 'rgb(136, 136, 136)');
-  await expect(unreadable.locator('.translation')).toHaveCount(0);
-  await expect(unreadable.locator('.untranslated')).toHaveCount(0);
+  // 灰＝design token --naru-ink-3（#75706A）
+  await expect(original).toHaveCSS('color', 'rgb(117, 112, 106)');
+  await expect(unreadable.locator('[lang="zh-Hant"]')).toHaveCount(0);
+  await expect(unreadable.getByText('未翻譯')).toHaveCount(0);
 
   // key 不在任何 runtime 訊息裡，content script 也拿不到
   const panelSeen = await panel.evaluate(() => (globalThis as unknown as { __seen: string[] }).__seen);
@@ -126,14 +127,14 @@ test('從 Chrome 內建 side panel 選單打開（沒有啟動 tab）也能設�
   const panel = await openSidePanel(context, extensionId);
 
   await expect(panel.getByText('請點外掛圖示啟動')).toBeVisible();
-  await panel.getByRole('button', { name: '設定' }).click();
-  const settings = panel.getByRole('region', { name: '設定' });
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  const settings = panel.getByRole('region', { name: 'API key 與模型' });
   await settings.getByLabel('Claude API key').fill(FAKE_KEY);
   await settings.getByRole('button', { name: '儲存' }).click();
   await expect(settings).toContainText('末四碼 WXYZ');
 
   // 重新打開 side panel 仍然記得（存在 IndexedDB）
   await panel.reload();
-  await panel.getByRole('button', { name: '設定' }).click();
-  await expect(panel.getByRole('region', { name: '設定' })).toContainText('末四碼 WXYZ');
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  await expect(panel.getByRole('region', { name: 'API key 與模型' })).toContainText('末四碼 WXYZ');
 });

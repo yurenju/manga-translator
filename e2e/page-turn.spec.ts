@@ -5,7 +5,7 @@
 import type { Page, Worker } from '@playwright/test';
 import type { Message, PagesResponse } from '../src/shared/messages.ts';
 import { hammingDistance, SAME_PAGE_MAX_DISTANCE } from '../src/shared/page-hash.ts';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { activateOnJumpPlus, expect, openPanelMenu, test } from './fixtures.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
 
@@ -112,7 +112,7 @@ test('關掉自動翻譯後翻頁不會翻譯，按「翻譯此頁」才翻', as
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
   await expectOverlaid(page, 0, FIRST_PAGE_TIMEOUT);
 
-  const toggle = panel.getByRole('checkbox', { name: '自動翻譯' });
+  const toggle = (await openPanelMenu(panel)).getByRole('switch', { name: '自動翻譯' });
   await expect(toggle).toBeChecked();
   await toggle.uncheck();
   await page.bringToFront();

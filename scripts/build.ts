@@ -21,6 +21,10 @@ const root = fileURLToPath(new URL('..', import.meta.url));
  */
 const STATIC_FILES: [string, string][] = [
   ['src/sidepanel/sidepanel.html', 'sidepanel.html'],
+  // design tokens（#71）：side panel 直接載入；content script 另外把它打包成字串放進 shadow DOM
+  ['src/shared/tokens.css', 'tokens.css'],
+  ['src/sidepanel/components.css', 'components.css'],
+  ['src/sidepanel/sidepanel.css', 'sidepanel.css'],
   ['src/offscreen/offscreen.html', 'offscreen.html'],
   // onnxruntime-web 不打包進 offscreen.js，執行時動態 import（見 src/offscreen/ort-engine.ts）。
   // webgpu bundle 同時支援 WebGPU 與 wasm，只會載入 asyncify 這一份 wasm（與它的 .mjs，多執行緒 worker 用）。
@@ -29,8 +33,11 @@ const STATIC_FILES: [string, string][] = [
   ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm', 'ort/ort-wasm-simd-threaded.asyncify.wasm'],
 ];
 
-/** 原樣複製的目錄。 */
-const STATIC_DIRS: [string, string][] = [['node_modules/kuromoji/dict', 'kuromoji/dict']];
+/** 原樣複製的目錄。icons：外掛 icon 的 PNG 與 side panel 標題用的 SVG 母檔（PNG 由 scripts/icons.ts 產出）。 */
+const STATIC_DIRS: [string, string][] = [
+  ['node_modules/kuromoji/dict', 'kuromoji/dict'],
+  ['src/icons', 'icons'],
+];
 
 /**
  * 覆蓋層的 Noto Sans TC（#32）：@fontsource 依 unicode-range 切好的 700 字重 woff2 子集（約 3.5 MB），

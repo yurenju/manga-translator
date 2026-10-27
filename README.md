@@ -46,7 +46,7 @@
 ### 3. 設定 API key
 
 1. 打開任一網頁，點工具列的 Naruhodo 圖示，side panel 會打開。
-2. 在 side panel 的「⚙ 設定」貼上 Claude API key。
+2. 在 side panel 右上角的 ⚙ 選單點「API key 與模型」，貼上 Claude API key。
 
 key 只存在這台電腦的外掛裡，不會交給網頁，也不會出現在匯出檔。建議在 Anthropic Console 為這個外掛建立專用的 key，並替它的 workspace 設定花費上限。
 

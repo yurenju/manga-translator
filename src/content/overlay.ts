@@ -7,10 +7,15 @@
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛；
  * img 換了 src（Kindle 翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
  * host 是 anchor 的兄弟節點，不會跟著 anchor 被藏起來，所以 anchor 看不到時 host 也自己藏起來。
+ *
+ * Page Mode（#73）只決定擦字＋譯文那一層要不要顯示：學習時藏起來、保留日文原稿；hover hit-test、tooltip、
+ * 高亮框兩種模式都照常運作。
  */
 import type { LineRef } from '../shared/messages.ts';
+import type { PageMode } from '../shared/page-mode.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
+import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
@@ -27,7 +32,8 @@ export const isShown = (element: Element) => element.checkVisibility({ visibilit
 /** 給 e2e 與頁面辨識用：shadow host 的屬性。 */
 export const HOST_ATTRIBUTE = 'data-naruhodo-overlay';
 
-const STYLE = `
+/** tooltip 與高亮框的顏色、字型取自 design tokens（跟 side panel 同一份，#71）；擦字與譯文的顏色跟著原稿算。 */
+const STYLE = `${TOKENS}
 :host { all: initial; }
 .pl { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .er { position: absolute; border-radius: 3px; }
@@ -36,17 +42,28 @@ const STYLE = `
 .tx.v { writing-mode: vertical-rl; text-orientation: mixed; }
 .tx .u { text-combine-upright: all; }
 .tx[data-fit="3"] { align-items: flex-start; justify-content: flex-start; }
-.tip { position: absolute; display: none; box-sizing: border-box; padding: 0.4em 0.6em; border-radius: 0.4em;
-  background: rgba(20, 20, 20, 0.92); color: #fff; font-weight: 600; line-height: 1.4; white-space: pre-wrap;
-  font-family: system-ui, sans-serif; z-index: 2; }
+:host([data-page-mode="learn"]) .er, :host([data-page-mode="learn"]) .tx { visibility: hidden; }
+.tip { position: absolute; display: none; box-sizing: border-box; padding: 0.6em 0.8em; border-radius: 0.6em;
+  background: var(--naru-tooltip-bg); color: var(--naru-tooltip-ink); font-weight: 500; line-height: 1.4; white-space: pre-wrap;
+  font-family: var(--naru-font-sans); z-index: 2; }
 .tip.on { display: block; }
-.tip-ja { font-size: 1.15em; line-height: 1.9; }
-.tip-ja rt, .tip-guess { color: #f9d36b; }
+.tip-ja { font-family: var(--naru-font-ja); font-size: 1.1em; line-height: 2; color: var(--naru-tooltip-ink-2); }
+.tip-ja rt, .tip-guess, .tip-note { color: var(--naru-tooltip-ruby); }
+.tip-ja rt { font-weight: 400; }
 .tip-guess { font-size: 0.75em; }
-.tip-unreadable { color: #aaa; text-decoration: line-through dotted; }
-.tip-note { margin-top: 0.3em; font-size: 0.75em; color: #f9d36b; }
-.hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: #1a73e8;
-  background: rgba(26, 115, 232, 0.12); }
+.tip-unreadable { color: var(--naru-tooltip-ink-3); text-decoration: line-through dotted; }
+.tip-zh { font-size: 1.15em; }
+.tip-note { margin-top: 0.3em; font-size: 0.75em; }
+.tip.learn .tip-ja { font-size: 1.4em; color: var(--naru-tooltip-ink); }
+.tip-reveal { display: flex; align-items: center; gap: 0.6em; box-sizing: border-box; min-height: 3em; margin: 0.3em 0;
+  padding: 0.6em 0.75em; border-radius: 0.6em; background: var(--naru-tooltip-chip-bg); border: 1px dashed var(--naru-tooltip-chip-line); }
+.tip-reveal.on { background: var(--naru-tooltip-chip-on-bg); border: 1px solid var(--naru-tooltip-chip-on-line); }
+.tip-reveal-label { flex: none; display: flex; align-items: center; justify-content: center; width: 1.7em; height: 1.7em;
+  border-radius: 0.45em; background: var(--naru-tooltip-ink); color: var(--naru-tooltip-bg); font-weight: 700; }
+.tip-reveal-body { color: var(--naru-tooltip-chip-hint); }
+.tip-reveal.on .tip-reveal-body { color: var(--naru-on-accent); font-size: 1.15em; }
+.hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: var(--naru-highlight);
+  background: var(--naru-highlight-fill); }
 .hl.on { display: block; }
 `;
 
@@ -57,6 +74,15 @@ const FRAME_TIMEOUT_MS = 200;
 const TOOLTIP_SCREEN_PX = 13;
 /** 高亮框的畫面邊框粗細。 */
 const HIGHLIGHT_SCREEN_PX = 2;
+/**
+ * 學習時 tooltip 四周的緩衝（畫面 px）：tooltip 緊貼在句子的框旁邊，滑鼠從句子斜著移進 tooltip 時可能擦過框外一點點。
+ * 只在 tooltip 已經顯示時才算，而且只有這麼窄，不會吃掉閱讀網站翻頁感應區的正常使用（spec #70 Further Notes）。
+ */
+const TOOLTIP_BUFFER_SCREEN_PX = 8;
+
+/** 畫面座標 (x, y) 在 rect 往外擴 margin 的範圍內。 */
+const within = (r: DOMRect, x: number, y: number, margin = 0) =>
+  x >= r.left - margin && x <= r.right + margin && y >= r.top - margin && y <= r.bottom + margin;
 
 /** 頁面上可以 hover 的一句（Balloon 或 Loose Text），座標是 Page 原始像素。 */
 interface HoverLine {
@@ -129,7 +155,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   const entries = new Map<HTMLElement, Entry>();
   /** 被我們從 static 改成 relative 的父元素 → 原本的 inline position，停止時還原。 */
   const changedParents = new Map<HTMLElement, string>();
-  let enabled = true;
+  let pageMode: PageMode = 'read';
   let capturing = false;
   let hiddenAt: number | undefined;
   let stopped = false;
@@ -160,17 +186,21 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   let hovered: { layer: PageLayer; line: HoverLine } | undefined;
   /** side panel 那邊滑過的那句。 */
   let panelHighlight: LineRef | undefined;
+  /** 學習時 tooltip 的「譯」區塊是否揭露中（滑鼠在區塊上）。 */
+  let revealed = false;
+  /** 顯示中的 tooltip 放在句子上方（揭露時長大要留在同一側）。 */
+  let tipAbove = false;
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
-  /** host 要不要顯示：覆蓋開著、不在截圖中、anchor 看得到。 */
-  const isVisible = (entry: Entry) => enabled && !capturing && isShown(entry.anchor);
+  /** host 要不要顯示：不在截圖中、anchor 看得到。 */
+  const isVisible = (entry: Entry) => !capturing && isShown(entry.anchor);
 
   function applyVisibility(entry: Entry): void {
     const visibility = isVisible(entry) ? 'visible' : 'hidden';
     // 只在真的變了才寫：自己的 MutationObserver 也看 style，寫一樣的值會一直被叫回來
     if (entry.host.style.visibility === visibility) return;
-    if (enabled && !capturing)
+    if (!capturing)
       trace('overlay:anchorVisibility', { pageHashes: [...entry.layers.values()].map((layer) => layer.pageHash), shown: visibility === 'visible' });
     entry.host.style.visibility = visibility;
     if (visibility === 'hidden' && hovered && [...entry.layers.values()].includes(hovered.layer)) setHovered(undefined);
@@ -224,6 +254,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     if (entry) return entry;
     const host = document.createElement('div');
     host.setAttribute(HOST_ATTRIBUTE, '');
+    host.dataset.pageMode = pageMode;
     host.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;margin:0;padding:0;border:0;';
     const root = host.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
@@ -364,6 +395,12 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
    * 祖先 transform）換算回 Page 原始像素，找包含滑鼠的最小那句。
    */
   function updateHover(x: number, y: number): void {
+    // 學習時滑鼠在顯示中的 tooltip 上（含緩衝）：tooltip 留著，在「譯」區塊上就揭露譯文
+    if (hovered && pageMode === 'learn' && within(hovered.layer.tip.getBoundingClientRect(), x, y, TOOLTIP_BUFFER_SCREEN_PX)) {
+      const chip = hovered.layer.tip.querySelector('.tip-reveal');
+      setRevealed(chip !== null && within(chip.getBoundingClientRect(), x, y));
+      return;
+    }
     let hit: { layer: PageLayer; line: HoverLine; area: number } | undefined;
     for (const entry of entries.values()) {
       if (entry.host.style.visibility === 'hidden') continue;
@@ -394,9 +431,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     else if (previous) onHover?.(null);
   }
 
-  /** tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。 */
+  /**
+   * tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。學習時譯文藏在「譯」區塊後面，
+   * 滑進區塊才揭露；每次顯示都重新藏起來。
+   */
   function showTooltip(layer: PageLayer, line: HoverLine): void {
     const { tip } = layer;
+    revealed = false;
     const ja = document.createElement('div');
     ja.className = 'tip-ja';
     ja.lang = 'ja';
@@ -422,17 +463,46 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         // 對不上：原文＋整句讀音
         ja.append(line.原文, textDiv('tip-guess', display.fallback));
       }
-      if (line.譯文) parts.push(textDiv('tip-zh', line.譯文));
+      // 譯文：閱讀直接顯示；學習藏在「譯」區塊後面。沒有譯文就兩種都不放
+      if (line.譯文) parts.push(pageMode === 'read' ? textDiv('tip-zh', line.譯文) : revealChip(line.譯文));
       if (line.讀音) parts.push(textDiv('tip-note', '讀音為推測'));
     }
+    tip.classList.toggle('learn', pageMode === 'learn');
     tip.replaceChildren(...parts);
     tip.classList.add('on');
-    // 置中在那句的框下方，夾在 Page 內；下方放不下就放上方
+    placeTooltip(layer, line);
+  }
+
+  function revealChip(譯文: string): HTMLElement {
+    const chip = document.createElement('div');
+    renderRevealChip(chip, 譯文);
+    return chip;
+  }
+
+  /** 「譯」區塊（RevealChip 深色版）：未揭露時是提示，揭露後換成譯文。 */
+  function renderRevealChip(chip: Element, 譯文: string): void {
+    chip.className = revealed ? 'tip-reveal on' : 'tip-reveal';
+    chip.replaceChildren(textDiv('tip-reveal-label', '譯'), textDiv('tip-reveal-body', revealed ? 譯文 : '滑過這裡看譯文'));
+  }
+
+  function setRevealed(next: boolean): void {
+    const chip = hovered?.layer.tip.querySelector('.tip-reveal');
+    if (!hovered || !chip || next === revealed) return;
+    revealed = next;
+    renderRevealChip(chip, hovered.line.譯文);
+    // 區塊長大時 tooltip 留在同一側：下方的往下長、上方的往上長，水平仍置中，原本的範圍一定還在裡面，滑鼠不會跑出區塊
+    placeTooltip(hovered.layer, hovered.line, tipAbove);
+  }
+
+  /** 置中在那句的框下方，夾在 Page 內；下方放不下就放上方。above 有給就固定在那一側。 */
+  function placeTooltip(layer: PageLayer, line: HoverLine, above?: boolean): void {
+    const { tip } = layer;
     const { box } = line;
     const left = box.x + box.w / 2 - tip.offsetWidth / 2;
     tip.style.left = `${Math.max(0, Math.min(left, layer.size.width - tip.offsetWidth))}px`;
     const below = box.y + box.h;
-    tip.style.top = `${below + tip.offsetHeight <= layer.size.height ? below : Math.max(0, box.y - tip.offsetHeight)}px`;
+    tipAbove = above ?? below + tip.offsetHeight > layer.size.height;
+    tip.style.top = `${tipAbove ? Math.max(0, box.y - tip.offsetHeight) : below}px`;
   }
 
   /** 每個 Page 層最多一個高亮框：頁面 hover 優先，其次是 side panel 滑過的那句。 */
@@ -456,19 +526,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     panelHighlight = line ?? undefined;
     renderHighlights();
   }
-  /** side panel 的覆蓋開關。用 visibility，關著時仍能量測排版。 */
-  function setEnabled(value: boolean): void {
-    // 每次 showOverlay 都會帶開關狀態，只記改變
-    if (value !== enabled) trace('overlay:enabled', { enabled: value });
-    enabled = value;
-    entries.forEach(applyVisibility);
+  /** Page Mode：學習時藏起擦字＋譯文（用 visibility，藏著時仍能量測排版）；顯示中的 tooltip 換成新模式的內容。 */
+  function setPageMode(mode: PageMode): void {
+    if (mode === pageMode) return;
+    trace('overlay:pageMode', { pageMode: mode });
+    pageMode = mode;
+    for (const entry of entries.values()) entry.host.dataset.pageMode = mode;
+    if (hovered) showTooltip(hovered.layer, hovered.line);
   }
 
-  /** 截圖前：隱藏所有 host，等兩個 rAF（確定已重繪）。 */
+  /** 截圖前：隱藏所有 host（學習時也藏，tooltip 與高亮框不能進截圖），等兩個 rAF（確定已重繪）。 */
   async function hideForCapture(): Promise<void> {
     capturing = true;
     entries.forEach(applyVisibility);
-    if (!enabled || entries.size === 0) return;
+    if (entries.size === 0) return;
     hiddenAt = performance.now();
     await untilRepainted();
   }
@@ -482,10 +553,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return ms;
   }
 
-  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；覆蓋開關關著或 host 不在畫面上就是空的。 */
+  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；學習（頁面上沒蓋任何東西）或 host 不在畫面上就是空的。 */
   function shownPages(anchor: Element): string[] {
     const entry = entries.get(anchor as HTMLElement);
-    if (!entry || !enabled || stopped || !entry.host.isConnected) return [];
+    if (!entry || pageMode === 'learn' || stopped || !entry.host.isConnected) return [];
     return [...entry.layers.values()].map((layer) => layer.pageHash);
   }
 
@@ -509,7 +580,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return changedParents.has(element as HTMLElement);
   }
 
-  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
+  return { show, highlight, setPageMode, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;

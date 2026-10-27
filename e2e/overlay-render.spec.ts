@@ -5,6 +5,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import type { PageMode } from '../src/shared/page-mode.ts';
 import type { PageText, RatioRect } from '../src/shared/page-text.ts';
 import { groundTruthPageTexts, readGroundTruth, SYNTHETIC_IDS } from '../src/testing/synthetic.ts';
 import { expect, test } from './fixtures.ts';
@@ -16,12 +17,12 @@ const SYNTHETIC = new URL('../testdata/synthetic/out/', import.meta.url);
 const PAGE_WIDTH = 430;
 
 declare global {
-  var __renderOverlay: (input: { image: string; width: number; pages: { sub: RatioRect; text: PageText }[] }) => Promise<void>;
+  var __renderOverlay: (input: { image: string; width: number; pages: { sub: RatioRect; text: PageText }[]; pageMode?: PageMode }) => Promise<void>;
 }
 
-async function render(page: Page, id: string, width: number, pages = groundTruthPageTexts(id)): Promise<void> {
+async function render(page: Page, id: string, width: number, pages = groundTruthPageTexts(id), pageMode?: PageMode): Promise<void> {
   const image = `data:image/png;base64,${(await readFile(new URL(`${id}.png`, SYNTHETIC))).toString('base64')}`;
-  await page.evaluate((input) => globalThis.__renderOverlay(input), { image, width, pages });
+  await page.evaluate((input) => globalThis.__renderOverlay(input), { image, width, pages, pageMode });
 }
 
 const anchorRect = (page: Page): Promise<ScreenRect> =>
@@ -141,5 +142,38 @@ test.describe('覆蓋渲染（ground truth）', () => {
     await expect(tooltip).toContainText('讀音為推測');
     await page.mouse.move(1, 1);
     await expect(tooltip).toBeHidden();
+  });
+
+  test('學習時 Loose Text 的 tooltip 也有「譯」區塊、滑進才揭露；unreadable 的句子沒有「譯」區塊', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);
+    // p04：t1「遅刻だー!!」當成 unreadable；t2「ドドドド」是狀聲詞（Loose Text）
+    const pages = groundTruthPageTexts('p04-outside').map(({ sub, text }) => ({
+      sub,
+      text: { ...text, balloons: text.balloons.map((b) => (b.id === 't1' ? { ...b, unreadable: true } : b)) },
+    }));
+    const loose = pages[0]!.text.looseText.find((l) => l.id === 't2')!;
+    expect(loose.譯文).not.toBe('');
+    await render(page, 'p04-outside', PAGE_WIDTH, pages, 'learn');
+    const anchor = await anchorRect(page);
+    const centerOf = (r: RatioRect) => ({ x: anchor.x + (r.x + r.w / 2) * anchor.width, y: anchor.y + (r.y + r.h / 2) * anchor.height });
+    const tooltip = page.locator('[data-naruhodo-overlay] .tip.on');
+
+    const looseCenter = centerOf(loose.bbox);
+    await page.mouse.move(looseCenter.x, looseCenter.y);
+    await expect(tooltip).toContainText(loose.原文);
+    await expect(tooltip).not.toContainText(loose.譯文);
+    const chipBox = (await tooltip.getByText('滑過這裡看譯文').boundingBox())!;
+    await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2, { steps: 10 });
+    await expect(tooltip).toContainText(loose.譯文);
+    await page.mouse.move(1, 1);
+    await expect(tooltip).toHaveCount(0);
+
+    const unreadable = pages[0]!.text.balloons.find((b) => b.id === 't1')!;
+    const unreadableCenter = centerOf(unreadable.balloonBbox);
+    await page.mouse.move(unreadableCenter.x, unreadableCenter.y);
+    await expect(tooltip).toContainText('無法辨識');
+    await expect(tooltip.getByText('譯', { exact: true })).toHaveCount(0);
+    await expect(tooltip).not.toContainText('滑過這裡看譯文');
   });
 });
