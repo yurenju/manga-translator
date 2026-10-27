@@ -6,6 +6,7 @@
  * translate＋scale 對到 anchor 的 offset*×subRect，捲動、祖先 transform、overflow 裁切都由瀏覽器自然套用。
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛；
  * img 換了 src（Kindle 翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
+ * host 是 anchor 的兄弟節點，不會跟著 anchor 被藏起來，所以 anchor 看不到時 host 也自己藏起來。
  */
 import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
@@ -15,6 +16,13 @@ import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separate
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
+
+/**
+ * 元素看得到（自己與祖先都不是 display:none、visibility 不是 hidden）。輪流用好幾張疊在一起的 img 的閱讀器
+ * （真實 Kindle）用 visibility 藏起舊的那張、留在原地：它不是 Page，上面的覆蓋層也要藏起來。
+ * opacity:0 不算：淡出結束不會有 mutation，要另外接 transitionend 才知道。
+ */
+export const isShown = (element: Element) => element.checkVisibility({ visibilityProperty: true });
 
 /** 給 e2e 與頁面辨識用：shadow host 的屬性。 */
 export const HOST_ATTRIBUTE = 'data-manga-translator-overlay';
@@ -136,12 +144,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // img 換了 src（Kindle 翻頁、視窗大小變了重新產生合成圖）：上面已經不是那些 Page，舊覆蓋先拿掉，
     // 等 SW 重新擷取後送新的（同一頁就從記住的結果重送，overlay-sync.ts）
     for (const record of records) {
-      const entry = record.type === 'attributes' ? entries.get(record.target as HTMLElement) : undefined;
+      const entry = record.attributeName === 'src' ? entries.get(record.target as HTMLElement) : undefined;
       if (entry && entry.layers.size > 0) removeLayers(entry, 'anchor 的 src 換了');
     }
-    for (const entry of entries.values()) reattach(entry);
+    for (const entry of entries.values()) {
+      reattach(entry);
+      // style／class 變了：anchor（或祖先）可能被藏起來或重新顯示
+      applyVisibility(entry);
+    }
   });
-  mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
+  mutationObserver.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'style', 'class'] });
   const onResize = () => entries.forEach(place);
   window.addEventListener('resize', onResize);
   /** 滑鼠目前在哪一句上（頁面 hover）。 */
@@ -151,9 +163,17 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
+  /** host 要不要顯示：覆蓋開著、不在截圖中、anchor 看得到。 */
+  const isVisible = (entry: Entry) => enabled && !capturing && isShown(entry.anchor);
+
   function applyVisibility(entry: Entry): void {
-    entry.host.style.visibility = enabled && !capturing ? 'visible' : 'hidden';
-    if (!enabled || capturing) setHovered(undefined);
+    const visibility = isVisible(entry) ? 'visible' : 'hidden';
+    // 只在真的變了才寫：自己的 MutationObserver 也看 style，寫一樣的值會一直被叫回來
+    if (entry.host.style.visibility === visibility) return;
+    if (enabled && !capturing)
+      trace('overlay:anchorVisibility', { pageHashes: [...entry.layers.values()].map((layer) => layer.pageHash), shown: visibility === 'visible' });
+    entry.host.style.visibility = visibility;
+    if (visibility === 'hidden' && hovered && [...entry.layers.values()].includes(hovered.layer)) setHovered(undefined);
   }
 
   /** host 插回 anchor 後面；父元素是 static 就改成 relative（唯一碰主頁面樣式的地方）。 */
@@ -345,19 +365,18 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
    */
   function updateHover(x: number, y: number): void {
     let hit: { layer: PageLayer; line: HoverLine; area: number } | undefined;
-    if (enabled && !capturing) {
-      for (const entry of entries.values()) {
-        for (const layer of entry.layers.values()) {
-          const r = layer.element.getBoundingClientRect();
-          if (r.width === 0 || r.height === 0) continue;
-          const px = ((x - r.left) / r.width) * layer.size.width;
-          const py = ((y - r.top) / r.height) * layer.size.height;
-          for (const line of layer.lines) {
-            const { box } = line;
-            if (px < box.x || px > box.x + box.w || py < box.y || py > box.y + box.h) continue;
-            const area = box.w * box.h;
-            if (!hit || area < hit.area) hit = { layer, line, area };
-          }
+    for (const entry of entries.values()) {
+      if (entry.host.style.visibility === 'hidden') continue;
+      for (const layer of entry.layers.values()) {
+        const r = layer.element.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        const px = ((x - r.left) / r.width) * layer.size.width;
+        const py = ((y - r.top) / r.height) * layer.size.height;
+        for (const line of layer.lines) {
+          const { box } = line;
+          if (px < box.x || px > box.x + box.w || py < box.y || py > box.y + box.h) continue;
+          const area = box.w * box.h;
+          if (!hit || area < hit.area) hit = { layer, line, area };
         }
       }
     }

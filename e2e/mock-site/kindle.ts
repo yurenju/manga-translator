@@ -10,7 +10,9 @@
  * 點畫面中間切換顯示。收起時跟真實閱讀器一樣先淡出（`fading`，半透明），比外掛的翻頁 debounce 久，之後才加上
  * `hidden`（display: none）。外掛截圖前會把工具列藏起來（#59）。img 是 `pointer-events: none`，
  * 上面蓋著一層全透明的感應層 `#tap`（真實閱讀器也是這樣接點擊）。
- * 網址參數：`toolbar=shown` 一開始就顯示工具列；`bg=white` 白底（合成圖的邊是白的）。
+ * 網址參數：`toolbar=shown` 一開始就顯示工具列；`bg=white` 白底（合成圖的邊是白的）；
+ * `buffers=3` 仿真實閱讀器輪流用好幾張疊在一起的 `<img>`：新畫面畫進下一張，載入後用 `visibility` 切換，
+ * 藏起來的那張保留舊的 `src`、留在原地（真實 Kindle 實測）。
  */
 export const KINDLE_VIEWS = ['p07-spread', 'p08-action', 'p01-basic'] as const;
 
@@ -24,7 +26,9 @@ export function kindlePage(): string {
   html, body { margin: 0; overflow: hidden; background: #000; }
   body.white { background: #fff; }
   #zoom { width: 100vw; height: 100vh; transform-origin: 0 0; }
-  #page { display: block; width: 100vw; height: 100vh; pointer-events: none; }
+  #zoom.buffered { position: relative; }
+  #zoom > img { display: block; width: 100vw; height: 100vh; pointer-events: none; }
+  #zoom.buffered > img { position: absolute; left: 0; top: 0; }
   #tap { position: absolute; inset: 0; }
   #chrome.hidden { display: none; }
   #chrome.fading { opacity: 0.5; }
@@ -65,9 +69,12 @@ export function kindlePage(): string {
     toolbar.classList.add('fading');
     fade = setTimeout(() => toolbar.classList.replace('fading', 'hidden'), FADE_MS);
   });
-  const img = document.getElementById('page');
+  const zoom = document.getElementById('zoom');
+  const buffers = [document.getElementById('page')];
+  for (let i = 1; i < Number(params.get('buffers') ?? 1); i++) buffers.push(zoom.appendChild(document.createElement('img')));
+  zoom.classList.toggle('buffered', buffers.length > 1);
+  let shown = 0;
   let index = 0;
-  let current;
   const sources = Promise.all(views.map((id) => new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
@@ -88,15 +95,19 @@ export function kindlePage(): string {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(source, Math.floor((canvas.width - w) / 2), Math.floor((canvas.height - h) / 2), w, h);
     const blob = await new Promise((resolve) => canvas.toBlob(resolve));
-    const previous = current;
-    current = URL.createObjectURL(blob);
+    // 單張：同一個 img 換 src；多張：畫進下一張，載入後才切 visibility（舊的那張留著舊 src）
+    const next = (shown + 1) % buffers.length;
+    const img = buffers[next];
+    const previous = img.src;
     document.body.dataset.ready = 'false';
     img.onload = () => {
       if (previous) URL.revokeObjectURL(previous);
+      shown = next;
+      buffers.forEach((b, i) => { b.style.visibility = i === shown ? 'visible' : 'hidden'; });
       document.body.dataset.pageIndex = String(index);
       document.body.dataset.ready = 'true';
     };
-    img.src = current;
+    img.src = URL.createObjectURL(blob);
   }
   document.addEventListener('keydown', (e) => {
     const next = e.key === 'ArrowLeft' ? index + 1 : e.key === 'ArrowRight' ? index - 1 : index;

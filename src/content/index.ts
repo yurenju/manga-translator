@@ -1,7 +1,7 @@
 import type { CaptureFinishedResponse, Message, PageCandidate, PageCandidatesResponse, Rect } from '../shared/messages.ts';
 import { createTrace } from '../shared/trace.ts';
 import { createCapturePrep } from './capture.ts';
-import { createOverlay, HOST_ATTRIBUTE } from './overlay.ts';
+import { createOverlay, HOST_ATTRIBUTE, isShown } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
 import { pageCandidateRejection } from './page-candidates.ts';
 import { watchPageTurns } from './page-turn.ts';
@@ -53,8 +53,9 @@ if (!globalThis.__mangaTranslator) {
       const { x, y, width, height } = element.getBoundingClientRect();
       const rect = { x, y, width, height };
       const clips = clipRects(element);
-      // 被工具列之類蓋住的照樣算：截圖前會把蓋在上面的元素藏起來（#59、ADR 0004）
-      const reason = pageCandidateRejection(rect, visible, clips);
+      // 被工具列之類蓋住的照樣算：截圖前會把蓋在上面的元素藏起來（#59、ADR 0004）。
+      // 藏起來的不算：疊在看得到的那張底下，截到的是上面那張，譯文會被貼到兩張上
+      const reason = isShown(element) ? pageCandidateRejection(rect, visible, clips) : 'hidden';
       if (reason === undefined) {
         const overlaid = overlay.shownPages(element);
         candidates.push({ anchorId: anchorIdOf(element), rect, ...(overlaid.length > 0 ? { overlaid } : {}) });
