@@ -17,7 +17,7 @@ import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
-import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { estimatePageFontPx, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -345,9 +345,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     old?.element.remove();
     place(entry);
 
-    // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算。
+    // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算，起始字級跟著原作字級（#80）。
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
+    const startPx = estimatePageFontPx(balloons.map((b, i) => ({ text: regionsList[i]!.text, 原文: b.原文 })));
     const fits: Record<string, unknown>[] = [];
     for (const { balloon, regions, box, inner } of items) {
       const result = fitText(
@@ -364,6 +365,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         },
         regions,
         minLayerPx,
+        startPx,
       );
       box.dataset.fit = String(result.stage);
       if (__DEBUG__) fits.push({ id: balloon.id, 譯文: balloon.譯文, vertical: box.classList.contains('v'), ...result, regions, eraseLuminance: balloon.eraseLuminance });
@@ -377,6 +379,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         anchorRect: { x: anchorRect.x, y: anchorRect.y, width: anchorRect.width, height: anchorRect.height },
         screenScale,
         minLayerPx,
+        startPx,
         skipped: text.balloons.filter((b) => !balloons.includes(b)).map((b) => ({ id: b.id, unreadable: b.unreadable, 譯文: b.譯文 })),
         fits,
       });

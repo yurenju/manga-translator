@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { estimatePageFontPx, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 describe('verticalize（直書前的文字處理）', () => {
   it('半形 !?~, 換成全形', () => {
@@ -102,6 +102,39 @@ describe('separateRegions（相鄰 Balloon 的譯文範圍不重疊）', () => {
   });
 });
 
+describe('estimatePageFontPx（起始字級跟著原作字級，#80）', () => {
+  it('從文字框面積與原文字數估原作字級，再乘保守係數', () => {
+    // 200×300 裝 6 個字：√(60000÷6)＝100 → 字寬 54 → 字級 60（字寬約 0.9 em）→ 保守係數 0.9 → 54
+    expect(estimatePageFontPx([{ text: { x: 0, y: 0, w: 200, h: 300 }, 原文: 'あいうえおか' }])).toBeCloseTo(54);
+  });
+
+  it('取整頁的中位數：喊叫的大字與小框不會把整頁帶偏', () => {
+    // 三個框的 √(面積÷字數)：400×300÷3 → 200、100×400÷4 → 100、50×100÷2 → 50；中位數 100 → 54
+    const page = [
+      { text: { x: 0, y: 0, w: 400, h: 300 }, 原文: 'ああ!' },
+      { text: { x: 0, y: 0, w: 100, h: 400 }, 原文: 'いいいい' },
+      { text: { x: 0, y: 0, w: 50, h: 100 }, 原文: 'うう' },
+    ];
+    expect(estimatePageFontPx(page)).toBeCloseTo(54);
+  });
+
+  it('連續的點（...、・・・ 或 …）算 2 個字（直書「……」佔兩格），空白不算', () => {
+    // 都是 4 個字：100×400÷4 → 100 → 54
+    const box = { x: 0, y: 0, w: 100, h: 400 };
+    expect(estimatePageFontPx([{ text: box, 原文: 'あ... い' }])).toBeCloseTo(54);
+    expect(estimatePageFontPx([{ text: box, 原文: 'あ…い' }])).toBeCloseTo(54);
+    expect(estimatePageFontPx([{ text: box, 原文: 'あ・・・い' }])).toBeCloseTo(54);
+    expect(estimatePageFontPx([{ text: box, 原文: '……あい' }])).toBeCloseTo(54);
+  });
+
+  it('沒有原文或文字框沒有面積的 Balloon 不算；整頁都沒得估就用 26px', () => {
+    const box = { x: 0, y: 0, w: 200, h: 300 };
+    expect(estimatePageFontPx([])).toBe(26);
+    expect(estimatePageFontPx([{ text: box, 原文: ' ' }, { text: { ...box, w: 0 }, 原文: 'あ' }])).toBe(26);
+    expect(estimatePageFontPx([{ text: box, 原文: '' }, { text: box, 原文: 'あいうえおか' }])).toBeCloseTo(54);
+  });
+});
+
 describe('fitText（譯文太長的三階段，spec 第 7.4 節）', () => {
   const fit1: Box = { x: 0, y: 0, w: 100, h: 100 };
   const fit2: Box = { x: 0, y: 0, w: 150, h: 150 };
@@ -122,6 +155,17 @@ describe('fitText（譯文太長的三階段，spec 第 7.4 節）', () => {
 
   it('放得下就用 26px', () => {
     expect(fitText(target(new Map([[fit1, 40], [fit2, 40]])), { fit1, fit2 }, 0)).toEqual({ stage: 1, size: 26, region: fit1, truncated: false });
+  });
+
+  it('有估出原作字級就從那個字級開始（#80）', () => {
+    expect(fitText(target(new Map([[fit1, 60], [fit2, 60]])), { fit1, fit2 }, 0, 54)).toEqual({ stage: 1, size: 54, region: fit1, truncated: false });
+    expect(fitText(target(new Map([[fit1, 40], [fit2, 40]])), { fit1, fit2 }, 0, 54)).toEqual({ stage: 1, size: 40, region: fit1, truncated: false });
+  });
+
+  it('起始字級比該階下限小時，從下限開始', () => {
+    const t = target(new Map([[fit1, 40], [fit2, 40]]));
+    expect(fitText(t, { fit1, fit2 }, 0, 10)).toEqual({ stage: 1, size: 14, region: fit1, truncated: false });
+    expect(t.applied).toEqual([[fit1, 14]]);
   });
 
   it('第 1 階：在文字框外擴範圍內縮到放得下（最小 14px）', () => {
