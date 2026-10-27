@@ -20,7 +20,7 @@ import type {
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
 import { Badge, Button, Callout, PageHeader, SegmentedControl, Switch, type SegmentOption, type SpreadSide } from './components.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
-import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
+import { DEFAULT_LEVEL, DisplaySwitch, Transcript, type Display, type Level } from './transcript.tsx';
 
 /**
  * 點圖示啟動時，SW 用 sidepanel.html?tabId=N 打開這個 tab 專屬的 side panel。
@@ -68,9 +68,9 @@ function TranslationStatusLine({ status }: { status: TranslationInfo }) {
   );
 }
 
-/** 學習模式的共用狀態：全域顯示層級與 hover 同步（#39）。 */
+/** 逐字稿的共用狀態：依 Page Mode 的顯示方式（#76）與 hover 同步（#39）。 */
 interface LearningProps {
-  level: Level;
+  display: Display;
   /** 頁面上滑鼠所在的那句。 */
   hovered: LineRef | undefined;
   /** 滑過 panel 的某行 → 頁面上那句高亮；null＝離開。 */
@@ -118,7 +118,7 @@ function PageItem({
   learning: LearningProps;
 }) {
   const { transcript } = page;
-  const { level, hovered, onLineHover } = learning;
+  const { display, hovered, onLineHover } = learning;
   const headingId = useId();
   return (
     <li aria-labelledby={headingId}>
@@ -150,7 +150,7 @@ function PageItem({
         <Transcript
           text={transcript.text}
           translated={transcript.translated}
-          level={level}
+          display={display}
           hoveredId={hovered?.pageHash === page.pageHash ? hovered.lineId : undefined}
           onHover={(lineId) => onLineHover(lineId === null ? null : { pageHash: page.pageHash, lineId })}
         />
@@ -325,18 +325,23 @@ const PAGE_MODES: readonly SegmentOption<PageMode>[] = [
   { value: 'learn', label: '學習', description: '保留日文，滑過看讀音' },
 ];
 
-/**
- * Page Mode 切換（spec #70、#73）：全域設定，存在 chrome.storage.local；頁面上的 content script 自己聽變更。
- * 學習時頁面不擦字、不畫譯文，翻譯照常進行。
- */
-function PageModeSwitch() {
+/** 目前的 Page Mode 與切換函式；別的 side panel 切了也跟著變。 */
+function usePageMode(): [PageMode, (mode: PageMode) => void] {
   const [mode, setMode] = useState<PageMode>(DEFAULT_PAGE_MODE);
-  // 別的 side panel 切了也跟著變
   useEffect(() => watchPageMode(setMode), []);
   const choose = (value: PageMode) => {
     setMode(value);
     void savePageMode(value);
   };
+  return [mode, choose];
+}
+
+/**
+ * Page Mode 切換（spec #70、#73）：全域設定，存在 chrome.storage.local；頁面上的 content script 自己聽變更。
+ * 學習時頁面不擦字、不畫譯文，翻譯照常進行。
+ */
+function PageModeSwitch() {
+  const [mode, choose] = usePageMode();
   return <SegmentedControl label="頁面模式" size="lg" options={PAGE_MODES} value={mode} onChange={choose} />;
 }
 
@@ -475,6 +480,9 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [modelStatus, setModelStatus] = useState<ModelStatus>({ state: 'idle' });
   const [hasKey, setHasKey] = useState(true);
   const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
+  const [furigana, setFurigana] = useState(true);
+  const [pageMode] = usePageMode();
+  const display: Display = pageMode === 'learn' ? { mode: 'learn', furigana } : { mode: 'read', level };
   const [hovered, setHovered] = useState<LearningProps['hovered']>(undefined);
 
   useEffect(() => {
@@ -509,7 +517,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
   const translate = () => void send({ type: 'panel:translate', tabId });
   const learning: LearningProps = {
-    level,
+    display,
     hovered,
     onLineHover(line) {
       chrome.tabs.sendMessage(tabId, { type: 'content:highlight', line } satisfies Message).catch(() => {});
@@ -537,7 +545,7 @@ function App({ tabId }: { tabId: number | undefined }) {
         {untranslated && !hasKey && (
           <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</Callout>
         )}
-        {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
+        {done.length > 0 && <DisplaySwitch display={display} onLevel={setLevel} onFurigana={setFurigana} />}
         <ul aria-label="Page">
           {pages.map((page, i) => (
             // 同一個 anchor 可能有兩個 Page（Spread），key 要帶 Page 身分

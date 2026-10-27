@@ -52,24 +52,26 @@ const transcriptOf = (panel: Page, pageIndex: number): Locator =>
 async function lines(transcript: Locator) {
   return transcript.getByRole('listitem').evaluateAll((items) =>
     items.map((li) => {
-      // 預設層級「加振り仮名」：原文帶 <rt>，對不上時下面是整句讀音（.reading）
-      const original = li.querySelector('.original, .loose')!.cloneNode(true) as Element;
-      const rts = [...original.querySelectorAll('rt, .reading')].map((rt) => (rt.remove(), rt.textContent ?? ''));
+      // 預設層級「加振り仮名」：原文（lang="ja"）帶 <rt>，對不上時下面是整句讀音（<small>）
+      const shown = li.querySelector('[lang="ja"]')!;
+      const original = shown.cloneNode(true) as Element;
+      const rts = [...original.querySelectorAll('rt, small')].map((rt) => (rt.remove(), rt.textContent ?? ''));
+      const badges = [...li.querySelectorAll('span')].filter((s) => s.children.length === 0).map((s) => s.textContent);
       return {
-        kind: (li as HTMLElement).dataset.kind,
+        sfx: badges.includes('狀聲詞'),
         original: original.textContent ?? '',
         hasKanji: /[一-鿿々〆ヶ]/.test(original.textContent ?? ''),
         reading: rts.join(''),
-        translation: li.querySelector('.translation')?.textContent ?? null,
-        untranslated: li.querySelector('.untranslated')?.textContent ?? null,
-        italic: getComputedStyle(li.querySelector('.original, .loose')!).fontStyle === 'italic',
+        translation: li.querySelector('[lang="zh-Hant"]')?.textContent ?? null,
+        untranslated: badges.includes('未翻譯') ? '未翻譯' : null,
+        italic: getComputedStyle(shown).fontStyle === 'italic',
       };
     }),
   );
 }
 
 test.describe('沒有 API key', () => {
-  test('side panel 依閱讀順序顯示原文＋讀音＋「未翻譯」，Loose Text 用斜體＋🔊', async ({ context, sw, extensionId, mockSite }) => {
+  test('side panel 依閱讀順序顯示原文＋讀音＋「未翻譯」，Loose Text 標「狀聲詞」',async ({ context, sw, extensionId, mockSite }) => {
     test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
@@ -77,7 +79,7 @@ test.describe('沒有 API key', () => {
     await expect(first.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
     const p01 = await lines(first);
     const p01Gt = readGroundTruth('p01-basic').texts;
-    const matched = matchGroundTruth(p01.map((l) => l.original.replace('🔊', '')), p01Gt);
+    const matched = matchGroundTruth(p01.map((l) => l.original), p01Gt);
     console.log('p01 逐字稿', p01.map((l, i) => `${l.original}（${l.reading}）→ ${matched[i]?.id ?? '?'}`).join(' / '));
     // 7 句裡至少 6 句認得出來，而且依 ground truth 的閱讀順序排列
     const orders = matched.filter((t) => t !== undefined).map((t) => t.order);
@@ -94,14 +96,15 @@ test.describe('沒有 API key', () => {
     const second = transcriptOf(panel, 1);
     await expect(second.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
     const p02 = await lines(second);
-    console.log('p02 逐字稿', p02.map((l) => `[${l.kind}] ${l.original}`).join(' / '));
-    const loose = p02.filter((l) => l.kind === 'loose');
-    expect(loose.length).toBeGreaterThan(0);
-    for (const line of loose) {
-      expect(line.original.startsWith('🔊')).toBe(true);
-      expect(line.italic).toBe(true);
+    console.log('p02 逐字稿', p02.map((l) => `[${l.sfx ? '狀聲詞' : 'balloon'}] ${l.original}`).join(' / '));
+    const narration = p02.find((l) => similarity(l.original, '潮見坂高校4月12日') >= 0.5);
+    expect(narration?.sfx).toBe(true);
+    expect(p02.some((l) => !l.sfx)).toBe(true);
+    // 「狀聲詞」徽章取代原本的斜體＋🔊
+    for (const line of p02) {
+      expect(line.original).not.toContain('🔊');
+      expect(line.italic).toBe(false);
     }
-    for (const line of p02.filter((l) => l.kind === 'balloon')) expect(line.italic).toBe(false);
   });
 });
 

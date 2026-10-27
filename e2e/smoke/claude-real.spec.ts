@@ -59,7 +59,7 @@ test.describe('e2e build', () => {
     const first = panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: '第 1 頁' });
     const lines = await first.getByRole('list', { name: '逐字稿' }).getByRole('listitem').allInnerTexts();
     console.log('p01 逐字稿\n' + lines.map((l) => l.replace(/\n/g, ' / ')).join('\n'));
-    await expect(first.locator('.translation').first()).toBeVisible();
+    await expect(first.locator('[lang="zh-Hant"]').first()).toBeVisible();
     await expect(panel.getByText('翻譯失敗')).toHaveCount(0);
   });
 });
