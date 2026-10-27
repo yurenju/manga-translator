@@ -56,8 +56,9 @@ export async function startMockSite(): Promise<MockSite> {
     const path = url.pathname;
     // /jumpplus/ 以下的任何路徑都是同一個仿 Jump+（同網站的另一話，#36 網址模式）
     if (path.startsWith('/jumpplus/')) {
-      const paged = url.searchParams.get('mode') === 'paged';
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin, { paged }));
+      const flag = (name: string) => url.searchParams.get(name) === '1';
+      const options = { paged: url.searchParams.get('mode') === 'paged', nav: flag('nav'), watermark: flag('watermark'), stacked: flag('stacked') };
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin, options));
       return;
     }
     if (path === '/kindle/') {

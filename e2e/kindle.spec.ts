@@ -5,7 +5,7 @@
 import type { Page, Worker } from '@playwright/test';
 import { hammingDistance, pageHash, SAME_PAGE_MAX_DISTANCE } from '../src/shared/page-hash.ts';
 import { cropGray, readGray, readGroundTruth, type GtText } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -154,7 +154,14 @@ test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中�
   await expectAligned(page, 'p07-spread', '重掛後');
 });
 
-const OCCLUDED_HINT = '頁面被其他東西擋住（例如閱讀器的工具列），收起後才會翻譯。';
+/** 仿 Kindle 工具列上的文字（e2e/mock-site/kindle.ts）：截到工具列的話 OCR 會讀到。 */
+const TOOLBAR_TEXTS = ['ライブラリ', 'サンプル作品', '期間限定', '無料試し読み', 'ページ'];
+
+/** 送進 LLM 的原文（= OCR 讀到的）裡有沒有工具列上的文字。 */
+async function toolbarTextsSent(sw: Worker): Promise<string[]> {
+  const sent = await sentOriginals(sw);
+  return TOOLBAR_TEXTS.filter((t) => sent.some((s) => normalize(s).includes(normalize(t))));
+}
 
 /** 點畫面中間（仿 Kindle 的感應層）切換工具列。 */
 async function toggleToolbar(page: Page): Promise<void> {
@@ -162,35 +169,38 @@ async function toggleToolbar(page: Page): Promise<void> {
   await page.mouse.click(size.width / 2, size.height / 2);
 }
 
+const captureCount = (sw: Worker) => sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
+
 for (const bg of ['black', 'white'] as const) {
-  test(`#55 工具列蓋住頁面（${bg === 'black' ? '黑底' : '白底'}）：開著時不截、不翻，side panel 提示；收起後才翻，譯文落在 Balloon 內`, async ({ context, sw, extensionId, mockSite }) => {
+  test(`#59 工具列蓋住頁面（${bg === 'black' ? '黑底' : '白底'}）：開著也翻，截圖前藏起工具列，譯文落在 Balloon 內`, async ({ context, sw, extensionId, mockSite }) => {
     test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
     const url = `${mockSite.kindleUrl}?toolbar=shown&bg=${bg}`;
     const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url });
 
-    await expect(panel.getByText(OCCLUDED_HINT)).toBeVisible();
-    // 透明的感應層不算遮擋，但工具列算：被擋住的 Page 不送本機流水線、也不送 LLM
-    expect(await jobLog(sw)).toEqual([]);
-    expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(0);
-
-    await toggleToolbar(page);
     await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
-    await expectAligned(page, 'p07-spread', `收起工具列後（${bg}）`);
-    await expect(panel.getByText(OCCLUDED_HINT)).toBeHidden();
+    await expectAligned(page, 'p07-spread', `工具列開著（${bg}）`);
+    expect(await page.locator('#chrome').evaluate((el) => !el.classList.contains('hidden'))).toBe(true);
+    // 截到的 Page 裡沒有工具列：OCR 沒讀到工具列上的字
+    expect(await toolbarTextsSent(sw)).toEqual([]);
+    // #55 的遮擋提示拿掉了
+    await expect(panel.getByText('擋住')).toHaveCount(0);
   });
 }
 
 test('#55 工具列開了又收起：同一頁命中快取、不重翻', async ({ context, sw, extensionId, mockSite }) => {
   test.setTimeout(FIRST_SPREAD_TIMEOUT + SPREAD_TIMEOUT);
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
   await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
   await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
 
+  // 點擊會觸發掃描：工具列開著時截的圖（藏起工具列）跟收起時一樣，hash 認得出同一頁
+  const captures = await captureCount(sw);
   await toggleToolbar(page);
-  await expect(panel.getByText(OCCLUDED_HINT)).toBeVisible();
+  await expect.poll(() => captureCount(sw)).toBeGreaterThan(captures);
   await toggleToolbar(page);
-  await expect(panel.getByText(OCCLUDED_HINT)).toBeHidden();
+  await page.locator('#chrome.hidden').waitFor({ state: 'attached' });
   await waitForOverlay(page, 'p07-spread', SPREAD_TIMEOUT);
   await expectAligned(page, 'p07-spread', '工具列收起後');
   expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
+  expect(await toolbarTextsSent(sw)).toEqual([]);
 });

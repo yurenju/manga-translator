@@ -201,6 +201,11 @@ export async function isContentScriptInjected(sw: Worker, tabId: number): Promis
 }
 
 /** 在 SW 裡直接讀外掛的 IndexedDB（只讀，不經過外掛的程式）。 */
+/** 送進 LLM（FakeTranslator）的每一句原文，也就是 OCR 讀到的字。 */
+export function sentOriginals(sw: Worker): Promise<string[]> {
+  return sw.evaluate(() => (globalThis.__translateInputs ?? []).flatMap((input) => input.items.map((item) => item.原文)));
+}
+
 export function readStore<T>(sw: Worker, store: string): Promise<T[]> {
   return sw.evaluate(
     (store) =>

@@ -1,8 +1,8 @@
-import type { Message, PageCandidate, PageCandidatesResponse, Rect } from '../shared/messages.ts';
+import type { CaptureFinishedResponse, Message, PageCandidate, PageCandidatesResponse, Rect } from '../shared/messages.ts';
 import { createTrace } from '../shared/trace.ts';
+import { createCapturePrep } from './capture.ts';
 import { createOverlay, HOST_ATTRIBUTE } from './overlay.ts';
 import { createOverlayFontLoader } from './overlay-font.ts';
-import { occludersOf } from './occlusion.ts';
 import { pageCandidateRejection } from './page-candidates.ts';
 import { watchPageTurns } from './page-turn.ts';
 
@@ -47,24 +47,13 @@ if (!globalThis.__mangaTranslator) {
     /** 除錯記錄用：夠大但不算候選的元素（太小的只算數量，圖示太多）。 */
     const rejected: { tag: string; rect: Rect; reason: string; clips: Rect[] }[] = [];
     let small = 0;
-    let occluded = 0;
     anchors.clear();
     for (const element of document.querySelectorAll('img, canvas')) {
-      const box = element.getBoundingClientRect();
-      const { x, y, width, height } = box;
+      const { x, y, width, height } = element.getBoundingClientRect();
       const rect = { x, y, width, height };
       const clips = clipRects(element);
-      let reason: string | undefined = pageCandidateRejection(rect, visible, clips);
-      // 被工具列之類蓋住的不算完整可見，等它收起再截（#55、ADR 0004）。工具列收起時也會再掃：
-      // 沒有任何 anchor 時 relatesToPage 一律回 true，工具列本身的變動（淡出後 display: none）就會觸發。
-      if (reason === undefined) {
-        const occluders = occludersOf(element, box, (el) => el.closest(`[${HOST_ATTRIBUTE}]`) !== null);
-        if (occluders.length > 0) {
-          reason = 'occluded';
-          occluded++;
-          if (__DEBUG__) trace('occluded', { tag: element.tagName.toLowerCase(), rect, occluders: occluders.slice(0, 5).map(describe) });
-        }
-      }
+      // 被工具列之類蓋住的照樣算：截圖前會把蓋在上面的元素藏起來（#59、ADR 0004）
+      const reason = pageCandidateRejection(rect, visible, clips);
       if (reason === undefined) {
         const overlaid = overlay.shownPages(element);
         candidates.push({ anchorId: anchorIdOf(element), rect, ...(overlaid.length > 0 ? { overlaid } : {}) });
@@ -73,14 +62,8 @@ if (!globalThis.__mangaTranslator) {
       else if (__DEBUG__) rejected.push({ tag: element.tagName.toLowerCase(), rect, reason, clips });
     }
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    if (__DEBUG__) trace('candidates', { url: location.href, viewport, visible, dpr: devicePixelRatio, candidates, rejected, small, occluded });
-    return { viewport, candidates, ...(occluded > 0 ? { occluded } : {}) };
-  }
-
-  /** trace 用：tag#id.class。 */
-  function describe(element: Element): string {
-    const cls = typeof element.className === 'string' ? element.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
-    return `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}${cls ? `.${cls}` : ''}`;
+    if (__DEBUG__) trace('candidates', { url: location.href, viewport, visible, dpr: devicePixelRatio, candidates, rejected, small });
+    return { viewport, candidates };
   }
 
   /** 會裁切內容的祖先（overflow 不是 visible）：翻頁式 viewer 的隔壁頁在它外面。 */
@@ -115,10 +98,14 @@ if (!globalThis.__mangaTranslator) {
     },
   });
 
+  /** 在自己的覆蓋層（shadow host）裡。 */
+  const inOverlayHost = (el: Element) => el.closest(`[${HOST_ATTRIBUTE}]`) !== null;
+  const capturePrep = createCapturePrep({ overlay, anchors: () => [...anchors.values()], isOwn: inOverlayHost });
+
   // 翻頁訊號 → SW 截圖比對 hash（#34）。
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
   const isOwn = (node: Node, attribute?: string) =>
-    node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
+    node instanceof Element && (inOverlayHost(node) || (attribute === 'style' && overlay.ownsStyleOf(node)));
   // 還沒量到任何 Page（剛啟動、上次沒有完整可見的 Page）時一律算，免得漏掉第一頁
   const relatesToPage = (node: Node, added: boolean) => {
     if (anchors.size === 0) return true;
@@ -154,14 +141,14 @@ if (!globalThis.__mangaTranslator) {
         else trace('overlay:skip', { anchorId: message.anchorId, pageHash: message.pageHash, reason: 'anchor 不在最近一次量到的 Page 裡' });
         return false;
       }
-      case 'content:hideOverlay':
-        void overlay.hideForCapture().then(() => sendResponse(null));
+      case 'content:prepareCapture':
+        void capturePrep.prepare(message.hideOverlay).then(() => sendResponse(null));
         return true;
-      case 'content:restoreOverlay': {
-        const hiddenMs = overlay.restoreAfterCapture();
-        trace('overlay:restore', { hiddenMs });
-        if (__E2E__ && hiddenMs !== undefined) (globalThis.__overlayHiddenMs ??= []).push(hiddenMs);
-        sendResponse(null);
+      case 'content:finishCapture': {
+        const { stable, overlayHiddenMs } = capturePrep.finish();
+        trace('capture:finish', { stable, overlayHiddenMs });
+        if (__E2E__ && overlayHiddenMs !== undefined) (globalThis.__overlayHiddenMs ??= []).push(overlayHiddenMs);
+        sendResponse({ stable } satisfies CaptureFinishedResponse);
         return false;
       }
       case 'content:highlight':
