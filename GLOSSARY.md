@@ -40,8 +40,12 @@ _Avoid_: item, sentence (one Balloon can hold several sentences)
 A reading-page URL reduced to origin + path (query and hash ignored), remembered against a Series once the reader chooses a non-provisional Series for it. Only used to preselect that Series the next time the extension is activated on the same URL; never activates the extension by itself.
 _Avoid_: site rule, domain mapping
 
+**Page Mode** (頁面模式)
+A global setting, remembered across tabs and browser restarts, that decides what the manga page itself shows: 閱讀 (the default) covers each Balloon with its translation; 學習 leaves the Japanese original untouched and reveals readings, then the translation, step by step through the hover tooltip. Hover sync and the tooltip work in both.
+_Avoid_: learning mode (that is the whole feature), overlay toggle
+
 **Display Level** (顯示層級)
-Which parts of every Line the side panel shows, switched once for all Pages: 只看譯文, 原文＋譯文, 加振り仮名 (the default), 只看日文.
+Which parts of every Line the side panel transcript shows, switched once for all Pages. Under the 閱讀 Page Mode it is one of three levels: 只看譯文, 原文＋譯文, 加振り仮名 (the default). Under 學習 it is only a furigana on/off switch; the translation always stays hidden until revealed step by step.
 _Avoid_: mode, learning mode (that is the whole feature)
 
 **Series Notes** (作品筆記)

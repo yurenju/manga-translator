@@ -1,5 +1,5 @@
 /** 覆蓋層的 e2e 共用量測。覆蓋層在 open shadow root 裡（[data-naruhodo-overlay] 是 shadow host）。 */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 export interface ScreenRect {
   x: number;
@@ -38,6 +38,16 @@ export function overlayTexts(page: Page): Promise<OverlayText[]> {
     ),
   );
 }
+
+/** 頁面上看得到的譯文元素（Playwright 的 locator 會穿進 open shadow root）。 */
+export const shownTranslations = (page: Page): Locator => page.locator('[data-naruhodo-overlay] [data-balloon-id]').filter({ visible: true });
+
+/** 頁面上看得到的擦字底色。 */
+export const shownErasers = (page: Page): Locator => page.locator('[data-naruhodo-overlay] .er').filter({ visible: true });
+
+/** side panel 的 Page Mode 切換（閱讀／學習）。 */
+export const pageMode = (panel: Page, name: '閱讀' | '學習'): Locator =>
+  panel.getByRole('group', { name: '頁面模式' }).getByRole('button', { name, exact: true });
 
 /** 頁面上有幾個覆蓋層的 shadow host。 */
 export function overlayHostCount(page: Page): Promise<number> {

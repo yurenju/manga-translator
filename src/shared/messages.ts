@@ -50,21 +50,14 @@ export type Message =
   /**
    * SW → content script：把一個 Page 的譯文原地覆蓋在 anchor 上（#32）。subRect＝Page 在 anchor 裡的範圍
    * （沒給＝整個 anchor；Spread 的一頁或去掉黑邊，#35）。pageHash＝Page 身分，hover 同步用（同一個 anchor 可能有兩個 Page）。
-   * enabled＝side panel 的覆蓋開關。
    */
-  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; subRect?: RatioRect; text: PageText; enabled: boolean }
+  | { type: 'content:showOverlay'; anchorId: string; pageHash: string; subRect?: RatioRect; text: PageText }
   /**
    * SW → content script：截圖前開始重繪動畫（#60）、藏起疊在 Page 上的元素（#59），hideOverlay 時也藏覆蓋層；等兩個 rAF（已重繪）才回應。
    */
   | { type: 'content:prepareCapture'; hideOverlay: boolean }
   /** SW → content script：截完還原。回應 CaptureFinishedResponse。 */
   | { type: 'content:finishCapture' }
-  /** SW → content script：side panel 的覆蓋開關。 */
-  | { type: 'content:setOverlayEnabled'; enabled: boolean }
-  /** side panel → SW：覆蓋開關。 */
-  | { type: 'panel:setOverlay'; tabId: number; enabled: boolean }
-  /** side panel → SW：覆蓋開關目前的狀態。回應 OverlayResponse。 */
-  | { type: 'panel:getOverlay'; tabId: number }
   /** content script → SW：翻頁訊號 debounce 後（#34）。SW 截圖比對 hash，變了才算翻頁。 */
   | { type: 'content:pageTurn' }
   /** content script → SW：覆蓋層畫好了。SW 不藏覆蓋層截一次，記下這頁帶覆蓋層的樣子（#27 除錯）。 */
@@ -170,10 +163,6 @@ export interface NotesResponse {
 }
 
 export type ImportResponse = { ok: true } | { ok: false; error: string };
-
-export interface OverlayResponse {
-  enabled: boolean;
-}
 
 export interface AutoTranslateResponse {
   enabled: boolean;

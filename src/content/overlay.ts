@@ -7,8 +7,12 @@
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛；
  * img 換了 src（Kindle 翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
  * host 是 anchor 的兄弟節點，不會跟著 anchor 被藏起來，所以 anchor 看不到時 host 也自己藏起來。
+ *
+ * Page Mode（#73）只決定擦字＋譯文那一層要不要顯示：學習時藏起來、保留日文原稿；hover hit-test、tooltip、
+ * 高亮框兩種模式都照常運作。
  */
 import type { LineRef } from '../shared/messages.ts';
+import type { PageMode } from '../shared/page-mode.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
@@ -38,6 +42,7 @@ const STYLE = `${TOKENS}
 .tx.v { writing-mode: vertical-rl; text-orientation: mixed; }
 .tx .u { text-combine-upright: all; }
 .tx[data-fit="3"] { align-items: flex-start; justify-content: flex-start; }
+:host([data-page-mode="learn"]) .er, :host([data-page-mode="learn"]) .tx { visibility: hidden; }
 .tip { position: absolute; display: none; box-sizing: border-box; padding: 0.6em 0.8em; border-radius: 0.6em;
   background: var(--naru-tooltip-bg); color: var(--naru-tooltip-ink); font-weight: 500; line-height: 1.4; white-space: pre-wrap;
   font-family: var(--naru-font-sans); z-index: 2; }
@@ -133,7 +138,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   const entries = new Map<HTMLElement, Entry>();
   /** 被我們從 static 改成 relative 的父元素 → 原本的 inline position，停止時還原。 */
   const changedParents = new Map<HTMLElement, string>();
-  let enabled = true;
+  let pageMode: PageMode = 'read';
   let capturing = false;
   let hiddenAt: number | undefined;
   let stopped = false;
@@ -167,14 +172,14 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
-  /** host 要不要顯示：覆蓋開著、不在截圖中、anchor 看得到。 */
-  const isVisible = (entry: Entry) => enabled && !capturing && isShown(entry.anchor);
+  /** host 要不要顯示：不在截圖中、anchor 看得到。 */
+  const isVisible = (entry: Entry) => !capturing && isShown(entry.anchor);
 
   function applyVisibility(entry: Entry): void {
     const visibility = isVisible(entry) ? 'visible' : 'hidden';
     // 只在真的變了才寫：自己的 MutationObserver 也看 style，寫一樣的值會一直被叫回來
     if (entry.host.style.visibility === visibility) return;
-    if (enabled && !capturing)
+    if (!capturing)
       trace('overlay:anchorVisibility', { pageHashes: [...entry.layers.values()].map((layer) => layer.pageHash), shown: visibility === 'visible' });
     entry.host.style.visibility = visibility;
     if (visibility === 'hidden' && hovered && [...entry.layers.values()].includes(hovered.layer)) setHovered(undefined);
@@ -228,6 +233,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     if (entry) return entry;
     const host = document.createElement('div');
     host.setAttribute(HOST_ATTRIBUTE, '');
+    host.dataset.pageMode = pageMode;
     host.style.cssText = 'position:absolute;left:0;top:0;width:0;height:0;overflow:visible;pointer-events:none;margin:0;padding:0;border:0;';
     const root = host.attachShadow({ mode: 'open' });
     const style = document.createElement('style');
@@ -398,7 +404,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     else if (previous) onHover?.(null);
   }
 
-  /** tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。 */
+  /** tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。學習時不顯示譯文。 */
   function showTooltip(layer: PageLayer, line: HoverLine): void {
     const { tip } = layer;
     const ja = document.createElement('div');
@@ -426,7 +432,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         // 對不上：原文＋整句讀音
         ja.append(line.原文, textDiv('tip-guess', display.fallback));
       }
-      if (line.譯文) parts.push(textDiv('tip-zh', line.譯文));
+      if (line.譯文 && pageMode === 'read') parts.push(textDiv('tip-zh', line.譯文));
       if (line.讀音) parts.push(textDiv('tip-note', '讀音為推測'));
     }
     tip.replaceChildren(...parts);
@@ -460,19 +466,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     panelHighlight = line ?? undefined;
     renderHighlights();
   }
-  /** side panel 的覆蓋開關。用 visibility，關著時仍能量測排版。 */
-  function setEnabled(value: boolean): void {
-    // 每次 showOverlay 都會帶開關狀態，只記改變
-    if (value !== enabled) trace('overlay:enabled', { enabled: value });
-    enabled = value;
-    entries.forEach(applyVisibility);
+  /** Page Mode：學習時藏起擦字＋譯文（用 visibility，藏著時仍能量測排版）；顯示中的 tooltip 換成新模式的內容。 */
+  function setPageMode(mode: PageMode): void {
+    if (mode === pageMode) return;
+    trace('overlay:pageMode', { pageMode: mode });
+    pageMode = mode;
+    for (const entry of entries.values()) entry.host.dataset.pageMode = mode;
+    if (hovered) showTooltip(hovered.layer, hovered.line);
   }
 
-  /** 截圖前：隱藏所有 host，等兩個 rAF（確定已重繪）。 */
+  /** 截圖前：隱藏所有 host（學習時也藏，tooltip 與高亮框不能進截圖），等兩個 rAF（確定已重繪）。 */
   async function hideForCapture(): Promise<void> {
     capturing = true;
     entries.forEach(applyVisibility);
-    if (!enabled || entries.size === 0) return;
+    if (entries.size === 0) return;
     hiddenAt = performance.now();
     await untilRepainted();
   }
@@ -486,10 +493,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return ms;
   }
 
-  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；覆蓋開關關著或 host 不在畫面上就是空的。 */
+  /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；學習（頁面上沒蓋任何東西）或 host 不在畫面上就是空的。 */
   function shownPages(anchor: Element): string[] {
     const entry = entries.get(anchor as HTMLElement);
-    if (!entry || !enabled || stopped || !entry.host.isConnected) return [];
+    if (!entry || pageMode === 'learn' || stopped || !entry.host.isConnected) return [];
     return [...entry.layers.values()].map((layer) => layer.pageHash);
   }
 
@@ -513,7 +520,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return changedParents.has(element as HTMLElement);
   }
 
-  return { show, highlight, setEnabled, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
+  return { show, highlight, setPageMode, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;
