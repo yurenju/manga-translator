@@ -35,7 +35,7 @@ function mockOverlayTexts(page: Page): Promise<MockOverlayText[]> {
       const r = el.getBoundingClientRect();
       return { x: r.x, y: r.y, width: r.width, height: r.height };
     };
-    return [...document.querySelectorAll('[data-manga-translator-overlay]')].flatMap((host) => {
+    return [...document.querySelectorAll('[data-naruhodo-overlay]')].flatMap((host) => {
       const anchor = host.previousElementSibling!;
       return [...host.shadowRoot!.querySelectorAll('[data-balloon-id]')].map((el) => ({
         text: el.textContent ?? '',
@@ -78,7 +78,7 @@ async function expectAligned(page: Page, label: string): Promise<void> {
 }
 
 const hostVisibility = (page: Page) =>
-  page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-manga-translator-overlay]')].map((h) => getComputedStyle(h).visibility));
+  page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-naruhodo-overlay]')].map((h) => getComputedStyle(h).visibility));
 
 test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；覆蓋開關', async ({ context, sw, extensionId, mockSite }, testInfo) => {
   test.setTimeout(OVERLAY_TIMEOUT + 60_000);
@@ -90,7 +90,7 @@ test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；
   await page.screenshot({ path: shot });
   await testInfo.attach('overlay', { path: shot, contentType: 'image/png' });
   // 打包的 Noto Sans TC 有載入（content script 透過 web_accessible_resources 讀到字型檔）
-  expect(await page.evaluate(() => document.fonts.check('700 26px "Manga Translator Noto Sans TC"', '早安'))).toBe(true);
+  expect(await page.evaluate(() => document.fonts.check('700 26px "Naruhodo Noto Sans TC"', '早安'))).toBe(true);
 
   await page.mouse.wheel(0, 400);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
@@ -151,7 +151,7 @@ test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子�
   const screenshot = async () => `data:image/png;base64,${(await page.screenshot()).toString('base64')}`;
   const setHostDisplay = (display: string) =>
     page.evaluate((display) => {
-      for (const host of document.querySelectorAll<HTMLElement>('[data-manga-translator-overlay]')) host.style.display = display;
+      for (const host of document.querySelectorAll<HTMLElement>('[data-naruhodo-overlay]')) host.style.display = display;
     }, display);
   // 基準：把覆蓋層整個拿掉時的畫面（side panel 打開後版面才固定，所以不用最早的那張截圖）
   await setHostDisplay('none');

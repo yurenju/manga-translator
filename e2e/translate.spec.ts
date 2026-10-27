@@ -44,7 +44,7 @@ async function contentScriptView(sw: Worker, tabId: number) {
       target: { tabId },
       func: async () => {
         const db = await new Promise<IDBDatabase>((resolve, reject) => {
-          const request = indexedDB.open('manga-translator');
+          const request = indexedDB.open('naruhodo');
           request.onsuccess = () => resolve(request.result);
           request.onerror = () => reject(request.error);
         });

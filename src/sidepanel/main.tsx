@@ -158,7 +158,7 @@ function Backup() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `manga-translator-${new Date(data.exportedAt).toISOString().slice(0, 10)}.json`;
+    a.download = `naruhodo-${new Date(data.exportedAt).toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }

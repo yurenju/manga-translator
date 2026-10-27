@@ -69,7 +69,7 @@ test.describe('覆蓋渲染（ground truth）', () => {
     await render(page, 'p05-dense', 880);
 
     const clip = await page.evaluate(() => {
-      const host = document.querySelector('[data-manga-translator-overlay]')!;
+      const host = document.querySelector('[data-naruhodo-overlay]')!;
       const tx = host.shadowRoot!.querySelector('[data-balloon-id="t4"]')!;
       const walker = document.createTreeWalker(tx, NodeFilter.SHOW_TEXT);
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -127,7 +127,7 @@ test.describe('覆蓋渲染（ground truth）', () => {
     expect(truncated).toBeDefined();
     const balloon = pages[0]!.text.balloons.find((b) => b.id === truncated!.id)!;
 
-    const tooltip = page.locator('[data-manga-translator-overlay] .tip');
+    const tooltip = page.locator('[data-naruhodo-overlay] .tip');
     await expect(tooltip).toBeHidden();
     await page.mouse.move(truncated!.rect.x + truncated!.rect.width / 2, truncated!.rect.y + truncated!.rect.height / 2);
     await expect(tooltip).toBeVisible();

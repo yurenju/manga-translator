@@ -33,7 +33,7 @@ function kindleOverlay(page: Page): Promise<KindleOverlay> {
     };
     // 多張 img 輪流用時（buffers）取看得到的那張；藏起來的 img 上的譯文也要看不到才算
     const img = [...document.querySelectorAll<HTMLImageElement>('#zoom > img')].find((el) => el.checkVisibility({ visibilityProperty: true }))!;
-    const texts = [...document.querySelectorAll('[data-manga-translator-overlay]')].flatMap((host) =>
+    const texts = [...document.querySelectorAll('[data-naruhodo-overlay]')].flatMap((host) =>
       [...host.shadowRoot!.querySelectorAll('[data-balloon-id]')]
         .filter((el) => el.checkVisibility({ visibilityProperty: true }))
         .map((el) => ({ text: el.textContent ?? '', rect: rectOf(el) })),

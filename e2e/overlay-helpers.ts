@@ -1,4 +1,4 @@
-/** 覆蓋層的 e2e 共用量測。覆蓋層在 open shadow root 裡（[data-manga-translator-overlay] 是 shadow host）。 */
+/** 覆蓋層的 e2e 共用量測。覆蓋層在 open shadow root 裡（[data-naruhodo-overlay] 是 shadow host）。 */
 import type { Page } from '@playwright/test';
 
 export interface ScreenRect {
@@ -23,7 +23,7 @@ export interface OverlayText {
 /** 頁面上所有覆蓋層的譯文元素。 */
 export function overlayTexts(page: Page): Promise<OverlayText[]> {
   return page.evaluate(() =>
-    [...document.querySelectorAll('[data-manga-translator-overlay]')].flatMap((host) =>
+    [...document.querySelectorAll('[data-naruhodo-overlay]')].flatMap((host) =>
       [...host.shadowRoot!.querySelectorAll<HTMLElement>('[data-balloon-id]')].map((el) => {
         const r = el.getBoundingClientRect();
         return {
@@ -41,5 +41,5 @@ export function overlayTexts(page: Page): Promise<OverlayText[]> {
 
 /** 頁面上有幾個覆蓋層的 shadow host。 */
 export function overlayHostCount(page: Page): Promise<number> {
-  return page.evaluate(() => document.querySelectorAll('[data-manga-translator-overlay]').length);
+  return page.evaluate(() => document.querySelectorAll('[data-naruhodo-overlay]').length);
 }

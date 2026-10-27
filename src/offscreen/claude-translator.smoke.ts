@@ -13,7 +13,7 @@ import { readTestApiKey, TEST_API_KEY_FILE } from '../testing/test-api-key.ts';
 import { CLAUDE_MODEL, createClaudeTranslator, type ApiUsage } from './claude-translator.ts';
 
 const apiKey = readTestApiKey();
-if (!apiKey) console.log(`已跳過：沒有 MANGA_TRANSLATOR_ANTHROPIC_KEY，也沒有 ${TEST_API_KEY_FILE}`);
+if (!apiKey) console.log(`已跳過：沒有 NARUHODO_ANTHROPIC_KEY，也沒有 ${TEST_API_KEY_FILE}`);
 
 const items = (id: string): TranslateInput['items'] =>
   readGroundTruth(id)

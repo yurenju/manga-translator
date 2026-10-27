@@ -194,7 +194,7 @@ export async function isContentScriptInjected(sw: Worker, tabId: number): Promis
   return sw.evaluate(async (tabId) => {
     const [result] = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => globalThis.__mangaTranslator?.active === true,
+      func: () => globalThis.__naruhodo?.active === true,
     });
     return result?.result === true;
   }, tabId);
@@ -210,7 +210,7 @@ export function readStore<T>(sw: Worker, store: string): Promise<T[]> {
   return sw.evaluate(
     (store) =>
       new Promise<T[]>((resolve, reject) => {
-        const open = indexedDB.open('manga-translator');
+        const open = indexedDB.open('naruhodo');
         open.onerror = () => reject(open.error);
         open.onsuccess = () => {
           const request = open.result.transaction(store).objectStore(store).getAll();

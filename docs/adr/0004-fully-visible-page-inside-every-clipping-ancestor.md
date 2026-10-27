@@ -1,6 +1,6 @@
 # 「完整可見」的 Page 要落在 viewport 與每一個會裁切的祖先裡面
 
-[ADR 0003](0003-page-location-and-activation.md) 定位 Page 的方法是「可視區域裡夠大的 `<img>` / `<canvas>`」。翻頁式的 viewer（仿 Jump+ 的 `?mode=paged`、真的 Jump+ 翻頁模式）把每一頁都放在同一個 `overflow: hidden` 的容器裡，用 `transform` 左右移動；隔壁頁的 `getBoundingClientRect()` 常常整個落在 viewport 裡，但被容器裁掉、畫面上看不到。只看 viewport 的話，隔壁頁會被當成 Page 截圖、跑 OCR、翻譯，覆蓋層也會蓋在看不到的元素上（[#34](https://github.com/yurenju/manga-translator/issues/34)）。
+[ADR 0003](0003-page-location-and-activation.md) 定位 Page 的方法是「可視區域裡夠大的 `<img>` / `<canvas>`」。翻頁式的 viewer（仿 Jump+ 的 `?mode=paged`、真的 Jump+ 翻頁模式）把每一頁都放在同一個 `overflow: hidden` 的容器裡，用 `transform` 左右移動；隔壁頁的 `getBoundingClientRect()` 常常整個落在 viewport 裡，但被容器裁掉、畫面上看不到。只看 viewport 的話，隔壁頁會被當成 Page 截圖、跑 OCR、翻譯，覆蓋層也會蓋在看不到的元素上（[#34](https://github.com/yurenju/naruhodo-manga-translator/issues/34)）。
 
 ## 決定
 
@@ -15,7 +15,7 @@ Page 候選要**完整可見**：rect 落在 viewport 裡，**而且**落在每�
 
 ## 被其他元素蓋住：截圖前藏起來（#55、#59）
 
-Kindle 的閱讀器把工具列（書名列、試讀橫幅、進度列、翻頁箭頭）疊在整個 viewport 大小的 img 上面；截到的 Page 會帶著 UI，Balloon 被蓋掉一截，OCR 缺字，hash 也對不上（[#55](https://github.com/yurenju/manga-translator/issues/55)）。#55 原本的做法是「被有畫東西的元素蓋住就不截，side panel 提示使用者收起」，但在真實 Jump+ 誤判：翻頁感應區是透明、各蓋半個畫面的 `<a>`，只有貼在畫面邊緣的小箭頭背景圖，整塊被當成遮擋物，整頁都不翻（[#59](https://github.com/yurenju/manga-translator/issues/59)）。
+Kindle 的閱讀器把工具列（書名列、試讀橫幅、進度列、翻頁箭頭）疊在整個 viewport 大小的 img 上面；截到的 Page 會帶著 UI，Balloon 被蓋掉一截，OCR 缺字，hash 也對不上（[#55](https://github.com/yurenju/naruhodo-manga-translator/issues/55)）。#55 原本的做法是「被有畫東西的元素蓋住就不截，side panel 提示使用者收起」，但在真實 Jump+ 誤判：翻頁感應區是透明、各蓋半個畫面的 `<a>`，只有貼在畫面邊緣的小箭頭背景圖，整塊被當成遮擋物，整頁都不翻（[#59](https://github.com/yurenju/naruhodo-manga-translator/issues/59)）。
 
 所以改成**一律截圖，截圖前把疊在 Page 上的元素暫時藏起來**：content script 在每個 anchor 的 rect 內格點取樣 `elementsFromPoint`，hit test 堆疊裡排在 anchor 前面的元素就是遮擋物（`occlusion.ts`），用 `document.adoptedStyleSheets` 加一張樣式表把它們設成 `opacity: 0 !important; transition: none !important`，等重繪完才截，截完立刻拿掉（`capture.ts`）。真實網站上量到：Jump+ 漫畫範圍內跟原圖 0 個像素不同；Kindle 工具列開著時藏起來截的圖跟使用者手動收起後截的 0 個像素不同；找遮擋物＋套樣式 3～9 ms，不產生 mutation。
 

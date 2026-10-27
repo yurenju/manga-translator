@@ -1,6 +1,6 @@
 # 翻譯流水線全部在外掛裡跑，LLM 只負責讀音與翻譯
 
-v1 的流水線（擷取 → 切單頁 → 偵測 Balloon / Loose Text → OCR → 閱讀順序 → 讀音＋翻譯 → 原地覆蓋）除了「讀音＋翻譯」交給 LLM API 之外，全部在 Chrome 外掛裡執行，不需要本機 server。原因有三個：native host 已經排除（[#8](https://github.com/yurenju/manga-translator/issues/8)），本機 server 只能靠使用者手動啟動；WebGPU 上的本機 OCR 在 Windows 與 Mac 上都只要數秒（[#7](https://github.com/yurenju/manga-translator/issues/7)）；在真實頁面上，本機 detector 的 Balloon 框比看圖模型可靠（[#13](https://github.com/yurenju/manga-translator/issues/13)）。
+v1 的流水線（擷取 → 切單頁 → 偵測 Balloon / Loose Text → OCR → 閱讀順序 → 讀音＋翻譯 → 原地覆蓋）除了「讀音＋翻譯」交給 LLM API 之外，全部在 Chrome 外掛裡執行，不需要本機 server。原因有三個：native host 已經排除（[#8](https://github.com/yurenju/naruhodo-manga-translator/issues/8)），本機 server 只能靠使用者手動啟動；WebGPU 上的本機 OCR 在 Windows 與 Mac 上都只要數秒（[#7](https://github.com/yurenju/naruhodo-manga-translator/issues/7)）；在真實頁面上，本機 detector 的 Balloon 框比看圖模型可靠（[#13](https://github.com/yurenju/naruhodo-manga-translator/issues/13)）。
 
 ## 各段放在哪裡
 
