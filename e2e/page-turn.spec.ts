@@ -112,7 +112,7 @@ test('關掉自動翻譯後翻頁不會翻譯，按「翻譯此頁」才翻', as
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
   await expectOverlaid(page, 0, FIRST_PAGE_TIMEOUT);
 
-  const toggle = panel.getByRole('checkbox', { name: '自動翻譯' });
+  const toggle = panel.getByRole('switch', { name: '自動翻譯' });
   await expect(toggle).toBeChecked();
   await toggle.uncheck();
   await page.bringToFront();

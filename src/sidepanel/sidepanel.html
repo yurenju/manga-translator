@@ -5,34 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>漫畫翻譯</title>
     <script type="module" src="sidepanel.js"></script>
-    <style>
-      [aria-label='逐字稿'] li { display: flex; flex-direction: column; margin-bottom: 0.5em; padding: 0.1em 0.3em; border-left: 3px solid transparent; }
-      [aria-label='逐字稿'] li.hl { background: #e8f0fe; border-left-color: #1a73e8; }
-      .original, .loose { font-size: 1.1em; line-height: 2; }
-      .loose { font-style: italic; color: #b06000; }
-      /* 振り仮名用另一個顏色（spec #27 第 8 節） */
-      rt, .reading { color: #a07c00; }
-      .reading { display: block; font-size: 0.6em; line-height: 1.4; }
-      .levels { display: flex; flex-wrap: wrap; gap: 0.25em; margin: 0.5em 0; }
-      .levels button[aria-pressed='true'] { background: #1a73e8; color: #fff; border-color: #1a73e8; }
-      .ruby-legend { color: #8a6d00; background: #fef7e0; font-size: 0.85em; padding: 0.3em 0.5em; margin: 0 0 0.5em; }
-      .untranslated { color: #888; font-size: 0.85em; }
-      .error, [role='alert'] { color: #b00020; }
-      .unreadable { color: #888; text-decoration: line-through; }
-      .unreadable-label { color: #888; font-size: 0.85em; }
-      .settings { border: 1px solid #ccc; padding: 0.5em; margin: 0.5em 0; }
-      .settings .hint { color: #555; font-size: 0.85em; }
-      footer { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #ccc; padding: 0.5em 0; display: flex; gap: 0.5em; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-      .stale { background: #fef7e0; color: #8a6d00; padding: 0.3em 0.5em; margin: 0.3em 0; display: flex; gap: 0.5em; align-items: center; flex-wrap: wrap; }
-      .notes { border: 1px solid #ccc; padding: 0.5em; margin: 0.5em 0; }
-      .notes table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
-      .notes td, .notes th { border-bottom: 1px solid #eee; padding: 0.2em; text-align: left; }
-      .notes h2 { font-size: 1em; margin: 0.3em 0; }
-      .note-form { display: flex; flex-wrap: wrap; gap: 0.25em; }
-      .note-form label { display: flex; flex-direction: column; font-size: 0.85em; }
-      .backup { display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center; margin: 0.5em 0; }
-      .series, .series form { display: flex; flex-wrap: wrap; gap: 0.25em; align-items: center; }
-    </style>
+    <!-- 同一份 tokens 也打包進覆蓋層的 shadow DOM（src/content/overlay.ts） -->
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="components.css" />
+    <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
     <div id="app"></div>

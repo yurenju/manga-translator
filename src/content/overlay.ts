@@ -11,6 +11,7 @@
 import type { LineRef } from '../shared/messages.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
+import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
@@ -27,7 +28,8 @@ export const isShown = (element: Element) => element.checkVisibility({ visibilit
 /** 給 e2e 與頁面辨識用：shadow host 的屬性。 */
 export const HOST_ATTRIBUTE = 'data-naruhodo-overlay';
 
-const STYLE = `
+/** tooltip 與高亮框的顏色、字型取自 design tokens（跟 side panel 同一份，#71）；擦字與譯文的顏色跟著原稿算。 */
+const STYLE = `${TOKENS}
 :host { all: initial; }
 .pl { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .er { position: absolute; border-radius: 3px; }
@@ -36,17 +38,19 @@ const STYLE = `
 .tx.v { writing-mode: vertical-rl; text-orientation: mixed; }
 .tx .u { text-combine-upright: all; }
 .tx[data-fit="3"] { align-items: flex-start; justify-content: flex-start; }
-.tip { position: absolute; display: none; box-sizing: border-box; padding: 0.4em 0.6em; border-radius: 0.4em;
-  background: rgba(20, 20, 20, 0.92); color: #fff; font-weight: 600; line-height: 1.4; white-space: pre-wrap;
-  font-family: system-ui, sans-serif; z-index: 2; }
+.tip { position: absolute; display: none; box-sizing: border-box; padding: 0.6em 0.8em; border-radius: 0.6em;
+  background: var(--naru-tooltip-bg); color: var(--naru-tooltip-ink); font-weight: 500; line-height: 1.4; white-space: pre-wrap;
+  font-family: var(--naru-font-sans); z-index: 2; }
 .tip.on { display: block; }
-.tip-ja { font-size: 1.15em; line-height: 1.9; }
-.tip-ja rt, .tip-guess { color: #f9d36b; }
+.tip-ja { font-family: var(--naru-font-ja); font-size: 1.1em; line-height: 2; color: var(--naru-tooltip-ink-2); }
+.tip-ja rt, .tip-guess, .tip-note { color: var(--naru-tooltip-ruby); }
+.tip-ja rt { font-weight: 400; }
 .tip-guess { font-size: 0.75em; }
-.tip-unreadable { color: #aaa; text-decoration: line-through dotted; }
-.tip-note { margin-top: 0.3em; font-size: 0.75em; color: #f9d36b; }
-.hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: #1a73e8;
-  background: rgba(26, 115, 232, 0.12); }
+.tip-unreadable { color: var(--naru-tooltip-ink-3); text-decoration: line-through dotted; }
+.tip-zh { font-size: 1.15em; }
+.tip-note { margin-top: 0.3em; font-size: 0.75em; }
+.hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: var(--naru-highlight);
+  background: var(--naru-highlight-fill); }
 .hl.on { display: block; }
 `;
 

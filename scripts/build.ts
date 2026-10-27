@@ -21,6 +21,10 @@ const root = fileURLToPath(new URL('..', import.meta.url));
  */
 const STATIC_FILES: [string, string][] = [
   ['src/sidepanel/sidepanel.html', 'sidepanel.html'],
+  // design tokens（#71）：side panel 直接載入；content script 另外把它打包成字串放進 shadow DOM
+  ['src/shared/tokens.css', 'tokens.css'],
+  ['src/sidepanel/components.css', 'components.css'],
+  ['src/sidepanel/sidepanel.css', 'sidepanel.css'],
   ['src/offscreen/offscreen.html', 'offscreen.html'],
   // onnxruntime-web 不打包進 offscreen.js，執行時動態 import（見 src/offscreen/ort-engine.ts）。
   // webgpu bundle 同時支援 WebGPU 與 wasm，只會載入 asyncify 這一份 wasm（與它的 .mjs，多執行緒 worker 用）。
