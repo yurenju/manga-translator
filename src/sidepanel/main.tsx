@@ -431,6 +431,16 @@ function SeriesPicker({ tabId }: { tabId: number }) {
   );
 }
 
+/** 標題：logo（跟外掛 icon 同一份 SVG 母檔）＋名稱。 */
+function Title() {
+  return (
+    <h1 class="title">
+      <img src="icons/naruhodo.svg" alt="" width={24} height={24} />
+      Naruhodo
+    </h1>
+  );
+}
+
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
   const [active, setActive] = useState<boolean | undefined>(tabId === undefined ? false : undefined);
@@ -461,6 +471,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   if (!active || tabId === undefined)
     return (
       <main>
+        <Title />
         <p>請點外掛圖示啟動</p>
         {settings}
       </main>
@@ -480,6 +491,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   return (
     <>
       <main>
+        <Title />
         <div class="toolbar">
           <Badge tone="ok">已啟動</Badge>
           <Button variant="ghost" onClick={() => void send({ type: 'panel:stop', tabId })}>

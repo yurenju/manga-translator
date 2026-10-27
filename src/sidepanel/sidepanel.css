@@ -6,7 +6,12 @@ body {
   color: var(--naru-ink); background: var(--naru-surface);
 }
 [lang='ja'] { font-family: var(--naru-font-ja); }
-h1 { font-size: var(--naru-text-body); margin: var(--naru-space-3) 0 var(--naru-space-2); }
+/* 標題：logo＋名稱（#72） */
+.title {
+  display: flex; align-items: center; gap: var(--naru-space-2);
+  margin: var(--naru-space-3) 0 var(--naru-space-2);
+  font-size: var(--naru-text-body); font-weight: 700; color: var(--naru-ink);
+}
 main { padding-bottom: var(--naru-space-3); }
 input:not([type]), input[type='password'], select {
   box-sizing: border-box; min-height: 32px; padding: 0 var(--naru-space-2);
