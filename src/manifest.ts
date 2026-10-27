@@ -1,6 +1,11 @@
 // 版本號只寫在 package.json，由 release workflow 更新（.github/workflows/release.yml）
 import pkg from '../package.json' with { type: 'json' };
 
+/** 外掛 icon 的尺寸：工具列 16/32、管理頁 48、安裝與 Web Store 128。PNG 由 scripts/icons.ts 從 SVG 母檔產出。 */
+export const ICON_SIZES = [16, 32, 48, 128] as const;
+
+const icons = Object.fromEntries(ICON_SIZES.map((size) => [String(size), `icons/icon-${size}.png`]));
+
 /**
  * 權限照 spec #27 第 6 節：沒有 host_permissions、沒有靜態 content_scripts，
  * 也不用 openPanelOnActionClick（ADR 0003）。e2e build 額外宣告 <all_urls>（第 12 節）；debug build 只改名字。
@@ -15,10 +20,11 @@ export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: bo
     version: pkg.version,
     description: '把畫面上的日文漫畫原地翻成繁體中文',
     minimum_chrome_version: '116',
+    icons,
     permissions: ['activeTab', 'scripting', 'sidePanel', 'offscreen', 'unlimitedStorage'],
     ...(e2e ? { host_permissions: ['<all_urls>'] } : {}),
     background: { service_worker: 'background.js', type: 'module' },
-    action: { default_title: '漫畫翻譯：在這個分頁啟動' },
+    action: { default_title: '漫畫翻譯：在這個分頁啟動', default_icon: icons },
     side_panel: { default_path: 'sidepanel.html' },
     // 讓外掛頁面（offscreen document）crossOriginIsolated，onnxruntime-web 的 wasm 才能用 SharedArrayBuffer 多執行緒。
     // 外掛頁面只載入自己的檔案、data URL，以及有 CORS 的 Hugging Face 下載，require-corp 不會擋到。

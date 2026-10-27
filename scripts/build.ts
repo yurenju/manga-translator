@@ -29,8 +29,11 @@ const STATIC_FILES: [string, string][] = [
   ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm', 'ort/ort-wasm-simd-threaded.asyncify.wasm'],
 ];
 
-/** 原樣複製的目錄。 */
-const STATIC_DIRS: [string, string][] = [['node_modules/kuromoji/dict', 'kuromoji/dict']];
+/** 原樣複製的目錄。icons：外掛 icon 的 PNG 與 side panel 標題用的 SVG 母檔（PNG 由 scripts/icons.ts 產出）。 */
+const STATIC_DIRS: [string, string][] = [
+  ['node_modules/kuromoji/dict', 'kuromoji/dict'],
+  ['src/icons', 'icons'],
+];
 
 /**
  * 覆蓋層的 Noto Sans TC（#32）：@fontsource 依 unicode-range 切好的 700 字重 woff2 子集（約 3.5 MB），
