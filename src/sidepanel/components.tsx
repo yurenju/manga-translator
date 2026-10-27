@@ -127,3 +127,55 @@ type CalloutProps = Omit<HTMLAttributes<HTMLDivElement>, 'class' | 'className'> 
 export function Callout({ tone = 'info', class: extra, ...rest }: CalloutProps) {
   return <div class={cx('naru-callout', `naru-callout--${tone}`, extra)} {...rest} />;
 }
+
+/** Page 在 Spread 裡的哪一邊；undefined＝不是 Spread。 */
+export type SpreadSide = 'right' | 'left';
+
+/** 小圖示：Spread 畫兩格、亮起的那格是這個 Page；單頁畫一格。標題已經說了是哪頁，圖示只是裝飾。 */
+function PageIcon({ side }: { side: SpreadSide | undefined }) {
+  const cells = side === undefined ? [{ x: 5, lit: true }] : [
+    { x: 1, lit: side === 'left' },
+    { x: 10, lit: side === 'right' },
+  ];
+  return (
+    <svg class="naru-page-header__icon" viewBox="0 0 19 14" width={19} height={14} aria-hidden="true">
+      {cells.map(({ x, lit }) => (
+        <rect key={x} class={lit ? 'lit' : undefined} x={x + 0.5} y={0.5} width={7} height={13} rx={1.5} />
+      ))}
+    </svg>
+  );
+}
+
+/**
+ * 每個 Page 的頁首（取代縮圖）：圖示＋「右頁 · 先讀」「左頁 · 後讀」或「第 N 頁」，右側小字放翻譯狀態。
+ * 標題是 heading，id 給外層 listitem 用 aria-labelledby 當名字。
+ */
+export function PageHeader({
+  id,
+  side,
+  number,
+  status,
+}: {
+  id: string;
+  side: SpreadSide | undefined;
+  /** 不是 Spread 時標的頁數（從 1 起）。 */
+  number: number;
+  status?: ComponentChildren;
+}) {
+  return (
+    <div class="naru-page-header">
+      <PageIcon side={side} />
+      <h2 id={id} class="naru-page-header__title">
+        {side === undefined ? (
+          `第 ${number} 頁`
+        ) : (
+          <>
+            {side === 'right' ? '右頁' : '左頁'}
+            <span class="naru-page-header__order"> · {side === 'right' ? '先讀' : '後讀'}</span>
+          </>
+        )}
+      </h2>
+      {status && <div class="naru-page-header__status">{status}</div>}
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useId, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
 import type { StaleReason } from '../shared/series-notes.ts';
 import type { BackupFile } from '../background/backup.ts';
@@ -18,7 +18,7 @@ import type {
   TestConnectionResponse,
   TranslationInfo,
 } from '../shared/messages.ts';
-import { Badge, Button, Callout, Switch } from './components.tsx';
+import { Badge, Button, Callout, PageHeader, Switch, type SpreadSide } from './components.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
 
@@ -92,30 +92,50 @@ function StaleHint({ reason, onRetranslate }: { reason: StaleReason; onRetransla
   );
 }
 
+/**
+ * Page 在 Spread 裡的哪一邊（spec #70）：同一個 anchor 切出兩個 Page 才是 Spread，subRect 中心偏右的是右頁。
+ * 只看 subRect 不夠：單頁去黑邊後也有 subRect。
+ */
+function spreadSide(page: PageView, pages: PageView[]): SpreadSide | undefined {
+  if (!pages.some((p) => p !== page && p.anchorId === page.anchorId)) return undefined;
+  const r = page.subRect;
+  return r && r.x + r.w / 2 < 0.5 ? 'left' : 'right';
+}
+
 function PageItem({
   page,
-  index,
+  side,
+  number,
   onRetry,
   onRetranslate,
   learning,
 }: {
   page: PageView;
-  index: number;
+  side: SpreadSide | undefined;
+  number: number;
   onRetry: () => void;
   onRetranslate: () => void;
   learning: LearningProps;
 }) {
   const { transcript } = page;
   const { level, hovered, onLineHover } = learning;
+  const headingId = useId();
   return (
-    <li>
-      <img src={page.thumbnail} alt={`Page ${index + 1}`} />
+    <li aria-labelledby={headingId}>
+      <PageHeader
+        id={headingId}
+        side={side}
+        number={number}
+        status={
+          transcript.state === 'done' &&
+          transcript.translation &&
+          !transcript.translating &&
+          !transcript.translateError && <TranslationStatusLine status={transcript.translation} />
+        }
+      />
       {transcript.state === 'analyzing' && <p>辨識中…</p>}
       {transcript.state === 'pending' && <Callout>未翻譯（自動翻譯已關閉，按「翻譯此頁」）</Callout>}
       {transcript.state === 'error' && <Callout tone="danger">辨識失敗：{transcript.message}</Callout>}
-      {transcript.state === 'done' && transcript.translation && !transcript.translating && !transcript.translateError && (
-        <TranslationStatusLine status={transcript.translation} />
-      )}
       {transcript.state === 'done' && transcript.stale && !transcript.translating && (
         <StaleHint reason={transcript.stale} onRetranslate={onRetranslate} />
       )}
@@ -517,7 +537,8 @@ function App({ tabId }: { tabId: number | undefined }) {
             <PageItem
               key={`${page.anchorId}/${page.pageHash}`}
               page={page}
-              index={i}
+              side={spreadSide(page, pages)}
+              number={i + 1}
               onRetry={translate}
               onRetranslate={() => void send({ type: 'panel:translate', tabId, pageHash: page.pageHash })}
               learning={learning}
