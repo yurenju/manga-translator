@@ -45,5 +45,9 @@ Which parts of every Line the side panel shows, switched once for all Pages: 只
 _Avoid_: mode, learning mode (that is the whole feature)
 
 **Series Notes** (作品筆記)
-The fixed translations a Series has settled on — names and terms, plus how each character refers to themself, speaks, and addresses others — used to keep translations consistent. Mostly accumulated by the translator as it reads; the reader reviews it and occasionally corrects it. No plot progress. Belongs to the Series, shared across every site the Series is read on.
+The fixed translations a Series has settled on — names and terms, plus how each character refers to themself, speaks, and addresses others — used to keep translations consistent. The translator accumulates names and terms as it reads; how each character speaks comes only from the reader, since the text alone does not say who is speaking. The reader reviews it and occasionally corrects it. No plot progress. Belongs to the Series, shared across every site the Series is read on.
 _Avoid_: context, glossary (ambiguous with this file), dictionary
+
+**Prior Pages** (前頁)
+The Pages the reader saw just before the ones on screen, in the same tab, with their text and translations; sent along when a Page is translated so the translator can follow the conversation and keep its wording. Follows what the reader actually saw, so after a jump or a page back they are not the previous Pages of the Episode.
+_Avoid_: context (that word is avoided for Series Notes), history
