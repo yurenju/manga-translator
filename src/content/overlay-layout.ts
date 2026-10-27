@@ -100,6 +100,34 @@ export function separateRegions(items: { text: Box; fit1: Box; fit2: Box }[]): v
   }
 }
 
+/** 估不出原作字級時的起始字級（Page 像素）。 */
+const START_PX = 26;
+/** 原作的字寬 ≈ 這個比例 × √(文字框面積 ÷ 字數)（#80 用 10 個 debug session、621 個對話框量出來的）。 */
+const INK_PER_CELL = 0.54;
+/** 譯文字形的墨水寬約 0.9 em。 */
+const INK_PER_EM = 0.9;
+/** 保守係數：比估出來的原作字級小一點，之後可再調。 */
+const FONT_ESTIMATE_FACTOR = 0.9;
+
+/** 原文佔幾格：連續的點（...、・・・ 或 …）算 2 格（直書「……」），空白不算。 */
+const cellCount = (text: string) => [...text.replace(/[.・]{2,}|…+/g, '……').replace(/\s/g, '')].length;
+
+/**
+ * 這一頁的起始字級（Page 像素）：從每個 Balloon 的文字框與原文估原作字級，取整頁中位數。
+ * 沒有原文或文字框沒有面積的不算；整頁都沒得估就用 START_PX。
+ */
+export function estimatePageFontPx(balloons: { text: Box; 原文: string }[]): number {
+  const cells = balloons
+    .map(({ text, 原文 }) => ({ area: text.w * text.h, count: cellCount(原文) }))
+    .filter(({ area, count }) => area > 0 && count > 0)
+    .map(({ area, count }) => Math.sqrt(area / count))
+    .sort((a, b) => a - b);
+  if (cells.length === 0) return START_PX;
+  const mid = cells.length / 2;
+  const median = cells.length % 2 ? cells[Math.floor(mid)]! : (cells[mid - 1]! + cells[mid]!) / 2;
+  return (median * INK_PER_CELL * FONT_ESTIMATE_FACTOR) / INK_PER_EM;
+}
+
 /** 最小畫面字級（畫面 px）。Jump+ 顯示倍率約 0.49×，只看 Page 像素的話 14px 在畫面上只剩約 7px。 */
 export const MIN_SCREEN_FONT_PX = 9;
 
@@ -122,28 +150,28 @@ export interface FitResult {
   truncated: boolean;
 }
 
-const START_PX = 26;
 const STAGE_FLOORS = [14, 12, 10] as const;
 
-/** 從 26px 每次 −1 縮到 floor；floor 不是整數時最後也試 floor 本身。 */
-function sizesDownTo(floor: number): number[] {
+/** 從 start 每次 −1 縮到 floor；floor 不是整數時最後也試 floor 本身；start 比 floor 小就只試 floor。 */
+function sizesDownTo(start: number, floor: number): number[] {
   const sizes: number[] = [];
-  for (let size = START_PX; size >= floor; size--) sizes.push(size);
+  for (let size = start; size >= floor; size--) sizes.push(size);
   if (sizes.at(-1) !== floor) sizes.push(floor);
   return sizes;
 }
 
 /**
- * 三階段：1. fit1 內從 26px 縮到 14px；2. 擴到 fit2 再從 26px 縮到 12px；3. 10px 並截斷。
+ * 三階段：1. fit1 內從 startPx 縮到 14px；2. 擴到 fit2 再從 startPx 縮到 12px；3. 10px 並截斷。
+ * startPx 是 estimatePageFontPx 估的這頁字級，沒有就 26px。
  * 每一階的下限都不小於 minLayerPx（最小畫面字級換算回 Page 像素）。
  */
-export function fitText(target: FitTarget, regions: { fit1: Box; fit2: Box }, minLayerPx: number): FitResult {
+export function fitText(target: FitTarget, regions: { fit1: Box; fit2: Box }, minLayerPx: number, startPx = START_PX): FitResult {
   const stages = [
     { stage: 1 as const, region: regions.fit1, floor: Math.max(STAGE_FLOORS[0], minLayerPx) },
     { stage: 2 as const, region: regions.fit2, floor: Math.max(STAGE_FLOORS[1], minLayerPx) },
   ];
   for (const { stage, region, floor } of stages) {
-    for (const size of sizesDownTo(floor)) {
+    for (const size of sizesDownTo(startPx, floor)) {
       target.apply(region, size);
       if (!target.overflows()) return { stage, size, region, truncated: false };
     }
