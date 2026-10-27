@@ -116,13 +116,16 @@ export function usedNotes(entries: readonly NotesEntry[], texts: readonly string
 /** 接在人名後面的敬稱。 */
 const HONORIFIC = /(?:君|くん|さん|ちゃん|様|さま|先生|先輩)$/;
 
+/** 比對寫法用：片假名一律當成平假名。 */
+const foldKana = (s: string) => normalizeText(s).replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+
 /**
- * 新增的原文其實是既有條目換個說法（加上敬稱、寫成讀音的假名）：LLM 常把「人名＋敬稱」當成新人名、
- * 或把既有的名字用假名再加一次（#64）。
+ * 新增的原文其實是別的條目換個說法（加上敬稱、寫成讀音的假名）：LLM 常把「人名＋敬稱」當成新人名、
+ * 或把既有的名字用假名再加一次（#64）。others：既有條目，加上同一次回應裡的其他新增（原文完全相同的不算）。
  */
-function duplicates(notes: readonly NotesEntry[], added: { 原文: string }): boolean {
-  const bare = normalizeText(added.原文).replace(HONORIFIC, '');
-  return notes.some((e) => [e.原文, e.讀音].some((s) => s && normalizeText(s) === bare));
+function isVariantOf(others: readonly Pick<NotesEntry, '原文' | '讀音'>[], added: { 原文: string }): boolean {
+  const bare = foldKana(added.原文).replace(HONORIFIC, '');
+  return others.some((e) => e.原文 !== added.原文 && [e.原文, e.讀音].some((s) => s && foldKana(s) === bare));
 }
 
 /** 套用 notes_changes 的結果，加上沒採用的新增（trace 用，#40 驗收）。 */
@@ -137,7 +140,7 @@ export interface AppliedNotes extends MergedNotes {
  * 依只能新增規則套用 LLM 翻某一頁時回傳的 notes_changes（#37）。規則由這裡執行，不交給 LLM 判斷。
  * OCR 錯字防護：新條目的原文必須出現在這頁某個 Balloon 的原文裡才採用。封面、扉頁的設計字與署名多半是
  * Loose Text 而且常被 OCR 讀錯，照先到先贏規則，錯的版本一旦進來就會卡住之後正確的版本（#37、#48 的觀察）。
- * 雜訊防護（#64）：既有條目加上敬稱或寫成讀音的假名、以及譯文是空的新條目，也不採用。
+ * 雜訊防護（#64）：既有條目（或同一次回應裡的其他新增）加上敬稱或寫成讀音的假名、以及譯文是空的新條目，也不採用。
  * 自稱、語氣、稱呼一律不採用，只由人填（ADR 0005）。
  */
 export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesChanges, page: NotesPage): AppliedNotes {
@@ -153,7 +156,8 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
   const rejected: string[] = [];
   const dropped: UsedNote[] = [];
   const adopted = changes.added.filter((a) => {
-    const ok = known.has(a.原文) || (a.譯文 !== '' && appearsIn(page.balloonTexts, a.原文) && !duplicates(notes, a));
+    const isNew = normalizeText(a.譯文) !== '' && appearsIn(page.balloonTexts, a.原文) && !isVariantOf([...notes, ...changes.added], a);
+    const ok = known.has(a.原文) || isNew;
     if (!ok) rejected.push(a.原文);
     return ok;
   });

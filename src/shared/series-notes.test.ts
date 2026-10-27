@@ -186,7 +186,27 @@ describe('applyNotesChanges（套用 LLM 的 notes_changes）', () => {
     expect(result.rejected).toEqual(['しおみざか']);
   });
 
-  it('新條目的譯文是空的不採用：沒有譯名可以讓之後的頁統一（#64）', () => {
+  it('讀音換成片假名寫法也算既有條目（#64）', () => {
+    const notes = [entry('s', '潮見坂', '潮見坡', { 讀音: 'しおみざか', 類別: '地名' })];
+    const result = applyNotesChanges(notes, { ...none, added: [added('シオミザカ', '潮見坡', { 類別: '地名' })] }, {
+      ...page,
+      balloonTexts: ['シオミザカまで走るよ'],
+    });
+
+    expect(result.entries).toEqual(notes);
+  });
+
+  it('同一次回應裡同時新增人名與人名＋敬稱：只採用人名（#64）', () => {
+    const result = applyNotesChanges([], { ...none, added: [added('ミナ', '美娜'), added('ミナちゃん', '小美娜')] }, page);
+
+    expect(result.entries).toEqual([entry('s', 'ミナ', '美娜')]);
+    expect(result.rejected).toEqual(['ミナちゃん']);
+  });
+
+  it('新條目的譯文是空的（或只有空白）不採用：沒有譯名可以讓之後的頁統一（#64）', () => {
+    const blank = applyNotesChanges([], { ...none, added: [added('ミナ', '　')] }, page);
+    expect(blank.entries).toEqual([]);
+
     const result = applyNotesChanges([], { ...none, added: [added('潮見坂', '', { 類別: '地名' })] }, page);
 
     expect(result.entries).toEqual([]);

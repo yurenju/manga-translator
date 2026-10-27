@@ -21,7 +21,7 @@ import type {
 } from '../shared/translator.ts';
 
 export const CLAUDE_MODEL = 'claude-haiku-5-5';
-/** 寫進快取判斷過時用（#33）；改 prompt 或 schema 就要改這個。 */
+/** 寫進快取判斷過時用（#33）；改 ① 的 prompt 或 schema 就要改這個。② 的 prompt 不影響已快取的譯文，不用改。 */
 export const PROMPT_VERSION = 'claude-text-v3';
 
 const API_URL = 'https://api.anthropic.com/v1/messages';
