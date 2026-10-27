@@ -11,7 +11,7 @@ import type { Series, UrlPattern } from '../shared/series.ts';
 import type { NotesEntry } from '../shared/translator.ts';
 import { mergeTranslations } from './series.ts';
 
-const FORMAT = 'manga-translator-backup';
+const FORMAT = 'naruhodo-backup';
 
 /** 匯出檔的內容（一個 IndexedDB store 一個陣列）。 */
 export interface BackupData {

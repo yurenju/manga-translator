@@ -21,8 +21,8 @@ export type Context = (typeof CONTEXTS)[number];
 
 export const isContext = (value: string | undefined): value is Context => (CONTEXTS as readonly string[]).includes(value ?? '');
 
-/** debug build 叫「Manga Translator (debug)」，正式版叫「Manga Translator」。 */
-export const isOurExtension = (name: unknown): boolean => typeof name === 'string' && name.startsWith('Manga Translator');
+/** debug build 叫「Naruhodo (debug)」，正式版叫「Naruhodo」。 */
+export const isOurExtension = (name: unknown): boolean => typeof name === 'string' && name.startsWith('Naruhodo');
 
 /**
  * 可能是目標的 target，照 /json/list 的順序（最近用過的在前）。

@@ -11,7 +11,7 @@ import pkg from '../package.json' with { type: 'json' };
 export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: boolean }): chrome.runtime.ManifestV3 {
   return {
     manifest_version: 3,
-    name: e2e ? 'Manga Translator (e2e)' : debug ? 'Manga Translator (debug)' : 'Manga Translator',
+    name: e2e ? 'Naruhodo (e2e)' : debug ? 'Naruhodo (debug)' : 'Naruhodo',
     version: pkg.version,
     description: '把畫面上的日文漫畫原地翻成繁體中文',
     minimum_chrome_version: '116',

@@ -24,7 +24,7 @@ const statusLines = (panel: Page) => panel.getByRole('status', { name: '翻譯�
 function overlaidPages(page: Page): Promise<number[]> {
   return page.evaluate(() => {
     const canvases = [...document.querySelectorAll('.viewer canvas')];
-    const pages = [...document.querySelectorAll('[data-manga-translator-overlay]')]
+    const pages = [...document.querySelectorAll('[data-naruhodo-overlay]')]
       .filter((host) => host.shadowRoot!.querySelector('[data-balloon-id]'))
       .map((host) => canvases.indexOf(host.previousElementSibling!));
     return [...new Set(pages)].sort((a, b) => a - b);

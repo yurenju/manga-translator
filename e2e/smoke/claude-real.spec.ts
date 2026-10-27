@@ -14,7 +14,7 @@ import { readTestApiKey, TEST_API_KEY_FILE } from '../../src/testing/test-api-ke
 import { activateOnJumpPlus, expect, launchWithExtension, openSidePanel, test } from '../fixtures.ts';
 
 const apiKey = readTestApiKey();
-if (!apiKey) console.log(`已跳過：沒有 MANGA_TRANSLATOR_ANTHROPIC_KEY，也沒有 ${TEST_API_KEY_FILE}`);
+if (!apiKey) console.log(`已跳過：沒有 NARUHODO_ANTHROPIC_KEY，也沒有 ${TEST_API_KEY_FILE}`);
 test.skip(!apiKey, '沒有測試用 API key');
 
 async function saveKey(panel: Page): Promise<void> {

@@ -6,8 +6,8 @@ The trace covers, per Page: page-turn signals → Page candidates (with why the 
 
 ## Steps
 
-1. **Start the recorder** in a Terminal panel tab (it runs until Chrome closes): `npm run debug:chrome`. It builds the debug flavour to `%LOCALAPPDATA%\manga-translator\extension`, opens Chrome with its own profile and remote debugging, and records over CDP. If that Chrome is already open, it reloads the extension instead of launching.
-2. **First run only, the user sets up the profile** (it persists): in that Chrome, `chrome://extensions` → Developer mode → Load unpacked → `%LOCALAPPDATA%\manga-translator\extension`; set the API key in the side panel; log in to the site. Hand these steps to the user, then wait.
+1. **Start the recorder** in a Terminal panel tab (it runs until Chrome closes): `npm run debug:chrome`. It builds the debug flavour to `%LOCALAPPDATA%\naruhodo\extension`, opens Chrome with its own profile and remote debugging, and records over CDP. If that Chrome is already open, it reloads the extension instead of launching.
+2. **First run only, the user sets up the profile** (it persists): in that Chrome, `chrome://extensions` → Developer mode → Load unpacked → `%LOCALAPPDATA%\naruhodo\extension`; set the API key in the side panel; log in to the site. Hand these steps to the user, then wait.
 3. **The user reproduces the bug**: refresh the manga tab, click the extension icon, read until the problem shows, and send a screenshot with what they expected. The content script only exists after the icon click, so nothing from the page is traced before it.
 4. **Read the trace** (below) until you can name the record where behaviour departs from what the user expected.
 5. **After a code change**, `npm run debug:reload` in a Terminal panel tab rebuilds and reloads the extension; the user then refreshes the tab and clicks the icon again (a reload orphans the old content script, and Chrome revokes `activeTab` on navigation).
@@ -16,7 +16,7 @@ Run both build commands in the Terminal panel: files the Bash and PowerShell too
 
 ## Reading the trace
 
-Each recording is a session folder `%LOCALAPPDATA%\manga-translator\debug\<YYYYMMDD-HHmmss>\` holding `trace.jsonl` (one record per line) and `images/`. The latest 10 sessions are kept.
+Each recording is a session folder `%LOCALAPPDATA%\naruhodo\debug\<YYYYMMDD-HHmmss>\` holding `trace.jsonl` (one record per line) and `images/`. The latest 10 sessions are kept.
 
 - `npm run debug:summary` prints event counts and a compact timeline of the latest session; pass a session name for another one, `--grep <event>` to filter, `--since <line>` to print only what was recorded after the last line you read. Each line starts with its line number in `trace.jsonl`: read that line for the full record. The timeline drops what is bulky: `crop` shows each Page as `anchorId:hash` plus `ms`, `overlay:show` shows only the fit count and whether any was truncated, and image paths are left out; LLM text, rects, fit regions and images are all in the full line.
 - Follow one Page by its `pageHash`. Offscreen `analyze` records carry only `anchorId`; link them through the `crop` record with the same `anchorId`.

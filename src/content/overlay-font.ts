@@ -8,7 +8,7 @@ import { facesFor, parseFontFaces } from './fonts.ts';
 import type { LoadFont } from './overlay.ts';
 
 /** 用自己的名字，不跟頁面上可能已經有的 Noto Sans TC 混在一起。 */
-export const OVERLAY_FONT_FAMILY = 'Manga Translator Noto Sans TC';
+export const OVERLAY_FONT_FAMILY = 'Naruhodo Noto Sans TC';
 
 export function createOverlayFontLoader(): LoadFont {
   const faces = parseFontFaces(css);

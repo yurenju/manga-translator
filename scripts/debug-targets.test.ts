@@ -39,8 +39,8 @@ describe('candidateTargets', () => {
 
 describe('isOurExtension', () => {
   it('debug 與正式版都算，別的外掛不算', () => {
-    expect(isOurExtension('Manga Translator (debug)')).toBe(true);
-    expect(isOurExtension('Manga Translator')).toBe(true);
+    expect(isOurExtension('Naruhodo (debug)')).toBe(true);
+    expect(isOurExtension('Naruhodo')).toBe(true);
     expect(isOurExtension('Google Docs Offline')).toBe(false);
     expect(isOurExtension(undefined)).toBe(false);
   });

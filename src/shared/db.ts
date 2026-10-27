@@ -2,7 +2,7 @@
  * 外掛 origin 的 IndexedDB（ADR 0002）。SW、offscreen、side panel 共用，content script 讀不到。
  * 之後的 ticket 加 store（Series Notes 等）時，調高 DB_VERSION 並在 upgrade 裡依舊版本建立。
  */
-const DB_NAME = 'manga-translator';
+const DB_NAME = 'naruhodo';
 const DB_VERSION = 4;
 
 export const STORES = {

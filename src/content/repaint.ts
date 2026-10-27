@@ -14,11 +14,11 @@
 const MAX_RUN_MS = 5000;
 
 const REPAINT_CSS = `
-@keyframes manga-translator-repaint { from { opacity: 0; } to { opacity: 0.0001; } }
+@keyframes naruhodo-repaint { from { opacity: 0; } to { opacity: 0.0001; } }
 html::after {
   content: '' !important; display: block !important; position: fixed !important; left: 0 !important; top: 0 !important;
   width: 1px !important; height: 1px !important; background: #000 !important; pointer-events: none !important;
-  z-index: 2147483647 !important; animation: manga-translator-repaint 1s linear infinite alternate !important;
+  z-index: 2147483647 !important; animation: naruhodo-repaint 1s linear infinite alternate !important;
 }
 `;
 

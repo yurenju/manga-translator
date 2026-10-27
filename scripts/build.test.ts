@@ -138,7 +138,7 @@ describe('debug build', () => {
     const [manifest, prodManifest] = await Promise.all([readJson(debugDir, 'manifest.json'), readJson(prodDir, 'manifest.json')]);
 
     for (const file of ['background.js', 'offscreen.js', 'content.js']) expect(await readText(debugDir, file)).toContain('[manga-trace]');
-    expect(manifest.name).toBe('Manga Translator (debug)');
+    expect(manifest.name).toBe('Naruhodo (debug)');
     expect(manifest.permissions).toEqual(prodManifest.permissions);
     expect(manifest.host_permissions).toBeUndefined();
     expect(await readText(debugDir, 'background.js')).not.toContain('test:activate');

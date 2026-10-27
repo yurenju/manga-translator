@@ -5,17 +5,17 @@
 ## 分工
 
 - **使用者**：開 `npm run debug:chrome` 錄 trace，照下面每一項操作，把「使用者回報」的項目記下來（通過／不通過＋一句話）。做完通知 Claude，並告訴它各段落大約是哪個時間做的。
-- **Claude**：從錄到的 session（`%LOCALAPPDATA%\manga-translator\debug\<session>\trace.jsonl`）與 `npm run debug:eval` 核對標「trace」或「eval」的項目。讀法見 `docs/agents/real-site-debugging.md`。
+- **Claude**：從錄到的 session（`%LOCALAPPDATA%\naruhodo\debug\<session>\trace.jsonl`）與 `npm run debug:eval` 核對標「trace」或「eval」的項目。讀法見 `docs/agents/real-site-debugging.md`。
 
 每一項的「判斷」欄標註來源：
 
 - **trace**：`npm run debug:summary -- --grep <event>` 或 trace.jsonl 的整行記錄。事件名稱與欄位都在 `grep -rn "trace('" src` 的呼叫處。
-- **eval**：`npm run debug:eval -- <sw|content|page> -e "<expression>"`。外掛的 IndexedDB（`manga-translator`，store 名見 `src/shared/db.ts`）從 `sw` 讀。
+- **eval**：`npm run debug:eval -- <sw|content|page> -e "<expression>"`。外掛的 IndexedDB（`naruhodo`，store 名見 `src/shared/db.ts`）從 `sw` 讀。
 - **使用者回報**：只能用肉眼判斷的項目。
 
 ## 準備
 
-1. Terminal panel 開 `npm run debug:chrome`（第一次要在那個 Chrome 載入 `%LOCALAPPDATA%\manga-translator\extension`、在 side panel 設 API key、登入網站）。
+1. Terminal panel 開 `npm run debug:chrome`（第一次要在那個 Chrome 載入 `%LOCALAPPDATA%\naruhodo\extension`、在 side panel 設 API key、登入網站）。
 2. 每個網站開始前：重新整理漫畫 tab。中途用 `npm run debug:reload` 改過 code，就要重新整理 tab 再點一次圖示。
 3. 準備兩部作品各一話：Jump+ 一話（直向捲動或翻頁皆可）、Kindle 一本有跨頁的書（試閱本即可）。各自都要能讀到至少 6 個 Page。
 4. 第一次驗收建議清空舊資料（side panel 的快取／Notes），讓「第一次翻譯 → 快取命中」的對照乾淨。要保留就先匯出備份。
@@ -112,7 +112,7 @@
 | H5 | 繼續翻到用到那個條目的頁 | trace：之後的 `translate:request` 帶的是改過的譯文；那頁的 `notes:apply` 裡這個原文不在 `added`／`filled`，LLM 想改的話只出現在 `suggestions` |
 | H6 | 有建議修改時，在 side panel 接受一個、忽略一個 | trace：`panel:acceptSuggestion`、`panel:ignoreSuggestion` 各一筆（`原文`、`建議譯文`）。使用者回報：兩個建議都從 side panel 消失 |
 | H7 | H4 改過之後，回到之前用過那個條目的已翻譯頁 | trace：翻回來的頁 `cache:hit` 帶 `stale: "notes"`（還在畫面上的頁則是 `stale:changed`）；按「重新翻譯」之前沒有新的 `translate:request`。使用者回報：該頁提示過時 |
-| H8 | 匯出 | trace：`panel:export` 的 `format` 是 `manga-translator-backup`、`counts` 有五個陣列的筆數、`hasApiKeyPrefix: false`（檔案內容找不到 key 的前綴 `sk-ant-`） |
+| H8 | 匯出 | trace：`panel:export` 的 `format` 是 `naruhodo-backup`、`counts` 有五個陣列的筆數、`hasApiKeyPrefix: false`（檔案內容找不到 key 的前綴 `sk-ant-`） |
 | H9 | 改一個條目後匯入 H8 的檔案 | trace：`panel:import` 是 `ok: true`、`notesSeriesIds` 有這部 Series。eval：衝突的譯文變成建議修改（來源 `imported`）。使用者回報：side panel 顯示建議 |
 
 匯出檔含真實頁面的原文與譯文，跟截圖一樣不要放進 repo，驗收完刪掉。

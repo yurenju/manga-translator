@@ -19,14 +19,14 @@ import { parseTrace } from '../src/shared/debug-trace.ts';
 import { build } from './build.ts';
 import { extractImages, sessionName, sessionsToPrune } from './debug-session.ts';
 
-const BASE_DIR = join(process.env.LOCALAPPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Local'), 'manga-translator');
+const BASE_DIR = join(process.env.LOCALAPPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Local'), 'naruhodo');
 export const EXTENSION_DIR = join(BASE_DIR, 'extension');
 export const DEBUG_DIR = join(BASE_DIR, 'debug');
 const DEFAULT_PROFILE = join(BASE_DIR, 'chrome-profile');
 const DEFAULT_CHROME = join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe');
 const DEFAULT_PORT = 9222;
 const KEEP_SESSIONS = 10;
-const EXTENSION_NAME = 'Manga Translator (debug)';
+const EXTENSION_NAME = 'Naruhodo (debug)';
 
 interface CdpMessage {
   id?: number;

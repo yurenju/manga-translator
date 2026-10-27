@@ -12,14 +12,14 @@ import { stopRepaint } from './repaint.ts';
  * 跑在 isolated world：這裡的 globalThis 跟頁面的 window 分開，頁面看不到。
  */
 declare global {
-  var __mangaTranslator: { active: true } | undefined;
+  var __naruhodo: { active: true } | undefined;
   /** e2e build 才有：每次截圖時覆蓋層被藏了多久（ms），給測試量閃爍時間。 */
   var __overlayHiddenMs: number[] | undefined;
 }
 
 // 同一頁可能被注入多次（例如重新整理事件重複），只啟動一次。
-if (!globalThis.__mangaTranslator) {
-  globalThis.__mangaTranslator = { active: true };
+if (!globalThis.__naruhodo) {
+  globalThis.__naruhodo = { active: true };
   const trace = createTrace('content');
 
   /**
@@ -174,7 +174,7 @@ if (!globalThis.__mangaTranslator) {
     stopRepaint();
     overlay.clear();
     anchors.clear();
-    globalThis.__mangaTranslator = undefined;
+    globalThis.__naruhodo = undefined;
     trace('content:stop', { overlaysLeft: document.querySelectorAll(`[${HOST_ATTRIBUTE}]`).length });
   }
 }

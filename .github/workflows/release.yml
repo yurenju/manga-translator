@@ -1,7 +1,7 @@
 # 手動發版：在 Actions 頁面選 Release → Run workflow。
 # 先跑型別檢查與單元測試，再改 package.json 的版本號、build、commit 回 main 並打 tag，
-# 最後建立 GitHub Release，附上 manga-translator.zip（dist/prod 的內容）。
-# zip 檔名固定不帶版本號：README 的下載連結指向 releases/latest/download/manga-translator.zip，
+# 最後建立 GitHub Release，附上 naruhodo.zip（dist/prod 的內容）。
+# zip 檔名固定不帶版本號：README 的下載連結指向 releases/latest/download/naruhodo.zip，
 # 使用者每次解壓縮出來的資料夾名稱也一樣（換資料夾 Chrome 會當成另一個外掛，資料就看不到了）。
 name: Release
 
@@ -77,7 +77,7 @@ jobs:
 
       - run: npm run build
       - name: 打包 zip
-        run: cd dist/prod && zip -r ../../manga-translator.zip .
+        run: cd dist/prod && zip -r ../../naruhodo.zip .
 
       - name: Commit 版本號並打 tag
         env:
@@ -93,4 +93,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
-        run: gh release create "v$VERSION" manga-translator.zip --title "v$VERSION" --generate-notes
+        run: gh release create "v$VERSION" naruhodo.zip --title "v$VERSION" --generate-notes

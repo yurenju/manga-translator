@@ -90,7 +90,7 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   const center = await greetingOnPage(page);
   const line = firstTranscript(panel).getByRole('listitem').filter({ hasText: GREETING_ZH });
   await expect(line).toBeVisible();
-  const tooltip = page.locator('[data-manga-translator-overlay] .tip.on');
+  const tooltip = page.locator('[data-naruhodo-overlay] .tip.on');
 
   // 頁面 → panel
   await page.mouse.move(1, 1);
@@ -107,7 +107,7 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   await expect(line).not.toHaveClass(/\bhl\b/);
 
   // panel → 頁面：高亮框蓋住那個 Balloon
-  const highlight = page.locator('[data-manga-translator-overlay] .hl.on');
+  const highlight = page.locator('[data-naruhodo-overlay] .hl.on');
   await expect(highlight).toHaveCount(0);
   // 背景分頁的 rAF 會停，Playwright 的 hover 要等穩定；panel 放到前景（真的 side panel 跟頁面同時可見）
   await panel.bringToFront();

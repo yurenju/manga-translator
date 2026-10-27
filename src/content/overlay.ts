@@ -25,7 +25,7 @@ export type LoadFont = (text: string) => Promise<string>;
 export const isShown = (element: Element) => element.checkVisibility({ visibilityProperty: true });
 
 /** 給 e2e 與頁面辨識用：shadow host 的屬性。 */
-export const HOST_ATTRIBUTE = 'data-manga-translator-overlay';
+export const HOST_ATTRIBUTE = 'data-naruhodo-overlay';
 
 const STYLE = `
 :host { all: initial; }

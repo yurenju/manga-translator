@@ -1,5 +1,5 @@
 {
-  "name": "manga-translator",
+  "name": "naruhodo-manga-translator",
   "version": "0.1.4",
   "private": true,
   "description": "Chrome extension that translates Japanese manga pages in place",
