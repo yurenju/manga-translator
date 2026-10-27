@@ -10,7 +10,6 @@ import type {
   ModelStatus,
   ModelStatusResponse,
   AutoTranslateResponse,
-  OverlayResponse,
   PagesResponse,
   PageView,
   SeriesResponse,
@@ -18,7 +17,8 @@ import type {
   TestConnectionResponse,
   TranslationInfo,
 } from '../shared/messages.ts';
-import { Badge, Button, Callout, Switch } from './components.tsx';
+import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
+import { Badge, Button, Callout, SegmentedControl, Switch, type SegmentOption } from './components.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
 
@@ -300,17 +300,24 @@ function StatusText({ pages }: { pages: PageView[] }) {
   );
 }
 
-/** 原地覆蓋的開關（spec #27 第 8 節的底部列）；關掉只是藏起來，翻譯照常進行。 */
-function OverlayToggle({ tabId }: { tabId: number }) {
-  const [enabled, setEnabled] = useState(true);
-  useEffect(() => {
-    void send<OverlayResponse>({ type: 'panel:getOverlay', tabId }).then((r) => setEnabled(r.enabled));
-  }, [tabId]);
-  const toggle = (value: boolean) => {
-    setEnabled(value);
-    void send({ type: 'panel:setOverlay', tabId, enabled: value });
+const PAGE_MODES: readonly SegmentOption<PageMode>[] = [
+  { value: 'read', label: '閱讀', description: '頁面直接顯示中文' },
+  { value: 'learn', label: '學習', description: '保留日文，滑過看讀音' },
+];
+
+/**
+ * Page Mode 切換（spec #70、#73）：全域設定，存在 chrome.storage.local；頁面上的 content script 自己聽變更。
+ * 學習時頁面不擦字、不畫譯文，翻譯照常進行。
+ */
+function PageModeSwitch() {
+  const [mode, setMode] = useState<PageMode>(DEFAULT_PAGE_MODE);
+  // 別的 side panel 切了也跟著變
+  useEffect(() => watchPageMode(setMode), []);
+  const choose = (value: PageMode) => {
+    setMode(value);
+    void savePageMode(value);
   };
-  return <Switch label="覆蓋" checked={enabled} onChange={toggle} />;
+  return <SegmentedControl label="頁面模式" size="lg" options={PAGE_MODES} value={mode} onChange={choose} />;
 }
 
 /** 自動翻譯開關（spec #27 第 3.4、8 節；預設開）；關掉後翻頁只顯示快取，其他要按「翻譯此頁」。 */
@@ -501,11 +508,11 @@ function App({ tabId }: { tabId: number | undefined }) {
           <Button variant="ghost" onClick={scan}>
             重新擷取
           </Button>
-          <OverlayToggle tabId={tabId} />
           <AutoTranslateToggle tabId={tabId} />
           {settings}
           <SeriesNotesSection tabId={tabId} />
         </div>
+        <PageModeSwitch />
         <ModelStatusLine status={modelStatus} onRetry={scan} />
         {untranslated && !hasKey && (
           <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</Callout>

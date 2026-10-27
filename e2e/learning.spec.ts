@@ -4,7 +4,7 @@
  */
 import type { Locator, Page } from '@playwright/test';
 import { activateOnJumpPlus, expect, test } from './fixtures.ts';
-import { overlayTexts } from './overlay-helpers.ts';
+import { overlayTexts, pageMode, shownTranslations } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
 
@@ -132,4 +132,52 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   await page.mouse.click(center.x, center.y);
   expect(await page.evaluate(() => (globalThis as unknown as { __clicked: number[] }).__clicked)).toEqual([0]);
   expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName, center)).toBe('CANVAS');
+});
+
+test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原文與振り仮名、沒有譯文；hover 雙向同步；不擋點擊', async ({
+  context,
+  sw,
+  extensionId,
+  mockSite,
+}) => {
+  test.setTimeout(TIMEOUT + 30_000);
+  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  // 譯文元素藏起來後 rect 不變（visibility），還是拿它當 Balloon 的位置
+  const center = await greetingOnPage(page);
+  await pageMode(panel, '學習').click();
+  await expect(shownTranslations(page)).toHaveCount(0);
+  await page.bringToFront();
+  const line = firstTranscript(panel).getByRole('listitem').filter({ hasText: GREETING_ZH });
+  const tooltip = page.locator('[data-naruhodo-overlay] .tip.on');
+
+  // 頁面 → panel
+  await page.mouse.move(1, 1);
+  await page.mouse.move(center.x, center.y);
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip.locator('rt')).toHaveText(['きょう', 'はや']);
+  await expect(tooltip).toContainText('今日');
+  await expect(tooltip).toContainText('讀音為推測');
+  await expect(tooltip).not.toContainText(GREETING_ZH);
+  await expect(line).toHaveClass(/\bhl\b/);
+  await page.mouse.move(1, 1);
+  await expect(tooltip).toHaveCount(0);
+
+  // panel → 頁面
+  const highlight = page.locator('[data-naruhodo-overlay] .hl.on');
+  await panel.bringToFront();
+  await line.hover();
+  await expect(highlight).toHaveCount(1);
+  await panel.mouse.move(1, 1);
+  await expect(highlight).toHaveCount(0);
+  await page.bringToFront();
+
+  // 點擊落到主頁面的 canvas
+  await page.evaluate(() => {
+    const g = globalThis as unknown as { __clicked: number[] };
+    g.__clicked = [];
+    const canvases = [...document.querySelectorAll('.viewer canvas')];
+    document.addEventListener('click', (e) => g.__clicked.push(canvases.indexOf(e.target as Element)));
+  });
+  await page.mouse.click(center.x, center.y);
+  expect(await page.evaluate(() => (globalThis as unknown as { __clicked: number[] }).__clicked)).toEqual([0]);
 });

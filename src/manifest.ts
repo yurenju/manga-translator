@@ -12,6 +12,7 @@ const icons = Object.fromEntries(ICON_SIZES.map((size) => [String(size), `icons/
  *
  * 與 ADR 0003 的差異：ADR 只列 activeTab＋scripting＋sidePanel，這裡多了 offscreen（ADR 0001）
  * 與 unlimitedStorage（ADR 0002）。spec #27 第 13 節第 6 項決定以合併後的清單為準。
+ * storage：Page Mode 存在 chrome.storage.local（spec #70、#73），沒有安裝警告。
  */
 export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: boolean }): chrome.runtime.ManifestV3 {
   return {
@@ -21,7 +22,7 @@ export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: bo
     description: '把畫面上的日文漫畫原地翻成繁體中文',
     minimum_chrome_version: '116',
     icons,
-    permissions: ['activeTab', 'scripting', 'sidePanel', 'offscreen', 'unlimitedStorage'],
+    permissions: ['activeTab', 'scripting', 'sidePanel', 'offscreen', 'storage', 'unlimitedStorage'],
     ...(e2e ? { host_permissions: ['<all_urls>'] } : {}),
     background: { service_worker: 'background.js', type: 'module' },
     action: { default_title: '漫畫翻譯：在這個分頁啟動', default_icon: icons },

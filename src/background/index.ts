@@ -12,7 +12,6 @@ import type {
   ModelStatus,
   ModelStatusResponse,
   NotesResponse,
-  OverlayResponse,
   PageCandidatesResponse,
   PagesResponse,
   PipelineConfig,
@@ -190,12 +189,9 @@ const transcriber = createTranscriber({
   },
 });
 
-/** side panel 的覆蓋開關（每個 tab；預設開，停止後回到預設）。 */
-const overlayEnabled = new Map<number, boolean>();
-
 const overlaySync = createOverlaySync({
   show({ tabId, anchorId, pageHash, subRect, text }) {
-    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, subRect, text, enabled: overlayEnabled.get(tabId) ?? true };
+    const message: Message = { type: 'content:showOverlay', anchorId, pageHash, subRect, text };
     chrome.tabs.sendMessage(tabId, message).catch(() => {});
   },
 });
@@ -302,7 +298,6 @@ const activation = createActivation({
     else {
       scanner.clear(tabId);
       transcriber.clear(tabId);
-      overlayEnabled.delete(tabId);
     }
   },
 });
@@ -346,14 +341,6 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
     case 'panel:stop':
       activation.stop(message.tabId).then(() => sendResponse());
       return true;
-    case 'panel:getOverlay':
-      sendResponse({ enabled: overlayEnabled.get(message.tabId) ?? true } satisfies OverlayResponse);
-      return false;
-    case 'panel:setOverlay':
-      overlayEnabled.set(message.tabId, message.enabled);
-      chrome.tabs.sendMessage(message.tabId, { type: 'content:setOverlayEnabled', enabled: message.enabled } satisfies Message).catch(() => {});
-      sendResponse();
-      return false;
     case 'content:pageTurn': {
       const tabId = sender.tab?.id;
       if (tabId !== undefined)
