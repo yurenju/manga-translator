@@ -34,9 +34,11 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--naru-accent
   border-left: 3px solid transparent; border-radius: 0 var(--naru-radius-sm) var(--naru-radius-sm) 0;
 }
 [aria-label='逐字稿'] li.hl { background: var(--naru-accent-weak); border-left-color: var(--naru-accent); }
-.original, .loose { font-family: var(--naru-font-ja); font-size: 1.1em; line-height: 2; }
-.loose { font-style: italic; color: var(--naru-sfx); }
-.translation { font-size: var(--naru-text-label); }
+.original { font-size: var(--naru-text-ja); line-height: 1.6; }
+/* 加振り仮名時行高放大，ルビ才不會壓到上一行 */
+.original.with-ruby { line-height: 2.2; }
+.translation { font-size: var(--naru-text-body); line-height: 1.6; }
+.badges { display: flex; flex-wrap: wrap; gap: var(--naru-space-1); margin: 2px 0; }
 /* 振り仮名用朱色（白底與高亮底都過 WCAG AA） */
 rt, .reading { color: var(--naru-ruby); }
 .reading { display: block; font-size: 0.6em; line-height: 1.4; }

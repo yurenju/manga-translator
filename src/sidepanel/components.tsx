@@ -3,7 +3,7 @@
  * src/shared/tokens.css。class 前綴 naru-，只給樣式用；測試用 role／accessible name 找元素。
  */
 import type { ButtonHTMLAttributes, ComponentChildren, HTMLAttributes } from 'preact';
-import { useId } from 'preact/hooks';
+import { useId, useState } from 'preact/hooks';
 
 const cx = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(' ');
 
@@ -127,6 +127,31 @@ type CalloutProps = Omit<HTMLAttributes<HTMLDivElement>, 'class' | 'className'> 
 
 export function Callout({ tone = 'info', class: extra, ...rest }: CalloutProps) {
   return <div class={cx('naru-callout', `naru-callout--${tone}`, extra)} {...rest} />;
+}
+
+/**
+ * 「譯」區塊（淺色版；頁面 tooltip 的深色版在 content script 用 DOM 畫）：先藏著內容，滑過或聚焦才顯示，
+ * 離開又藏起來。group 的名字是「譯」，測試與讀屏都靠它找到區塊。
+ */
+export function RevealChip({ children }: { children: ComponentChildren }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div
+      role="group"
+      aria-label="譯"
+      tabIndex={0}
+      class={cx('naru-reveal', revealed && 'naru-reveal--on')}
+      onMouseEnter={() => setRevealed(true)}
+      onMouseLeave={() => setRevealed(false)}
+      onFocus={() => setRevealed(true)}
+      onBlur={() => setRevealed(false)}
+    >
+      <span class="naru-reveal__tag" aria-hidden="true">
+        譯
+      </span>
+      {revealed ? children : <span class="naru-reveal__hint">滑過這裡看譯文</span>}
+    </div>
+  );
 }
 
 /** Page 在 Spread 裡的哪一邊；undefined＝不是 Spread。 */
