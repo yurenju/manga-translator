@@ -8,7 +8,7 @@
  *
  * 工具列（#55，仿真實 amazon manga 閱讀器）：上方書名列＋試讀橫幅、下方進度列、左右翻頁箭頭，疊在 img 上面。
  * 點畫面中間切換顯示。收起時跟真實閱讀器一樣先淡出（`fading`，半透明），比外掛的翻頁 debounce 久，之後才加上
- * `hidden`（display: none）：點擊觸發的那次掃描還會看到工具列擋著，要靠工具列本身的變動再掃一次。img 是 `pointer-events: none`，
+ * `hidden`（display: none）。外掛截圖前會把工具列藏起來（#59）。img 是 `pointer-events: none`，
  * 上面蓋著一層全透明的感應層 `#tap`（真實閱讀器也是這樣接點擊）。
  * 網址參數：`toolbar=shown` 一開始就顯示工具列；`bg=white` 白底（合成圖的邊是白的）。
  */

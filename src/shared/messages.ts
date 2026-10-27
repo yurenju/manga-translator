@@ -22,10 +22,6 @@ export type Message =
   | { type: 'panel:getPages'; tabId: number }
   /** SW → side panel：某個 tab 的 Page（縮圖＋逐字稿）更新了。 */
   | { type: 'pages:updated'; tabId: number; pages: PageView[] }
-  /** side panel → SW：這個 tab 的 Page 是不是被擋住了（#55）。回應 OcclusionResponse。 */
-  | { type: 'panel:getOcclusion'; tabId: number }
-  /** SW → side panel：畫面上沒有能截的 Page、只有被其他元素（工具列）擋住的，或擋住的東西收起了。 */
-  | { type: 'occlusion:changed'; tabId: number; occluded: boolean }
   /** SW → content script：量畫面上完整可見的 Page 候選。回應 PageCandidatesResponse。 */
   | { type: 'content:findPageCandidates' }
   /** SW → offscreen：依候選裁切截圖並做縮圖。回應 CropResponse。 */
@@ -55,10 +51,12 @@ export type Message =
    * enabled＝side panel 的覆蓋開關。
    */
   | { type: 'content:showOverlay'; anchorId: string; pageHash: string; subRect?: RatioRect; text: PageText; enabled: boolean }
-  /** SW → content script：截圖前隱藏覆蓋層，等兩個 rAF（已重繪）才回應。 */
-  | { type: 'content:hideOverlay' }
-  /** SW → content script：截完還原覆蓋層。 */
-  | { type: 'content:restoreOverlay' }
+  /**
+   * SW → content script：截圖前藏起疊在 Page 上的元素（#59），hideOverlay 時也藏覆蓋層；等兩個 rAF（已重繪）才回應。
+   */
+  | { type: 'content:prepareCapture'; hideOverlay: boolean }
+  /** SW → content script：截完還原。回應 CaptureFinishedResponse。 */
+  | { type: 'content:finishCapture' }
   /** SW → content script：side panel 的覆蓋開關。 */
   | { type: 'content:setOverlayEnabled'; enabled: boolean }
   /** side panel → SW：覆蓋開關。 */
@@ -147,8 +145,9 @@ export interface StatusResponse {
   active: boolean;
 }
 
-export interface OcclusionResponse {
-  occluded: boolean;
+export interface CaptureFinishedResponse {
+  /** false：藏起來的元素在截圖期間被換掉，這張截圖不能用（#59）。 */
+  stable: boolean;
 }
 
 export interface SeriesResponse {
@@ -207,8 +206,6 @@ export interface PageCandidatesResponse {
   /** 量 rect 當下的 viewport（CSS px），裁切時用來換算截圖倍率。 */
   viewport: Size;
   candidates: PageCandidate[];
-  /** 夠大、在可視範圍裡，但被其他元素（閱讀器的工具列）擋住而不算候選的 img／canvas 數量（#55）；沒有時省略。 */
-  occluded?: number;
 }
 
 export interface CropRequest extends PageCandidatesResponse {

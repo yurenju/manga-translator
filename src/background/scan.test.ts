@@ -10,14 +10,11 @@ const WINDOW_ID = 7;
 function fakeDeps(candidates: PageCandidate[] = [P1]) {
   const captures: number[] = [];
   const published: [number, PageThumb[]][] = [];
-  const occluded: [number, boolean][] = [];
   /** 覆蓋層與截圖的先後順序。 */
   const events: string[] = [];
   const env = {
     viewport: VIEWPORT,
     candidates,
-    /** 被其他元素擋住、不算候選的 img／canvas 數量。 */
-    occluded: 0,
     visible: true,
     /** 每次量 rect 花的時間（ms），依序取用；用完就是 0。 */
     findDelays: [] as number[],
@@ -30,14 +27,15 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
     hidden: false,
     /** 最近一次截圖時覆蓋層有沒有藏起來（crop 用）。 */
     capturedHidden: false,
+    /** 每次截完時藏起來的遮擋物有沒有被換掉，依序取用；用完就是 true。 */
+    stable: [] as boolean[],
   };
   const deps: ScannerDeps = {
     findPageCandidates: async () => {
       const delay = env.findDelays.shift() ?? 0;
       if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
-      return { viewport: env.viewport, candidates: env.candidates, ...(env.occluded > 0 ? { occluded: env.occluded } : {}) };
+      return { viewport: env.viewport, candidates: env.candidates };
     },
-    setOccluded: (tabId, value) => void occluded.push([tabId, value]),
     getVisibleWindowId: async () => (env.visible ? WINDOW_ID : undefined),
     captureWindow: async (windowId) => {
       expect(windowId).toBe(WINDOW_ID);
@@ -54,16 +52,18 @@ function fakeDeps(candidates: PageCandidate[] = [P1]) {
         return { anchorId: c.anchorId, rect: c.rect, thumbnail: `thumb(${screenshot},${c.anchorId})`, pageHash };
       }),
     publish: (tabId, pages) => void published.push([tabId, pages]),
-    hideOverlay: async (tabId) => {
-      env.hidden = true;
-      events.push(`hide ${tabId}`);
+    // hide＝連覆蓋層一起藏；prepare＝只藏網站的遮擋物
+    prepareCapture: async (tabId, hideOverlay) => {
+      env.hidden = hideOverlay;
+      events.push(`${hideOverlay ? 'hide' : 'prepare'} ${tabId}`);
     },
-    restoreOverlay: async (tabId) => {
+    finishCapture: async (tabId) => {
       env.hidden = false;
       events.push(`restore ${tabId}`);
+      return { stable: env.stable.shift() ?? true };
     },
   };
-  return { deps, captures, published, events, env, occluded };
+  return { deps, captures, published, events, env };
 }
 
 beforeEach(() => {
@@ -201,41 +201,28 @@ describe('scan', () => {
     expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1']);
   });
 
-  describe('Page 被其他元素擋住（#55）', () => {
-    it('沒有可截的 Page、但有被擋住的：不截圖，通知 side panel 提示收起', async () => {
-      const chrome = fakeDeps([]);
-      chrome.env.occluded = 1;
+  describe('疊在 Page 上的網站元素（#59）', () => {
+    it('不藏覆蓋層的那種截圖也要先藏網站的遮擋物', async () => {
+      const chrome = fakeDeps([{ ...P1, overlaid: ['0'.repeat(64)] }]);
+      chrome.env.cleanHash.a1 = '0'.repeat(64);
       const scanner = createScanner(chrome.deps);
 
       await settle(scanner.scan(1));
 
-      expect(chrome.captures).toHaveLength(0);
-      expect(chrome.occluded).toEqual([[1, true]]);
+      // 最後那次是補記帶覆蓋層的樣子
+      expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1', 'prepare 1', 'capture', 'restore 1']);
     });
 
-    it('擋住的東西收起後截到 Page：提示消失', async () => {
-      const chrome = fakeDeps([]);
-      chrome.env.occluded = 1;
-      const scanner = createScanner(chrome.deps);
-      await settle(scanner.scan(1));
-      chrome.env.occluded = 0;
-      chrome.env.candidates = [P1];
-
-      await settle(scanner.scan(1));
-
-      expect(chrome.captures).toHaveLength(1);
-      expect(chrome.occluded.at(-1)).toEqual([1, false]);
-    });
-
-    it('另一個 Page 完整可見（例如縱向捲動時隔壁頁被浮動標題蓋住）：照常截，不提示', async () => {
-      const chrome = fakeDeps([P1]);
-      chrome.env.occluded = 1;
+    it('藏起來的元素在截圖期間被換掉就丟掉截圖、重截', async () => {
+      const chrome = fakeDeps();
+      chrome.env.stable = [false];
       const scanner = createScanner(chrome.deps);
 
       await settle(scanner.scan(1));
 
-      expect(chrome.captures).toHaveLength(1);
-      expect(chrome.occluded.filter(([, value]) => value)).toEqual([]);
+      expect(chrome.captures).toHaveLength(2);
+      expect(chrome.published).toHaveLength(1);
+      expect(scanner.getPages(1)[0]!.thumbnail).toBe('thumb(data:image/png;base64,SCREENSHOT2,a1)');
     });
   });
 
@@ -295,7 +282,7 @@ describe('scan', () => {
 
       await settle(scanner.recordOverlaid(1));
 
-      expect(chrome.events).toEqual(['capture']);
+      expect(chrome.events).toEqual(['prepare 1', 'capture', 'restore 1']);
       expect(chrome.published).toHaveLength(1);
     });
 
@@ -305,7 +292,7 @@ describe('scan', () => {
 
       await settle(scanner.scan(1));
 
-      expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1', 'capture']);
+      expect(chrome.events).toEqual(['hide 1', 'capture', 'restore 1', 'prepare 1', 'capture', 'restore 1']);
       expect(chrome.published).toHaveLength(1);
     });
 
@@ -317,7 +304,7 @@ describe('scan', () => {
 
       await settle(scanner.scan(1));
 
-      expect(chrome.events).toEqual(['capture']);
+      expect(chrome.events).toEqual(['prepare 1', 'capture', 'restore 1']);
       expect(publishedHashes(chrome)).toEqual([CLEAN]);
     });
 
@@ -332,7 +319,7 @@ describe('scan', () => {
 
       await settle(scanner.scan(1));
 
-      expect(chrome.events.slice(0, 4)).toEqual(['capture', 'hide 1', 'capture', 'restore 1']);
+      expect(chrome.events.slice(0, 6)).toEqual(['prepare 1', 'capture', 'restore 1', 'hide 1', 'capture', 'restore 1']);
       expect(publishedHashes(chrome)).toEqual([NEW_PAGE]);
     });
 

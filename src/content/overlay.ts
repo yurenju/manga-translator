@@ -108,6 +108,10 @@ function textDiv(className: string, text: string): HTMLElement {
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+/** 等兩個 rAF（確定已重繪）；tab 在背景時 rAF 不會跑，最多等 FRAME_TIMEOUT_MS。 */
+export const untilRepainted = () =>
+  Promise.race([nextFrame().then(nextFrame), new Promise<void>((resolve) => setTimeout(resolve, FRAME_TIMEOUT_MS))]);
+
 /** 滑鼠移到哪一句上（null＝離開）。 */
 export type OnHover = (line: LineRef | null) => void;
 
@@ -332,7 +336,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     highlight.style.borderRadius = `${(2 * HIGHLIGHT_SCREEN_PX) / screenScale}px`;
     renderHighlights();
     // 等畫到畫面上才 resolve：呼叫端接著會截「帶覆蓋層的樣子」，太早截會截到還沒畫出來的畫面
-    await Promise.race([nextFrame().then(nextFrame), new Promise((resolve) => setTimeout(resolve, FRAME_TIMEOUT_MS))]);
+    await untilRepainted();
   }
 
   /**
@@ -447,7 +451,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     entries.forEach(applyVisibility);
     if (!enabled || entries.size === 0) return;
     hiddenAt = performance.now();
-    await Promise.race([nextFrame().then(nextFrame), new Promise((resolve) => setTimeout(resolve, FRAME_TIMEOUT_MS))]);
+    await untilRepainted();
   }
 
   /** 截完立刻還原；回傳覆蓋層被藏了多久（ms），沒藏就是 undefined。 */

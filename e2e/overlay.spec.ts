@@ -5,6 +5,7 @@
 import type { Page, Worker } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
 import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { WATERMARK_TEXT } from './mock-site/jumpplus.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -208,3 +209,55 @@ async function overlayHiddenMs(sw: Worker, tabId: number): Promise<number[]> {
     return (result?.result as number[] | undefined) ?? [];
   }, tabId);
 }
+
+/** 截圖裡某個元素範圍內，洋紅（浮水印）與青色（疊上去的 img）像素各佔多少。 */
+function colorFractions(page: Page, screenshot: string, selector: string): Promise<{ magenta: number; cyan: number }> {
+  return page.evaluate(
+    async ([url, selector]) => {
+      const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+      const scale = bitmap.width / innerWidth;
+      const r = document.querySelector(selector)!.getBoundingClientRect();
+      const [x, y, w, h] = [r.x, r.y, r.width, r.height].map((v) => Math.round(v * scale)) as [number, number, number, number];
+      const ctx = new OffscreenCanvas(w, h).getContext('2d')!;
+      ctx.drawImage(bitmap, x, y, w, h, 0, 0, w, h);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      let magenta = 0;
+      let cyan = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const [red, green, blue] = [data[i]!, data[i + 1]!, data[i + 2]!];
+        if (red - green > 60 && blue - green > 60) magenta++;
+        if (green - red > 150 && blue - red > 150) cyan++;
+      }
+      return { magenta: magenta / (w * h), cyan: cyan / (w * h) };
+    },
+    [screenshot, selector] as const,
+  );
+}
+
+test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', () => {
+  test('真實 Jump+ 的翻頁感應區（透明、半個畫面、貼邊小箭頭）蓋著也照常翻譯，譯文落在 Balloon 內', async ({ context, sw, extensionId, mockSite }) => {
+    test.setTimeout(OVERLAY_TIMEOUT + 30_000);
+    const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?nav=1` });
+    await waitForOverlay(page);
+    await expectAligned(page, '翻頁感應區蓋著');
+  });
+
+  test('pointer-events: none 的浮水印被藏起來、不進 OCR；疊在上面的另一張 img 不藏（可能是漫畫本身）', async ({ context, sw, extensionId, mockSite }) => {
+    test.setTimeout(OVERLAY_TIMEOUT + 30_000);
+    const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?watermark=1&stacked=1` });
+    // 覆蓋層出現前的截圖（之後補記帶覆蓋層樣子的那次會截到自己的譯文）
+    await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
+    const screenshot = await sw.evaluate(() => globalThis.__captures![0]!);
+    const watermark = await colorFractions(page, screenshot, '#watermark');
+    expect(watermark.magenta, '截圖裡的浮水印').toBeLessThan(0.01);
+    const stacked = await colorFractions(page, screenshot, '#stacked');
+    expect(stacked.cyan, '截圖裡疊上去的 img').toBeGreaterThan(0.9);
+    // 對照：畫面上浮水印確實蓋在 Page 上
+    expect((await colorFractions(page, await page.screenshot().then((b) => `data:image/png;base64,${b.toString('base64')}`), '#watermark')).magenta).toBeGreaterThan(0.5);
+
+    await waitForOverlay(page);
+    const sent = await sw.evaluate(() => (globalThis.__translateInputs ?? []).flatMap((input) => input.items.map((item) => item.原文)));
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.filter((s) => normalize(s).includes(normalize(WATERMARK_TEXT)))).toEqual([]);
+  });
+});

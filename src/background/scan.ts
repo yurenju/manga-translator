@@ -21,17 +21,18 @@ export interface ScannerDeps {
   findPageCandidates(tabId: number): Promise<PageCandidatesResponse>;
   /** tab 是它視窗裡的作用中 tab 就回傳 windowId；否則 undefined（captureVisibleTab 只截得到作用中 tab）。 */
   getVisibleWindowId(tabId: number): Promise<number | undefined>;
-  /** 截圖前把覆蓋層（shadow host）隱藏，等到瀏覽器重繪完才 resolve（spec #27 第 3.2 節）。 */
-  hideOverlay(tabId: number): Promise<void>;
-  /** 截完立刻還原覆蓋層。 */
-  restoreOverlay(tabId: number): Promise<void>;
+  /**
+   * 截圖前：藏起疊在 Page 上的網站元素（工具列、翻頁感應區，#59），hideOverlay 時也藏自己的覆蓋層（shadow host）；
+   * 等到瀏覽器重繪完才 resolve（spec #27 第 3.2 節）。
+   */
+  prepareCapture(tabId: number, hideOverlay: boolean): Promise<void>;
+  /** 截完立刻還原。stable＝false：藏起來的元素在截圖期間被換掉，截圖不能用。 */
+  finishCapture(tabId: number): Promise<{ stable: boolean }>;
   /** 截圖。要在呼叫當下就送出 captureVisibleTab，限速是以呼叫的時間計算。 */
   captureWindow(windowId: number): Promise<string>;
   crop(request: CropRequest): Promise<PageThumb[]>;
   /** capture＝這次的截圖與版面（沒有 Page 或停止時是 undefined），給後面的本機流水線裁全解析度的 Page。 */
   publish(tabId: number, pages: PageThumb[], capture?: CropRequest): void;
-  /** 畫面上沒有能截的 Page、只有被其他元素擋住的（#55）：side panel 提示使用者收起擋住的東西。 */
-  setOccluded(tabId: number, occluded: boolean): void;
 }
 
 export function createScanner(deps: ScannerDeps) {
@@ -89,18 +90,19 @@ export function createScanner(deps: ScannerDeps) {
     return result;
   }
 
-  async function capture(windowId: number, tabId: number, hide: boolean): Promise<string> {
-    if (!hide) {
-      lastCaptureAt = Date.now();
-      return deps.captureWindow(windowId);
-    }
-    await deps.hideOverlay(tabId);
+  /** 截圖前後的準備一律做（藏網站的遮擋物）；hideOverlay 決定要不要連自己的覆蓋層一起藏。 */
+  async function capture(windowId: number, tabId: number, hideOverlay: boolean): Promise<{ screenshot: string; stable: boolean }> {
+    await deps.prepareCapture(tabId, hideOverlay);
+    let screenshot: string;
     try {
       lastCaptureAt = Date.now();
-      return await deps.captureWindow(windowId);
-    } finally {
-      await deps.restoreOverlay(tabId);
+      screenshot = await deps.captureWindow(windowId);
+    } catch (e) {
+      await deps.finishCapture(tabId);
+      throw e;
     }
+    const { stable } = await deps.finishCapture(tabId);
+    return { screenshot, stable };
   }
 
   async function scanOnce(tabId: number, generation: number): Promise<void> {
@@ -112,10 +114,9 @@ export function createScanner(deps: ScannerDeps) {
       if (!isCurrentGeneration()) return;
       const before = await deps.findPageCandidates(tabId);
       if (before.candidates.length === 0) {
-        trace('scan:noCandidates', { tabId, occluded: before.occluded ?? 0 });
+        trace('scan:noCandidates', { tabId });
         if (!isCurrentGeneration()) return;
         publish(tabId, []);
-        deps.setOccluded(tabId, (before.occluded ?? 0) > 0);
         return;
       }
       const windowId = await deps.getVisibleWindowId(tabId);
@@ -124,12 +125,13 @@ export function createScanner(deps: ScannerDeps) {
         return;
       }
       // 截圖會截到自己的覆蓋層，hash 就跟原圖對不上；所以截圖期間先藏起來。真實 Chrome 截一次要 1～2 秒，
-      // 藏著的這段時間中文會閃回日文；已經記過帶覆蓋層樣子的 Page 就不藏，改用那個樣子認。
+      // 藏著的這段時間中文會閃回日文；已經記過帶覆蓋層樣子的 Page 就不藏，改用那個樣子認。網站疊在 Page 上的
+      // 元素（工具列等）不管哪一種都藏（#59）。
       const keep = !forceHide && canKeepOverlay(tabId, before.candidates);
-      const screenshot = await capture(windowId, tabId, !keep);
-      // side panel 剛打開造成重排、使用者在截圖時捲動……rect 跟截圖對不上就重來。
-      if (!sameLayout(before, await deps.findPageCandidates(tabId))) {
-        trace('scan:layoutChanged', { tabId, attempt });
+      const { screenshot, stable } = await capture(windowId, tabId, !keep);
+      // side panel 剛打開造成重排、使用者在截圖時捲動、藏起來的元素被換掉（藏不到新的）……截圖不可靠就重來。
+      if (!stable || !sameLayout(before, await deps.findPageCandidates(tabId))) {
+        trace('scan:layoutChanged', { tabId, attempt, occludersChanged: !stable });
         continue;
       }
       const request: CropRequest = { screenshot, ...before };
@@ -142,7 +144,6 @@ export function createScanner(deps: ScannerDeps) {
       }
       if (!isCurrentGeneration()) return;
       publish(tabId, result, request);
-      deps.setOccluded(tabId, false);
       // 覆蓋層顯示中卻還沒記過樣子（例如重新整理後從快取顯示）：補記，下次就不必藏
       if (!keep && withOverlay(before.candidates).length > 0 && !canKeepOverlay(tabId, before.candidates)) void recordOverlaid(tabId);
       return;
@@ -151,7 +152,7 @@ export function createScanner(deps: ScannerDeps) {
   }
 
   /**
-   * 覆蓋層畫好之後：不藏覆蓋層截一次，記下每個顯示中的 Page「帶覆蓋層的樣子」（hash）。不公布。
+   * 覆蓋層畫好之後：不藏覆蓋層截一次（網站的遮擋物照樣藏），記下每個顯示中的 Page「帶覆蓋層的樣子」（hash）。不公布。
    * 只記上次截圖確實看到同一頁的 anchor，免得覆蓋層底下剛好換頁時把錯的頁配上去。
    */
   async function recordOnce(tabId: number, generation: number): Promise<void> {
@@ -172,8 +173,8 @@ export function createScanner(deps: ScannerDeps) {
     if (shown.length === 0) return;
     const windowId = await deps.getVisibleWindowId(tabId);
     if (windowId === undefined) return;
-    const screenshot = await capture(windowId, tabId, false);
-    if (!sameLayout(before, await deps.findPageCandidates(tabId)) || !isCurrentGeneration()) return;
+    const { screenshot, stable } = await capture(windowId, tabId, false);
+    if (!stable || !sameLayout(before, await deps.findPageCandidates(tabId)) || !isCurrentGeneration()) return;
     const cropped = await deps.crop({ screenshot, viewport: before.viewport, candidates: shown });
     if (!isCurrentGeneration()) return;
     let looks = overlaidLooks.get(tabId);
@@ -219,7 +220,6 @@ export function createScanner(deps: ScannerDeps) {
     overlaidLooks.delete(tabId);
     pendingScans.delete(tabId);
     deps.publish(tabId, []);
-    deps.setOccluded(tabId, false);
   }
 
   /** 覆蓋層畫好後呼叫（content:overlayShown）；跟掃描排同一條隊，限速才算得準。 */
