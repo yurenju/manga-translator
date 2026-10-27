@@ -47,7 +47,7 @@ function matchGroundTruth(originals: string[], texts: GtText[]): (GtText | undef
 }
 
 const transcriptOf = (panel: Page, pageIndex: number): Locator =>
-  panel.getByRole('list', { name: 'Page' }).getByRole('listitem').filter({ has: panel.getByRole('img') }).nth(pageIndex).getByRole('list', { name: '逐字稿' });
+  panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: `第 ${pageIndex + 1} 頁` }).getByRole('list', { name: '逐字稿' });
 
 async function lines(transcript: Locator) {
   return transcript.getByRole('listitem').evaluateAll((items) =>

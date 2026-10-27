@@ -12,7 +12,7 @@ const TRANSCRIPT_TIMEOUT = 60_000;
 const FAKE_KEY = 'sk-ant-e2e-not-a-real-key-WXYZ';
 
 const firstTranscript = (panel: Page) =>
-  panel.getByRole('list', { name: 'Page' }).getByRole('listitem').filter({ has: panel.getByRole('img') }).first().getByRole('list', { name: '逐字稿' });
+  panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: '第 1 頁' }).getByRole('list', { name: '逐字稿' });
 
 /** 在 side panel 裡記下所有 runtime 訊息（SW ↔ offscreen 的 sendMessage 也會廣播到這裡）。 */
 async function recordPanelMessages(panel: Page): Promise<void> {

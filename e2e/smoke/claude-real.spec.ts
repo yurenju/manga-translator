@@ -56,7 +56,7 @@ test.describe('e2e build', () => {
     console.log('狀態列', text);
     expect(text).toMatch(/\d+\.\d 秒/);
     expect(text).toMatch(/\$0\.\d{5}/);
-    const first = panel.getByRole('list', { name: 'Page' }).getByRole('listitem').filter({ has: panel.getByRole('img') }).first();
+    const first = panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: '第 1 頁' });
     const lines = await first.getByRole('list', { name: '逐字稿' }).getByRole('listitem').allInnerTexts();
     console.log('p01 逐字稿\n' + lines.map((l) => l.replace(/\n/g, ' / ')).join('\n'));
     await expect(first.locator('.translation').first()).toBeVisible();
