@@ -1,4 +1,5 @@
-import type { Page } from '@playwright/test';
+import type { Page, Worker } from '@playwright/test';
+import type { Message, PageView } from '../src/shared/messages.ts';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, test } from './fixtures.ts';
 
@@ -88,6 +89,42 @@ test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀�
   await expect(pageList(panel).getByRole('img')).toHaveCount(0);
   // 頁首圖示畫兩格（Spread）
   await expect(pageIcon(panel, '右頁 · 先讀').locator('rect')).toHaveCount(2);
+});
+
+/** Spread 兩頁都翻好（之後 SW 不會再更新 Page 列表）。 */
+const untilBothTranslated = (panel: Page) =>
+  expect(panel.getByRole('status', { name: '翻譯狀態' })).toHaveText([/^已翻譯・/, /^已翻譯・/], { timeout: TRANSCRIPT_TIMEOUT });
+
+/** 讓 SW 廣播一份改過的 Page 列表給 side panel（模擬 SW 給的順序或欄位不同）。 */
+async function broadcastEditedPages(
+  { sw, panel, tabId }: { sw: Worker; panel: Page; tabId: number },
+  edit: (pages: PageView[]) => PageView[],
+): Promise<void> {
+  await untilBothTranslated(panel);
+  const { pages } = await panel.evaluate((tabId) => chrome.runtime.sendMessage({ type: 'panel:getPages', tabId }), tabId);
+  const message = { type: 'pages:updated', tabId, pages: edit(pages) } satisfies Message;
+  await sw.evaluate((message) => chrome.runtime.sendMessage(message), message);
+}
+
+test('SW 給的 Spread 順序是左頁在前，side panel 仍排成右頁在前', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
+  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+  await untilBothTranslated(panel);
+  const rightFirst = await pageList(panel).getByRole('list', { name: '逐字稿' }).allTextContents();
+
+  await broadcastEditedPages({ sw, panel, tabId }, (pages) => [...pages].reverse());
+  await expect(pageList(panel).getByRole('list', { name: '逐字稿' })).toHaveText(rightFirst);
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+});
+
+test('同一個 anchor 的兩個 Page 沒有 subRect：分不出左右，頁首是「第 N 頁」', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
+  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
+
+  await broadcastEditedPages({ sw, panel, tabId }, (pages) => pages.map(({ subRect: _, ...page }) => page));
+  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
 });
 
 test('單頁的頁首是「第 N 頁」、圖示一格', async ({ context, sw, extensionId, mockSite }) => {

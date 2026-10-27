@@ -463,18 +463,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         // 對不上：原文＋整句讀音
         ja.append(line.原文, textDiv('tip-guess', display.fallback));
       }
-      if (line.譯文 && pageMode === 'read') parts.push(textDiv('tip-zh', line.譯文));
-      if (line.譯文 && pageMode === 'learn') {
-        const chip = document.createElement('div');
-        renderRevealChip(chip, line.譯文);
-        parts.push(chip);
-      }
+      // 譯文：閱讀直接顯示；學習藏在「譯」區塊後面。沒有譯文就兩種都不放
+      if (line.譯文) parts.push(pageMode === 'read' ? textDiv('tip-zh', line.譯文) : revealChip(line.譯文));
       if (line.讀音) parts.push(textDiv('tip-note', '讀音為推測'));
     }
     tip.classList.toggle('learn', pageMode === 'learn');
     tip.replaceChildren(...parts);
     tip.classList.add('on');
     placeTooltip(layer, line);
+  }
+
+  function revealChip(譯文: string): HTMLElement {
+    const chip = document.createElement('div');
+    renderRevealChip(chip, 譯文);
+    return chip;
   }
 
   /** 「譯」區塊（RevealChip 深色版）：未揭露時是提示，揭露後換成譯文。 */

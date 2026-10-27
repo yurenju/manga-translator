@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef } from 'preact/hooks';
 import type { PageText } from '../shared/page-text.ts';
-import { rubyDisplay } from '../shared/ruby.ts';
+import { rubyDisplay, type RubyDisplay } from '../shared/ruby.ts';
 import { Badge, RevealChip, SegmentedControl, Switch } from './components.tsx';
 
 /** 閱讀時的 Display Level：整頁一起切。 */
@@ -41,8 +41,7 @@ export function DisplaySwitch({
 }
 
 /** 原文＋ルビ；對不上時退回「原文＋下面一行整句讀音」。 */
-function Ruby({ ja, reading }: { ja: string; reading: string }) {
-  const display = rubyDisplay(ja, reading);
+function Ruby({ ja, display }: { ja: string; display: RubyDisplay }) {
   if ('fallback' in display)
     return (
       <>
@@ -66,12 +65,8 @@ function Ruby({ ja, reading }: { ja: string; reading: string }) {
   );
 }
 
-/** 這句畫出來會不會有讀音（全是假名的句子沒有ルビ，也就不標「讀音為推測」）。 */
-function hasRuby(ja: string, reading: string): boolean {
-  if (reading === '') return false;
-  const display = rubyDisplay(ja, reading);
-  return 'fallback' in display || display.segments.some((s) => s.rt !== undefined);
-}
+/** 畫出來有沒有讀音（全是假名的句子沒有ルビ，也就不標「讀音為推測」）。 */
+const hasReading = (display: RubyDisplay) => 'fallback' in display || display.segments.some((s) => s.rt !== undefined);
 
 export interface TranscriptProps {
   text: PageText;
@@ -83,7 +78,7 @@ export interface TranscriptProps {
   onHover: (lineId: string | null) => void;
 }
 
-/** 逐字稿：Balloon 與 Loose Text 依閱讀順序混在同一串；Loose Text 標「狀聲詞」。 */
+/** 逐字稿：Balloon 與 Loose Text 依閱讀順序混在同一串；Loose Text 標「框外文字」。 */
 export function Transcript({ text, translated, display, hoveredId, onHover }: TranscriptProps) {
   const learn = display.mode === 'learn';
   const showRuby = learn ? display.furigana : display.level === '加振り仮名';
@@ -105,13 +100,14 @@ export function Transcript({ text, translated, display, hoveredId, onHover }: Tr
         const unreadable = translated && line.unreadable;
         const hasTranslation = translated && line.譯文 !== '';
         const showOriginal = unreadable || !translationOnly || !hasTranslation;
-        const ruby = showRuby && !unreadable;
+        // 要畫ルビ的句子才對齊讀音，結果同時拿來畫ルビ與判斷要不要標「讀音為推測」
+        const ruby = showRuby && !unreadable ? rubyDisplay(line.原文, line.讀音) : undefined;
         const shownTranslation = (
           <span lang="zh-Hant" class="translation">
             {line.譯文}
           </span>
         );
-        const guessed = ruby && hasRuby(line.原文, line.讀音);
+        const guessed = ruby !== undefined && line.讀音 !== '' && hasReading(ruby);
         return (
           <li
             key={line.id}
@@ -121,12 +117,12 @@ export function Transcript({ text, translated, display, hoveredId, onHover }: Tr
           >
             {showOriginal && (
               <span lang="ja" class={unreadable ? 'original unreadable' : ruby ? 'original with-ruby' : 'original'}>
-                {ruby ? <Ruby ja={line.原文} reading={line.讀音} /> : line.原文}
+                {ruby ? <Ruby ja={line.原文} display={ruby} /> : line.原文}
               </span>
             )}
             {(line.loose || guessed) && (
               <span class="badges">
-                {line.loose && <Badge tone="sfx">狀聲詞</Badge>}
+                {line.loose && <Badge tone="loose">框外文字</Badge>}
                 {guessed && <Badge tone="warn">讀音為推測</Badge>}
               </span>
             )}

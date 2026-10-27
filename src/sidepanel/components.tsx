@@ -105,8 +105,8 @@ export function Switch({
   );
 }
 
-/** 小標籤。neutral：一般；warn：推測、過期；sfx：狀聲詞；danger：失敗；ok：啟動狀態（膠囊＋圓點）。 */
-export type BadgeTone = 'neutral' | 'warn' | 'sfx' | 'danger' | 'ok';
+/** 小標籤。neutral：一般；warn：推測、過期；loose：框外文字（Loose Text）；danger：失敗；ok：啟動狀態（膠囊＋圓點）。 */
+export type BadgeTone = 'neutral' | 'warn' | 'loose' | 'danger' | 'ok';
 
 export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; children: ComponentChildren }) {
   return (
@@ -127,6 +127,11 @@ type CalloutProps = Omit<HTMLAttributes<HTMLDivElement>, 'class' | 'className'> 
 
 export function Callout({ tone = 'info', class: extra, ...rest }: CalloutProps) {
   return <div class={cx('naru-callout', `naru-callout--${tone}`, extra)} {...rest} />;
+}
+
+/** 還在跑的一行（辨識中…、翻譯中…）。 */
+export function Progress({ children }: { children: ComponentChildren }) {
+  return <span class="naru-progress">{children}</span>;
 }
 
 /**

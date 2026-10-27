@@ -18,7 +18,7 @@ import type {
   TranslationInfo,
 } from '../shared/messages.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
-import { Badge, Button, Callout, PageHeader, SegmentedControl, Switch, type SegmentOption, type SpreadSide } from './components.tsx';
+import { Badge, Button, Callout, PageHeader, Progress, SegmentedControl, Switch, type SegmentOption, type SpreadSide } from './components.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 import { DEFAULT_LEVEL, DisplaySwitch, Transcript, type Display, type Level } from './transcript.tsx';
 
@@ -69,7 +69,7 @@ function TranslationStatusLine({ status }: { status: TranslationInfo }) {
 }
 
 /** 逐字稿的共用狀態：依 Page Mode 的顯示方式（#76）與 hover 同步（#39）。 */
-interface LearningProps {
+interface TranscriptSync {
   display: Display;
   /** 頁面上滑鼠所在的那句。 */
   hovered: LineRef | undefined;
@@ -92,14 +92,30 @@ function StaleHint({ reason, onRetranslate }: { reason: StaleReason; onRetransla
   );
 }
 
+const centerX = (page: PageView) => page.subRect && page.subRect.x + page.subRect.w / 2;
+
+type OrderedPage = { page: PageView; side: SpreadSide | undefined };
+
 /**
- * Page 在 Spread 裡的哪一邊（spec #70）：同一個 anchor 切出兩個 Page 才是 Spread，subRect 中心偏右的是右頁。
- * 只看 subRect 不夠：單頁去黑邊後也有 subRect。
+ * side panel 列 Page 的順序與每頁在 Spread 裡的哪一邊（spec #70）。同一個 anchor 切出兩個 Page 才是 Spread：
+ * subRect 中心偏右的是右頁、排在前面（日漫由右往左讀），不依賴 SW 給的順序。只看 subRect 不夠：單頁去黑邊後也有
+ * subRect。同一個 anchor 的兩個 Page 分不出左右（沒有 subRect）就不標左右，照 SW 的順序。
  */
-function spreadSide(page: PageView, pages: PageView[]): SpreadSide | undefined {
-  if (!pages.some((p) => p !== page && p.anchorId === page.anchorId)) return undefined;
-  const r = page.subRect;
-  return r && r.x + r.w / 2 < 0.5 ? 'left' : 'right';
+function readingOrder(pages: PageView[]): OrderedPage[] {
+  const byAnchor = new Map<string, PageView[]>();
+  for (const page of pages) byAnchor.set(page.anchorId, [...(byAnchor.get(page.anchorId) ?? []), page]);
+  return [...byAnchor.values()].flatMap((group): OrderedPage[] => {
+    const [a, b] = group;
+    const ax = a && centerX(a);
+    const bx = b && centerX(b);
+    if (group.length !== 2 || ax === undefined || bx === undefined || ax === bx)
+      return group.map((page) => ({ page, side: undefined }));
+    const [right, left] = ax > bx ? [a!, b!] : [b!, a!];
+    return [
+      { page: right, side: 'right' },
+      { page: left, side: 'left' },
+    ];
+  });
 }
 
 function PageItem({
@@ -108,17 +124,17 @@ function PageItem({
   number,
   onRetry,
   onRetranslate,
-  learning,
+  sync,
 }: {
   page: PageView;
   side: SpreadSide | undefined;
   number: number;
   onRetry: () => void;
   onRetranslate: () => void;
-  learning: LearningProps;
+  sync: TranscriptSync;
 }) {
   const { transcript } = page;
-  const { display, hovered, onLineHover } = learning;
+  const { display, hovered, onLineHover } = sync;
   const headingId = useId();
   return (
     <li aria-labelledby={headingId}>
@@ -133,13 +149,13 @@ function PageItem({
           !transcript.translateError && <TranslationStatusLine status={transcript.translation} />
         }
       />
-      {transcript.state === 'analyzing' && <p>辨識中…</p>}
+      {transcript.state === 'analyzing' && <Progress>辨識中…</Progress>}
       {transcript.state === 'pending' && <Callout>未翻譯（自動翻譯已關閉，按「翻譯此頁」）</Callout>}
       {transcript.state === 'error' && <Callout tone="danger">辨識失敗：{transcript.message}</Callout>}
       {transcript.state === 'done' && transcript.stale && !transcript.translating && (
         <StaleHint reason={transcript.stale} onRetranslate={onRetranslate} />
       )}
-      {transcript.state === 'done' && transcript.translating && <p>翻譯中…</p>}
+      {transcript.state === 'done' && transcript.translating && <Progress>翻譯中…</Progress>}
       {transcript.state === 'done' && transcript.translateError && (
         <Callout tone="danger" role="alert">
           <p>翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
@@ -300,7 +316,7 @@ const dollars = (usd: number) => (Number.isNaN(usd) ? '費用未知' : `$${usd.t
 /** 底部狀態列（spec #27 第 8 節）：已翻譯・模型・秒數・費用。多個 Page 時加總。 */
 function StatusText({ pages }: { pages: PageView[] }) {
   const done = pages.flatMap((p) => (p.transcript.state === 'done' ? [p.transcript] : []));
-  if (done.some((t) => t.translating)) return <span>翻譯中…</span>;
+  if (done.some((t) => t.translating)) return <Progress>翻譯中…</Progress>;
   const infos = done.flatMap((t) => (t.translated && t.translation ? [t.translation] : []));
   if (infos.length === 0) return null;
   // 這頁的提示在逐字稿上方；狀態列只說有更新（#38）
@@ -320,7 +336,7 @@ const PAGE_MODES: readonly SegmentOption<PageMode>[] = [
   { value: 'learn', label: '學習', description: '保留日文，滑過看讀音' },
 ];
 
-/** 目前的 Page Mode 與切換函式；別的 side panel 切了也跟著變。 */
+/** 目前的 Page Mode 與切換函式；別的 side panel 切了也跟著變。只在 App 訂閱一次，往下傳。 */
 function usePageMode(): [PageMode, (mode: PageMode) => void] {
   const [mode, setMode] = useState<PageMode>(DEFAULT_PAGE_MODE);
   useEffect(() => watchPageMode(setMode), []);
@@ -335,8 +351,7 @@ function usePageMode(): [PageMode, (mode: PageMode) => void] {
  * Page Mode 切換（spec #70、#73）：全域設定，存在 chrome.storage.local；頁面上的 content script 自己聽變更。
  * 學習時頁面不擦字、不畫譯文，翻譯照常進行。
  */
-function PageModeSwitch() {
-  const [mode, choose] = usePageMode();
+function PageModeSwitch({ mode, choose }: { mode: PageMode; choose: (mode: PageMode) => void }) {
   return <SegmentedControl label="頁面模式" size="lg" options={PAGE_MODES} value={mode} onChange={choose} />;
 }
 
@@ -587,9 +602,9 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [hasKey, setHasKey] = useState(true);
   const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
   const [furigana, setFurigana] = useState(true);
-  const [pageMode] = usePageMode();
+  const [pageMode, choosePageMode] = usePageMode();
   const display: Display = pageMode === 'learn' ? { mode: 'learn', furigana } : { mode: 'read', level };
-  const [hovered, setHovered] = useState<LearningProps['hovered']>(undefined);
+  const [hovered, setHovered] = useState<TranscriptSync['hovered']>(undefined);
   const [section, setSection] = useState<PanelSection | undefined>(undefined);
 
   useEffect(() => {
@@ -643,7 +658,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const pending = pages.some((p) => p.transcript.state === 'pending');
   const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
   const translate = () => void send({ type: 'panel:translate', tabId });
-  const learning: LearningProps = {
+  const sync: TranscriptSync = {
     display,
     hovered,
     onLineHover(line) {
@@ -654,7 +669,7 @@ function App({ tabId }: { tabId: number | undefined }) {
     <>
       <main>
         {header}
-        <PageModeSwitch />
+        <PageModeSwitch mode={pageMode} choose={choosePageMode} />
         {settings}
         {section === 'notes' && <SeriesNotesSection tabId={tabId} onClose={close} />}
         <ModelStatusLine status={modelStatus} onRetry={scan} />
@@ -663,16 +678,16 @@ function App({ tabId }: { tabId: number | undefined }) {
         )}
         {done.length > 0 && <DisplaySwitch display={display} onLevel={setLevel} onFurigana={setFurigana} />}
         <ul aria-label="Page">
-          {pages.map((page, i) => (
+          {readingOrder(pages).map(({ page, side }, i) => (
             // 同一個 anchor 可能有兩個 Page（Spread），key 要帶 Page 身分
             <PageItem
               key={`${page.anchorId}/${page.pageHash}`}
               page={page}
-              side={spreadSide(page, pages)}
+              side={side}
               number={i + 1}
               onRetry={translate}
               onRetranslate={() => void send({ type: 'panel:translate', tabId, pageHash: page.pageHash })}
-              learning={learning}
+              sync={sync}
             />
           ))}
         </ul>

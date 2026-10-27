@@ -29,9 +29,9 @@
   /* 振り仮名（朱）：白底對比 6.9:1；舊的 #a07c00 不到 AA */
   --naru-ruby: #9A3B22;
 
-  /* 語意色：狀聲詞、警告、錯誤、成功 */
-  --naru-sfx: #1F5A56;
-  --naru-sfx-bg: #E3F0EE;
+  /* 語意色：框外文字（Loose Text）、警告、錯誤、成功 */
+  --naru-loose: #1F5A56;
+  --naru-loose-bg: #E3F0EE;
   --naru-warn: #6E5000;
   --naru-warn-bg: #FBF3DC;
   --naru-danger: #8C1D18;
@@ -62,6 +62,7 @@
   --naru-text-ja: 17px;
   --naru-text-body: 15px;
   --naru-text-label: 14px;
+  --naru-text-small: 13px;
   --naru-text-caption: 12px;
 
   /* 間距 */

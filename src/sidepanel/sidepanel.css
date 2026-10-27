@@ -79,7 +79,7 @@ rt, .reading { color: var(--naru-ruby); }
 .settings form, .settings .actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--naru-space-2); }
 .settings label { display: flex; flex-direction: column; gap: var(--naru-space-1); }
 .notes { overflow-x: auto; }
-.notes table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.notes table { border-collapse: collapse; width: 100%; font-size: var(--naru-text-small); }
 .notes td, .notes th { border-bottom: 1px solid var(--naru-line); padding: var(--naru-space-1); text-align: left; }
 .notes th { color: var(--naru-ink-3); font-weight: 500; font-size: var(--naru-text-caption); }
 .notes h2 { font-size: var(--naru-text-label); margin: var(--naru-space-1) 0; }
@@ -104,6 +104,7 @@ footer {
   font-size: var(--naru-text-label); font-weight: 500; color: var(--naru-ink);
 }
 .status-row > span { flex: 1 1 auto; min-width: 0; }
+.status-row > .naru-progress { margin: 0; }
 .status-row > .naru-btn { flex: none; }
 /* 點鉛筆才出現的編輯區 */
 .series-editor { display: flex; flex-direction: column; gap: var(--naru-space-2); padding: var(--naru-space-2) 0; }

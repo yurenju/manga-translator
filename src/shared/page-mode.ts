@@ -20,18 +20,35 @@ export function savePageMode(mode: PageMode): Promise<void> {
   return chrome.storage.local.set({ [KEY]: mode });
 }
 
-/** 先讀一次目前的值，之後每次變更都呼叫 onChange；回傳取消監聽。 */
-export function watchPageMode(onChange: (mode: PageMode) => void): () => void {
+/**
+ * 之後的每次變更都呼叫 onChange（不含目前的值，目前的值用 loadPageMode 讀）；回傳取消監聽。
+ * after：初始讀取的 promise。變更排在它後面才套用，讀取比變更晚回來也不會被舊值蓋掉。
+ */
+export function onPageModeChange(after: Promise<unknown>, onChange: (mode: PageMode) => void): () => void {
   let stopped = false;
   const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-    if (area === 'local' && KEY in changes) onChange(parse(changes[KEY]!.newValue));
+    if (area !== 'local' || !(KEY in changes)) return;
+    const mode = parse(changes[KEY]!.newValue);
+    void after.then(() => {
+      if (!stopped) onChange(mode);
+    });
   };
   chrome.storage.onChanged.addListener(listener);
-  void loadPageMode().then((mode) => {
-    if (!stopped) onChange(mode);
-  });
   return () => {
     stopped = true;
     chrome.storage.onChanged.removeListener(listener);
+  };
+}
+
+/** 先讀一次目前的值，之後每次變更都呼叫 onChange；回傳取消監聽。 */
+export function watchPageMode(onChange: (mode: PageMode) => void): () => void {
+  let stopped = false;
+  const loaded = loadPageMode().then((mode) => {
+    if (!stopped) onChange(mode);
+  });
+  const stopListening = onPageModeChange(loaded, onChange);
+  return () => {
+    stopped = true;
+    stopListening();
   };
 }

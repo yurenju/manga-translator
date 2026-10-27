@@ -3,7 +3,7 @@
  * 頁面上的內容與 hover 在 overlay.spec.ts、learning.spec.ts；這裡是記住設定、學習時認頁。
  */
 import type { Page, Worker } from '@playwright/test';
-import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test, testActivate } from './fixtures.ts';
 import { overlayTexts, pageMode, shownTranslations } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -67,4 +67,33 @@ test('學習時重新擷取同一頁不會重翻；翻頁後翻新的一頁、�
   await expect(statusLines(panel)).toHaveText([/^快取・/], { timeout: PAGE_TIMEOUT });
   expect(await translateCalls(sw)).toBe(2);
   await expect(shownTranslations(page)).toHaveCount(0);
+});
+
+test('學習時重新整理再啟動（快取命中）：頁面上從頭到尾沒出現過譯文', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(FIRST_PAGE_TIMEOUT + PAGE_TIMEOUT);
+  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  await expect(statusLines(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  await pageMode(panel, '學習').click();
+  await expect(shownTranslations(page)).toHaveCount(0);
+
+  // 重新整理後的頁面每一格畫面都檢查一次：只要有一格看得到譯文就記下來
+  await page.addInitScript(() => {
+    const w = window as unknown as { __sawTranslation: boolean };
+    w.__sawTranslation = false;
+    const check = () => {
+      for (const host of document.querySelectorAll('[data-naruhodo-overlay]'))
+        for (const el of host.shadowRoot?.querySelectorAll<HTMLElement>('[data-balloon-id]') ?? [])
+          if (el.checkVisibility({ visibilityProperty: true })) w.__sawTranslation = true;
+      requestAnimationFrame(check);
+    };
+    requestAnimationFrame(check);
+  });
+  await page.reload();
+  await page.locator('body[data-ready="true"]').waitFor();
+  await page.bringToFront();
+  await testActivate(panel, tabId);
+  await expect(statusLines(panel)).toHaveText([/^快取・/], { timeout: PAGE_TIMEOUT });
+  // 覆蓋層畫好了（hover 要用），但頁面上從來沒有看得到的譯文
+  await expect.poll(async () => (await overlayTexts(page)).length, { timeout: PAGE_TIMEOUT }).toBeGreaterThan(0);
+  expect(await page.evaluate(() => (window as unknown as { __sawTranslation: boolean }).__sawTranslation)).toBe(false);
 });

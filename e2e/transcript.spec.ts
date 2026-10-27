@@ -58,7 +58,7 @@ async function lines(transcript: Locator) {
       const rts = [...original.querySelectorAll('rt, small')].map((rt) => (rt.remove(), rt.textContent ?? ''));
       const badges = [...li.querySelectorAll('span')].filter((s) => s.children.length === 0).map((s) => s.textContent);
       return {
-        sfx: badges.includes('狀聲詞'),
+        loose: badges.includes('框外文字'),
         original: original.textContent ?? '',
         hasKanji: /[一-鿿々〆ヶ]/.test(original.textContent ?? ''),
         reading: rts.join(''),
@@ -71,7 +71,7 @@ async function lines(transcript: Locator) {
 }
 
 test.describe('沒有 API key', () => {
-  test('side panel 依閱讀順序顯示原文＋讀音＋「未翻譯」，Loose Text 標「狀聲詞」',async ({ context, sw, extensionId, mockSite }) => {
+  test('side panel 依閱讀順序顯示原文＋讀音＋「未翻譯」，Loose Text 標「框外文字」',async ({ context, sw, extensionId, mockSite }) => {
     test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
@@ -96,11 +96,11 @@ test.describe('沒有 API key', () => {
     const second = transcriptOf(panel, 1);
     await expect(second.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
     const p02 = await lines(second);
-    console.log('p02 逐字稿', p02.map((l) => `[${l.sfx ? '狀聲詞' : 'balloon'}] ${l.original}`).join(' / '));
+    console.log('p02 逐字稿', p02.map((l) => `[${l.loose ? '框外文字' : 'balloon'}] ${l.original}`).join(' / '));
     const narration = p02.find((l) => similarity(l.original, '潮見坂高校4月12日') >= 0.5);
-    expect(narration?.sfx).toBe(true);
-    expect(p02.some((l) => !l.sfx)).toBe(true);
-    // 「狀聲詞」徽章取代原本的斜體＋🔊
+    expect(narration?.loose).toBe(true);
+    expect(p02.some((l) => !l.loose)).toBe(true);
+    // 「框外文字」徽章取代原本的斜體＋🔊
     for (const line of p02) {
       expect(line.original).not.toContain('🔊');
       expect(line.italic).toBe(false);

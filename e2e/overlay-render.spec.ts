@@ -152,20 +152,20 @@ test.describe('覆蓋渲染（ground truth）', () => {
       sub,
       text: { ...text, balloons: text.balloons.map((b) => (b.id === 't1' ? { ...b, unreadable: true } : b)) },
     }));
-    const sfx = pages[0]!.text.looseText.find((l) => l.id === 't2')!;
-    expect(sfx.譯文).not.toBe('');
+    const loose = pages[0]!.text.looseText.find((l) => l.id === 't2')!;
+    expect(loose.譯文).not.toBe('');
     await render(page, 'p04-outside', PAGE_WIDTH, pages, 'learn');
     const anchor = await anchorRect(page);
     const centerOf = (r: RatioRect) => ({ x: anchor.x + (r.x + r.w / 2) * anchor.width, y: anchor.y + (r.y + r.h / 2) * anchor.height });
     const tooltip = page.locator('[data-naruhodo-overlay] .tip.on');
 
-    const sfxCenter = centerOf(sfx.bbox);
-    await page.mouse.move(sfxCenter.x, sfxCenter.y);
-    await expect(tooltip).toContainText(sfx.原文);
-    await expect(tooltip).not.toContainText(sfx.譯文);
+    const looseCenter = centerOf(loose.bbox);
+    await page.mouse.move(looseCenter.x, looseCenter.y);
+    await expect(tooltip).toContainText(loose.原文);
+    await expect(tooltip).not.toContainText(loose.譯文);
     const chipBox = (await tooltip.getByText('滑過這裡看譯文').boundingBox())!;
     await page.mouse.move(chipBox.x + chipBox.width / 2, chipBox.y + chipBox.height / 2, { steps: 10 });
-    await expect(tooltip).toContainText(sfx.譯文);
+    await expect(tooltip).toContainText(loose.譯文);
     await page.mouse.move(1, 1);
     await expect(tooltip).toHaveCount(0);
 
