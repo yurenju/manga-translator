@@ -113,9 +113,21 @@ export function usedNotes(entries: readonly NotesEntry[], texts: readonly string
   return entries.filter((e) => appearsIn(texts, e.原文)).map(({ 原文, 譯文 }) => ({ 原文, 譯文 }));
 }
 
+/** 接在人名後面的敬稱。 */
+const HONORIFIC = /(?:君|くん|さん|ちゃん|様|さま|先生|先輩)$/;
+
+/**
+ * 新增的原文其實是既有條目換個說法（加上敬稱、寫成讀音的假名）：LLM 常把「人名＋敬稱」當成新人名、
+ * 或把既有的名字用假名再加一次（#64）。
+ */
+function duplicates(notes: readonly NotesEntry[], added: { 原文: string }): boolean {
+  const bare = normalizeText(added.原文).replace(HONORIFIC, '');
+  return notes.some((e) => [e.原文, e.讀音].some((s) => s && normalizeText(s) === bare));
+}
+
 /** 套用 notes_changes 的結果，加上沒採用的新增（trace 用，#40 驗收）。 */
 export interface AppliedNotes extends MergedNotes {
-  /** 原文不在這頁任何 Balloon 裡、沒採用的新增（OCR 錯字防護）。 */
+  /** 沒採用的新增：原文不在這頁任何 Balloon 裡（OCR 錯字防護）、是既有條目換個說法、或譯文是空的。 */
   rejected: string[];
   /** 同一個 Spread 先套用的頁剛新增、這頁看不到而給了不同譯名：丟掉的譯名（其他空欄位照補）。 */
   dropped: UsedNote[];
@@ -125,6 +137,7 @@ export interface AppliedNotes extends MergedNotes {
  * 依只能新增規則套用 LLM 翻某一頁時回傳的 notes_changes（#37）。規則由這裡執行，不交給 LLM 判斷。
  * OCR 錯字防護：新條目的原文必須出現在這頁某個 Balloon 的原文裡才採用。封面、扉頁的設計字與署名多半是
  * Loose Text 而且常被 OCR 讀錯，照先到先贏規則，錯的版本一旦進來就會卡住之後正確的版本（#37、#48 的觀察）。
+ * 雜訊防護（#64）：既有條目加上敬稱或寫成讀音的假名、以及譯文是空的新條目，也不採用。
  * 自稱、語氣、稱呼一律不採用，只由人填（ADR 0005）。
  */
 export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesChanges, page: NotesPage): AppliedNotes {
@@ -140,7 +153,7 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
   const rejected: string[] = [];
   const dropped: UsedNote[] = [];
   const adopted = changes.added.filter((a) => {
-    const ok = known.has(a.原文) || appearsIn(page.balloonTexts, a.原文);
+    const ok = known.has(a.原文) || (a.譯文 !== '' && appearsIn(page.balloonTexts, a.原文) && !duplicates(notes, a));
     if (!ok) rejected.push(a.原文);
     return ok;
   });

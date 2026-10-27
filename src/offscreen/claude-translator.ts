@@ -1,9 +1,9 @@
 /**
  * Translator 的 Claude 實作（spec #27 第 5 節、#15）：offscreen document 直接 fetch Messages API，
  * 帶 anthropic-dangerous-direct-browser-access，不宣告 api.anthropic.com 的 host_permissions。
- * Haiku 5.5 文字模式、effort low、structured outputs。每個 Page 兩次呼叫（ADR 0005）：
- * ① translatePage 關 thinking、只回譯文，user message 先放 Prior Pages 再放這頁的原文；
- * ② proposeNotes 開 thinking、只回 notes_changes，輸入這頁的原文與 ① 的譯文。
+ * Haiku 5.5 文字模式、structured outputs。每個 Page 兩次呼叫（ADR 0005）：
+ * ① translatePage effort low、關 thinking、只回譯文，user message 先放 Prior Pages 再放這頁的原文；
+ * ② proposeNotes effort high、開 thinking、只回 notes_changes，輸入這頁的原文與 ① 的譯文（#64）。
  * 兩次都把 Series Notes 放在標了 cache_control 的 system（固定前綴）。
  *
  * API key 只在 offscreen document 裡用（ADR 0001）；錯誤訊息只帶 API 回的訊息，不帶 key。
@@ -92,9 +92,13 @@ const NOTES_TEXT = `你是日文漫畫翻譯助手的 Series Notes 整理員。S
 - ja：OCR 讀到的日文原文，偶爾有錯字。
 - zh：這一頁已經顯示給讀者的繁體中文譯文。
 
-請整理這部作品的 Series Notes 變更（notes_changes）：
-- added：這頁出現、但 Series Notes 裡還沒有的人名、地名、專有名詞或固定用語。ja 是原文，reading 是讀音，zh 必須是這頁譯文（zh）裡實際用的譯名，不要另取新譯名，category 例如「人名」「地名」「用語」；不知道的欄位填空字串。ja 要原樣出現在某個 balloon 的原文裡；只出現在 loose 的、或看起來是 OCR 誤讀的不要加。
-- filled：Series Notes 已有的條目，如果某個欄位是空的、而這頁讓你知道了答案，就補上；其他欄位填空字串。
+請整理這部作品的 Series Notes 變更（notes_changes）。Series Notes 只用來讓之後的 Page 譯名一致，所以記的是「之後還會再出現、譯法需要統一」的專有名詞。
+
+- added：這頁出現、但 Series Notes 裡還沒有的人名、地名、作品裡特有的名稱或用語（作品自創的詞、神明或組織的名字與別稱、角色的綽號等）。
+  - 加之前先跟 Series Notes 的條目逐一比對。已經有的、去掉敬稱（君、さん、ちゃん、様、先生、先輩等）後跟已有條目相同的、或只是已有條目換成平假名／片假名寫法的，都不要加。
+  - 不要加：人名加敬稱的形式（〜君、〜さん）、一般詞彙（家人稱呼、學校用語、日常名詞，即使在劇情裡很重要）、狀聲詞、語氣詞、口吃或拉長音造成的字形變化（例如把「僕」說成「ぼぐ」）、看起來是 OCR 誤讀的字、只出現在 loose 的字、好幾個名字串在一起的片段。
+  - ja 要原樣出現在某個 balloon 的原文裡。reading 是讀音。zh 必須是這頁譯文（zh）裡實際用的譯名，不能是空字串，不要另取新譯名；category 例如「人名」「地名」「用語」。
+- filled：Series Notes 已有的條目，如果某個欄位是空的、而這頁讓你知道了答案，就補上；已經有值的欄位與其他欄位填空字串。
 - suggestions：如果你認為 Series Notes 裡既有的譯名不對，不要直接改，提出建議譯名 zh 與理由 reason。
 - 沒有變更就回傳空陣列。不要記劇情進展。
 
@@ -311,7 +315,8 @@ export function createClaudeTranslator(deps: ClaudeDeps): Translator & { testCon
           max_tokens: MAX_TOKENS,
           system: systemBlocks(NOTES_TEXT, '以下是這部作品目前的 Series Notes：', input.seriesNotes),
           messages: [{ role: 'user', content: [{ type: 'text', text: JSON.stringify(toWire(input.items)) }] }],
-          output_config: { effort: 'low', format: { type: 'json_schema', schema: NOTES_SCHEMA } },
+          // effort low 時模型不太比對既有條目，常重複新增；② 在背景跑，慢一點沒關係（#64）
+          output_config: { effort: 'high', format: { type: 'json_schema', schema: NOTES_SCHEMA } },
         },
         isNotesAnswer,
         signal,
