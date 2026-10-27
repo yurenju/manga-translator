@@ -1,7 +1,7 @@
 /**
  * 翻頁偵測的前半段（spec #27 第 3.2 節）：DOM mutation／scroll／resize／按鍵／點擊／img load
  * → debounce → 通知 SW 截圖。真的有沒有翻頁由 SW 比對每個 Page 的 hash 決定。不做定時輪詢。
- * 截圖期間覆蓋層要藏起來，而真實 Chrome 的 captureVisibleTab 要 0.2–1.7 秒（#27 除錯實測），
+ * 截圖期間覆蓋層要藏起來，而真實 Chrome 的 captureVisibleTab 約 0.25 秒（#60 實測），
  * 所以明顯不是翻頁的訊號（只按修飾鍵、跟 Page 無關的元素變動）先在這裡擋掉。
  */
 

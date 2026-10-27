@@ -1,10 +1,11 @@
 /**
- * 截圖前後頁面上要做的事（spec #27 第 3.2 節、#59）：藏起疊在 Page 上的元素、視情況藏自己的覆蓋層，
- * 等瀏覽器重繪完才讓 SW 截；截完立刻還原。
+ * 截圖前後頁面上要做的事（spec #27 第 3.2 節、#59、#60）：讓頁面持續重繪（靜止的頁面截一次要等 1.6 s）、
+ * 藏起疊在 Page 上的元素、視情況藏自己的覆蓋層，等瀏覽器重繪完才讓 SW 截；截完立刻還原。
  */
 import { createTrace } from '../shared/trace.ts';
 import { describeElement, findOccluders, hideOccluders, type HiddenOccluders } from './occlusion.ts';
 import { untilRepainted, type Overlay } from './overlay.ts';
+import { startRepaint, stopRepaint } from './repaint.ts';
 
 const trace = createTrace('content');
 
@@ -26,6 +27,7 @@ export function createCapturePrep({ overlay, anchors, isOwn }: {
   /** hideOverlay＝false：SW 已經記過帶覆蓋層的樣子，只藏網站的遮擋物。 */
   async function prepare(hideOverlay: boolean): Promise<void> {
     occluders?.restore();
+    startRepaint();
     const startedAt = performance.now();
     const found = findOccluders(anchors(), isOwn);
     occluders = hideOccluders(found);
@@ -40,6 +42,7 @@ export function createCapturePrep({ overlay, anchors, isOwn }: {
   }
 
   function finish(): CaptureFinished {
+    stopRepaint();
     const stable = occluders?.restore() ?? true;
     occluders = undefined;
     return { stable, overlayHiddenMs: overlay.restoreAfterCapture() };

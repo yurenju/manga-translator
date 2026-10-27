@@ -29,9 +29,11 @@ Timing and performance bugs need measuring in the debug Chrome: e2e runs Playwri
 
 | | Real Chrome | Playwright Chromium |
 | --- | --- | --- |
-| `chrome.tabs.captureVisibleTab` | 0.2–1.7 s | ~80 ms |
+| `chrome.tabs.captureVisibleTab` | ~0.25 s while something repaints; ~1.6 s on a still page | ~80 ms |
 | `OffscreenCanvas.convertToBlob` in the offscreen document | ~1 s | ~55 ms |
 | `requestAnimationFrame` in the offscreen document | never fires | — |
+
+`captureVisibleTab` waits for a new compositor frame, and a still page produces none until a timeout. So every capture runs a repaint animation the screenshot cannot see (`src/content/repaint.ts`, #60): Jump+ went from ~1.6 s to ~0.25 s, while Kindle's reader repaints on its own and was already ~0.25 s. To time captures by hand, call `captureVisibleTab` from the SW at least 500 ms apart (Chrome allows two per second), and send the tab `content:prepareCapture` before and `content:finishCapture` after each one; without them you measure the still-page timeout. Any change to what the page draws during capture must leave the screenshot byte-identical: compare captures with and without it.
 
 `npm run debug:eval -- <sw|offscreen|page|content> <file.js>` (or `-e "<expression>"`) runs an awaitable expression in that context of the open debug Chrome and prints the result as JSON. `content` is the content script's isolated world in the manga tab; `page` is that tab's main world. It picks this extension's SW and offscreen document by manifest name, defines `activeTab()` in the SW (the manga tab: the extension has no `tabs` permission, so `chrome.tabs.query` shows no URLs), and gives up after `--timeout` seconds (default 30). The offscreen document exists only after the extension's first detection or translation, and the SW only while awake: click the icon first.
 

@@ -41,7 +41,7 @@
 | # | 使用者操作 | 判斷 |
 |---|---|---|
 | B1 | 啟動後停在一頁不動 | trace：`candidates` 列出的候選數＝畫面上完整可見的 Page 數；`rejected`／`small` 裡沒有應該是 Page 的元素（看 `rect` 與 viewport） |
-| B2 | 同上 | trace：`capture` 的 `ms`（真實 Chrome 約 0.2–1.7 s）；`capture` 的截圖（images/）裡看不到我們的譯文 |
+| B2 | 同上 | trace：`capture` 的 `ms`（真實 Chrome 約 0.25 s，#60）；`capture` 的截圖（images/）裡看不到我們的譯文 |
 | B3 | 同上 | trace：`crop` 的每個 Page 縮圖（images/）各是一整頁，沒切到別頁、沒多切黑邊或網站 UI |
 | B4 | 同上 | trace：`analyze` 的 `detections` 疊圖：藍框（Balloon）有框到對話框、數字是由右到左、由上到下的閱讀順序 |
 | B5 | 捲動到兩頁各露一半的位置停住 | trace：只露一半的 Page 不在 `candidates`，或在 `rejected` 裡有理由；沒有翻譯不完整的 Page |
