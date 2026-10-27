@@ -77,3 +77,15 @@
 .naru-callout > p { margin: 0; }
 .naru-callout--warn { background: var(--naru-warn-bg); color: var(--naru-warn); }
 .naru-callout--danger { background: var(--naru-danger-bg); color: var(--naru-danger); }
+
+/* PageHeader：一行，圖示＋標題靠左、翻譯狀態靠右（窄的時候狀態換到下一行） */
+.naru-page-header {
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--naru-space-2); row-gap: 2px;
+  padding-bottom: var(--naru-space-1); border-bottom: 1px solid var(--naru-line);
+}
+.naru-page-header__icon { flex: none; }
+.naru-page-header__icon rect { fill: var(--naru-surface); stroke: var(--naru-line-strong); }
+.naru-page-header__icon rect.lit { fill: var(--naru-accent); stroke: var(--naru-accent); }
+.naru-page-header__title { margin: 0; font-size: var(--naru-text-label); font-weight: 700; color: var(--naru-ink); }
+.naru-page-header__order { font-size: var(--naru-text-caption); font-weight: 400; color: var(--naru-ink-3); }
+.naru-page-header__status { margin-left: auto; min-width: 0; color: var(--naru-ink-3); font-size: var(--naru-text-caption); }

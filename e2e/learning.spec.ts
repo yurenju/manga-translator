@@ -14,7 +14,7 @@ const TIMEOUT = 60_000;
 const GREETING_ZH = '早安！今天好早喔';
 
 const firstTranscript = (panel: Page): Locator =>
-  panel.getByRole('list', { name: 'Page' }).getByRole('listitem').filter({ has: panel.getByRole('img') }).first().getByRole('list', { name: '逐字稿' });
+  panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: '第 1 頁' }).getByRole('list', { name: '逐字稿' });
 
 const level = (panel: Page, name: string) => panel.getByRole('group', { name: '顯示層級' }).getByRole('button', { name, exact: true });
 
