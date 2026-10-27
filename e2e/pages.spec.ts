@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, test } from './fixtures.ts';
 
 /**
  * 用真的視窗（1280×1500）而不是 Playwright 模擬的 viewport：啟動時 side panel 會真的打開、把頁面擠窄，
@@ -55,7 +55,7 @@ test('捲動後重新擷取：上下都只露出一部分時只列中間那頁',
   await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
 
   await page.evaluate(() => window.scrollTo(0, 300));
-  await panel.getByRole('button', { name: '重新擷取' }).click();
+  await chooseFromPanelMenu(panel, '重新擷取頁面');
 
   await expectPagesListed(panel, ['p02-ruby']);
 });
@@ -67,10 +67,10 @@ test('連續觸發時截圖不超過 2 次/秒', async ({ context, sw, extension
   // 同一個 tab 還沒開始的掃描會合併，連按 5 次截幾次不一定；所以每次截圖一送出就馬上再按，
   // 下一次掃描排在這次後面、不限速的話會緊接著截。翻頁偵測（#34）也會觸發截圖，所以用相對次數。
   const captureCount = () => sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
-  const button = panel.getByRole('button', { name: '重新擷取' });
+  const rescan = () => chooseFromPanelMenu(panel, '重新擷取頁面');
   for (let i = 0; i < 5; i++) {
     const before = await captureCount();
-    await button.click();
+    await rescan();
     await expect.poll(captureCount, { intervals: [20] }).toBeGreaterThan(before);
   }
 

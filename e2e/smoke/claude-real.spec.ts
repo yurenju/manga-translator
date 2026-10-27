@@ -11,15 +11,15 @@ import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { build } from '../../scripts/build.ts';
 import { readTestApiKey, TEST_API_KEY_FILE } from '../../src/testing/test-api-key.ts';
-import { activateOnJumpPlus, expect, launchWithExtension, openSidePanel, test } from '../fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, launchWithExtension, openSidePanel, test } from '../fixtures.ts';
 
 const apiKey = readTestApiKey();
 if (!apiKey) console.log(`已跳過：沒有 NARUHODO_ANTHROPIC_KEY，也沒有 ${TEST_API_KEY_FILE}`);
 test.skip(!apiKey, '沒有測試用 API key');
 
 async function saveKey(panel: Page): Promise<void> {
-  await panel.getByRole('button', { name: '設定' }).click();
-  const settings = panel.getByRole('region', { name: '設定' });
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  const settings = panel.getByRole('region', { name: 'API key 與模型' });
   await settings.getByLabel('Claude API key').fill(apiKey!);
   await settings.getByRole('button', { name: '儲存' }).click();
   await expect(settings).toContainText('末四碼');

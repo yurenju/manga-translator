@@ -4,7 +4,7 @@
  */
 import type { Page, Worker } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, sentOriginals, test } from './fixtures.ts';
 import { WATERMARK_TEXT } from './mock-site/jumpplus.ts';
 import { overlayHostCount, pageMode, shownErasers, shownTranslations, type ScreenRect } from './overlay-helpers.ts';
 
@@ -169,7 +169,7 @@ test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子�
 
   // 覆蓋層顯示中再擷取一次（SW 的 captureVisibleTab）
   const count = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
-  await panel.getByRole('button', { name: '重新擷取' }).click();
+  await chooseFromPanelMenu(panel, '重新擷取頁面');
   await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(count);
   await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
   const captured = (await sw.evaluate(() => globalThis.__captures!.at(-1)!)) as string;

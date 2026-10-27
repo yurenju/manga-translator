@@ -4,7 +4,7 @@
  * 也檢查 key 不經過 content script 與 messaging（spec #27 第 5 節）。
  */
 import type { Page, Worker } from '@playwright/test';
-import { activateOnJumpPlus, expect, openSidePanel, test } from './fixtures.ts';
+import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test } from './fixtures.ts';
 
 test.use({ viewport: null, fakeTranslator: true, requireApiKey: true, unreadableTexts: ['もちろん！'] });
 
@@ -73,9 +73,9 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await expect(transcript.getByText('未翻譯').first()).toBeVisible();
   await expect(panel.getByText('尚未設定 API key')).toBeVisible();
 
-  // 設定區：輸入 key，只顯示末四碼
-  await panel.getByRole('button', { name: '設定' }).click();
-  const settings = panel.getByRole('region', { name: '設定' });
+  // ⚙ 選單的「API key 與模型」：輸入 key，只顯示末四碼
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  const settings = panel.getByRole('region', { name: 'API key 與模型' });
   await expect(settings).toContainText('Anthropic Console');
   await expect(settings).toContainText('花費上限');
   await settings.getByLabel('Claude API key').fill(FAKE_KEY);
@@ -127,14 +127,14 @@ test('從 Chrome 內建 side panel 選單打開（沒有啟動 tab）也能設�
   const panel = await openSidePanel(context, extensionId);
 
   await expect(panel.getByText('請點外掛圖示啟動')).toBeVisible();
-  await panel.getByRole('button', { name: '設定' }).click();
-  const settings = panel.getByRole('region', { name: '設定' });
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  const settings = panel.getByRole('region', { name: 'API key 與模型' });
   await settings.getByLabel('Claude API key').fill(FAKE_KEY);
   await settings.getByRole('button', { name: '儲存' }).click();
   await expect(settings).toContainText('末四碼 WXYZ');
 
   // 重新打開 side panel 仍然記得（存在 IndexedDB）
   await panel.reload();
-  await panel.getByRole('button', { name: '設定' }).click();
-  await expect(panel.getByRole('region', { name: '設定' })).toContainText('末四碼 WXYZ');
+  await chooseFromPanelMenu(panel, 'API key 與模型');
+  await expect(panel.getByRole('region', { name: 'API key 與模型' })).toContainText('末四碼 WXYZ');
 });
