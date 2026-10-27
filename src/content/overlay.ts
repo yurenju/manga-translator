@@ -17,6 +17,7 @@ import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
+import { currentVariant, installSwitcher, limitLine, measure, planPage } from './overlay-layout.prototype.ts';
 import { estimatePageFontPx, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
@@ -104,6 +105,8 @@ interface PageLayer {
   /** 高亮框（滑過頁面或 side panel 那行時）。 */
   highlight: HTMLElement;
   lines: HoverLine[];
+  /** PROTOTYPE #81：切換排法時用同一份資料重排。 */
+  args?: [HTMLElement, RatioRect, PageText, string];
 }
 
 interface Entry {
@@ -192,6 +195,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   let tipAbove = false;
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
+  if (__DEBUG__)
+    installSwitcher(() => {
+      for (const entry of entries.values()) for (const layer of [...entry.layers.values()]) if (layer.args) void show(...layer.args);
+    });
 
   /** host 要不要顯示：不在截圖中、anchor 看得到。 */
   const isVisible = (entry: Entry) => !capturing && isShown(entry.anchor);
@@ -310,7 +317,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       ...text.balloons.map((b) => toHoverLine(b, b.balloonBbox)),
       ...text.looseText.map((l) => toHoverLine(l, l.bbox)),
     ];
-    const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
+    const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines, args: [anchor, sub, text, pageHash] };
 
     const regionsList = balloons.map((balloon) => {
       const text = toPx(balloon.textBbox, size);
@@ -333,7 +340,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       box.style.color = luminance < 128 ? '#fff' : '#111';
       const inner = buildText(balloon.譯文, vertical);
       box.append(inner);
-      return { balloon, regions, erase, box, inner };
+      return { balloon, regions, erase, box, inner, vertical };
     });
     // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
     element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
@@ -349,12 +356,18 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
     const startPx = estimatePageFontPx(balloons.map((b, i) => ({ text: regionsList[i]!.text, 原文: b.原文 })));
+    const plans = __DEBUG__ ? planPage(items.map(({ balloon, regions, vertical }) => ({ text: regions.text, 原文: balloon.原文, 譯文: balloon.譯文, vertical }))) : [];
     const fits: Record<string, unknown>[] = [];
-    for (const { balloon, regions, box, inner } of items) {
+    for (const [i, { balloon, regions, box, inner, vertical }] of items.entries()) {
+      const plan = plans[i];
+      if (__DEBUG__ && plan?.lines) {
+        inner.replaceChildren(...plan.lines.flatMap((line, k) => [...(k ? [document.createElement('br')] : []), ...buildText(line, vertical).childNodes]));
+        inner.style.whiteSpace = 'nowrap';
+      }
       const result = fitText(
         {
           apply(region, px) {
-            setBox(box, region);
+            setBox(box, __DEBUG__ && plan ? limitLine(region, px, vertical, plan.charsPerLine) : region);
             box.style.fontSize = `${px}px`;
           },
           overflows: () =>
@@ -365,10 +378,11 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         },
         regions,
         minLayerPx,
-        startPx,
+        __DEBUG__ && plan ? plan.startPx : startPx,
       );
       box.dataset.fit = String(result.stage);
-      if (__DEBUG__) fits.push({ id: balloon.id, 譯文: balloon.譯文, vertical: box.classList.contains('v'), ...result, regions, eraseLuminance: balloon.eraseLuminance });
+      if (__DEBUG__)
+        fits.push({ id: balloon.id, 譯文: balloon.譯文, vertical, ...result, regions, eraseLuminance: balloon.eraseLuminance, ...plan, ...measure(inner, regions.text, result.size, vertical) });
     }
     if (__DEBUG__) {
       const anchorRect = anchor.getBoundingClientRect();
@@ -380,6 +394,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         screenScale,
         minLayerPx,
         startPx,
+        variant: currentVariant(),
         skipped: text.balloons.filter((b) => !balloons.includes(b)).map((b) => ({ id: b.id, unreadable: b.unreadable, 譯文: b.譯文 })),
         fits,
       });
