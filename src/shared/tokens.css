@@ -46,6 +46,12 @@
   --naru-tooltip-ink-2: #E2DED6;
   --naru-tooltip-ink-3: #A8A29A;
   --naru-tooltip-ruby: #F2A488;
+  /* tooltip 裡的「譯」區塊（RevealChip 深色版）：未揭露是虛線框，揭露後偏藍的實線框 */
+  --naru-tooltip-chip-bg: #34312C;
+  --naru-tooltip-chip-line: #6F6A61;
+  --naru-tooltip-chip-hint: #C9C4BB;
+  --naru-tooltip-chip-on-bg: #3A3F4D;
+  --naru-tooltip-chip-on-line: #5A6175;
 
   /* 字型：系統字型堆疊，不從網路載入 */
   --naru-font-sans: 'Noto Sans TC', 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
