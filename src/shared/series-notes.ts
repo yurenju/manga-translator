@@ -34,8 +34,17 @@ const sameSuggestion = (a: SuggestionRef) => (b: SuggestionRef) => a.原文 === 
  */
 export type SuggestionSource = { pageHash: string } | { mergedFrom: string } | { imported: true };
 
+/** 只由人填的欄位（ADR 0005）：LLM 只看文字、不知道誰在說話，會填到錯的角色身上。套用 notes_changes 時丟掉。 */
+const HUMAN_ONLY = ['自稱', '語氣', '稱呼'] as const;
+
 /** 空字串＝沒有值，可以補。譯文也算：目標的譯文是空的就直接補上，有值且不同才變成建議。 */
-const FILLABLE = ['讀音', '譯文', '類別', '備註', '自稱', '語氣', '稱呼'] as const;
+const FILLABLE = ['讀音', '譯文', '類別', '備註', ...HUMAN_ONLY] as const;
+
+function withoutHumanOnly<T extends Partial<NotesEntry>>(fields: T): T {
+  const out = { ...fields };
+  for (const field of HUMAN_ONLY) delete out[field];
+  return out;
+}
 
 export interface MergedNotes {
   /** 目標 Series 合併後的全部條目（既有的在前，順序不變）。 */
@@ -116,6 +125,7 @@ export interface AppliedNotes extends MergedNotes {
  * 依只能新增規則套用 LLM 翻某一頁時回傳的 notes_changes（#37）。規則由這裡執行，不交給 LLM 判斷。
  * OCR 錯字防護：新條目的原文必須出現在這頁某個 Balloon 的原文裡才採用。封面、扉頁的設計字與署名多半是
  * Loose Text 而且常被 OCR 讀錯，照先到先贏規則，錯的版本一旦進來就會卡住之後正確的版本（#37、#48 的觀察）。
+ * 自稱、語氣、稱呼一律不採用，只由人填（ADR 0005）。
  */
 export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesChanges, page: NotesPage): AppliedNotes {
   const known = new Map(notes.map((e) => [e.原文, e]));
@@ -123,7 +133,7 @@ export function applyNotesChanges(notes: readonly NotesEntry[], changes: NotesCh
     讀音: '',
     譯文: '',
     類別: '',
-    ...e,
+    ...withoutHumanOnly(e),
     seriesId: page.seriesId,
     locked: false,
   });

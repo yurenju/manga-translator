@@ -21,10 +21,11 @@ import type {
   TestConfig,
   TestConnectionResponse,
   TranslateResponse,
+  ProposeNotesResponse,
 } from '../shared/messages.ts';
 import { acceptSuggestion, editEntry, ignoreSuggestion, pendingSuggestions, type SeriesNotes, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { TranslateInput, Translator } from '../shared/translator.ts';
+import type { NotesInput, TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { BACKUP_KEYS, createBackup } from './backup.ts';
 import { indexedDbPageCache } from './cache-store.ts';
@@ -47,6 +48,8 @@ declare global {
   var __translateCalls: number | undefined;
   /** e2e build 才有：每次送給 FakeTranslator 的內容（#37：確認前一頁新增的條目有送出）。 */
   var __translateInputs: TranslateInput[] | undefined;
+  /** e2e build 才有：每次送給 FakeTranslator 整理 Notes（②）的內容。 */
+  var __notesInputs: NotesInput[] | undefined;
   /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
   var __jobLog: (JobEvent & { at: number })[] | undefined;
   /** e2e build 才有：記下過幾個 Page「帶覆蓋層的樣子」（scan.ts），給測試等它做完。 */
@@ -127,6 +130,17 @@ const offscreenTranslator: Translator = {
     if ('error' in response) throw new Error(response.error);
     return response.output;
   },
+  async proposeNotes(input) {
+    if (__E2E__ && fakeTranslator) (globalThis.__notesInputs ??= []).push(input);
+    await ensureOffscreenDocument();
+    const response = await chrome.runtime.sendMessage<Message, ProposeNotesResponse>({
+      type: 'offscreen:proposeNotes',
+      input,
+      ...(__E2E__ && fakeTranslator ? { fake: fakeTranslator } : {}),
+    });
+    if ('error' in response) throw new Error(response.error);
+    return response.output;
+  },
 };
 
 /** 沒有 key 時不排 LLM 工作（spec 第 5 節）。 */
@@ -160,7 +174,7 @@ const transcriber = createTranscriber({
   cache: indexedDbPageCache(),
   notes: {
     ...notesStore,
-    // 翻譯時套用 notes_changes 或人改了：side panel 的 Series Notes 區塊重新讀
+    // 背景整理 Notes（②）套用了 notes_changes 或人改了：side panel 的 Series Notes 區塊重新讀
     async save(seriesId, notes) {
       await notesStore.save(seriesId, notes);
       notifyPanel({ type: 'notes:changed', seriesId });
@@ -193,6 +207,7 @@ if (__E2E__) {
     pipelineConfig = config.pipeline;
     globalThis.__translateCalls = 0;
     globalThis.__translateInputs = [];
+    globalThis.__notesInputs = [];
     globalThis.__jobLog = [];
     fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [], notes: config.fakeNotes ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;

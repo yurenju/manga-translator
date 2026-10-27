@@ -105,9 +105,9 @@
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
-| H1 | 翻 6 頁以上有角色名的頁面 | trace：`translate:request` 的 `input.seriesNotes` 隨頁數累積；`translate:response` 的 `output.notes_changes` 有新增條目 |
+| H1 | 翻 6 頁以上有角色名的頁面 | trace：`translate:request` 的 `input.seriesNotes` 隨頁數累積、`input.priorPages` 帶前面看過的頁；背景整理 Notes 的 `notes:response` 的 `output.notes_changes` 有新增條目 |
 | H2 | 同上 | trace：`notes:apply` 的 `added` 是實際採用的新條目；`rejected` 是原文不在那頁任何 Balloon（`analyze` 的 `balloons[].原文`）而沒採用的 |
-| H3 | 跨頁的兩頁 | trace：同一個 Spread 的兩頁 `translate:request` 帶的 `seriesNotes` 相同（同一份快照）；左頁的 `notes:apply` 對右頁剛新增的條目給不同譯名時出現在 `dropped`，不出現在 `suggestions` |
+| H3 | 跨頁的兩頁 | trace：同一個 Spread 的兩頁 `notes:request` 帶的 `seriesNotes` 相同（同一份快照）；左頁的 `notes:apply` 對右頁剛新增的條目給不同譯名時出現在 `dropped`，不出現在 `suggestions` |
 | H4 | 在 side panel 修改一個條目的譯文 | trace：`panel:editNote`（`原文`、`fields`；改過的條目一律 locked）。使用者回報：條目顯示 🔒 |
 | H5 | 繼續翻到用到那個條目的頁 | trace：之後的 `translate:request` 帶的是改過的譯文；那頁的 `notes:apply` 裡這個原文不在 `added`／`filled`，LLM 想改的話只出現在 `suggestions` |
 | H6 | 有建議修改時，在 side panel 接受一個、忽略一個 | trace：`panel:acceptSuggestion`、`panel:ignoreSuggestion` 各一筆（`原文`、`建議譯文`）。使用者回報：兩個建議都從 side panel 消失 |

@@ -1,13 +1,15 @@
 /**
- * 一個 Page 的翻譯與快取（spec #27 第 3、4.3 節）：送出 LLM 時帶 Notes 快照、回來後依送出順序套用 notes_changes
- * （順序在 notes-ledger.ts）、翻譯成功才寫快取（#33）；查快取時判斷過時（#38）。
- * 排程與每個 tab 的畫面狀態在 transcribe.ts。
+ * 一個 Page 的翻譯與快取（spec #27 第 3、4.3 節、ADR 0005）：
+ * - ① 翻譯：帶送出時的 Notes 快照與 Prior Pages，回來就寫快取（#33）、顯示，不等 Notes。
+ * - ② 整理 Notes：① 成功後在背景送出，依 ② 送出的順序套用 notes_changes（順序在 notes-ledger.ts）。
+ *   失敗就跳過、不重試，只記在 trace，譯文不受影響。
+ * 查快取時判斷過時（#38）。排程、每個 tab 的畫面狀態與 Prior Pages 在 transcribe.ts。
  */
 import type { PageView } from '../shared/messages.ts';
-import type { PageText, PageTranslation } from '../shared/page-text.ts';
+import { pageLines, type PageText, type PageTranslation } from '../shared/page-text.ts';
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
-import type { NotesEntry, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import type { NotesChanges, NotesEntry, PriorPage, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import type { NotesLedger, SnapshotGroup } from './notes-ledger.ts';
 
 export interface PageCache {
@@ -34,18 +36,20 @@ export interface TranslateRequest {
   /** 沒有 Series 時不帶 Notes、不套用、不寫快取。 */
   seriesId: string | undefined;
   pageHash: string;
-  /** 同一組的頁共用 Notes 快照。 */
+  /** 同一組的頁共用 ② 的 Notes 快照。 */
   group: SnapshotGroup;
+  /** 這部 Series 在這一批之前最近看過、已經翻好的頁（ADR 0005）。 */
+  priorPages: PriorPage[];
 }
 
 const trace = createTrace('sw');
 
-function toTranslateInput(text: PageText, seriesNotes: NotesEntry[]): TranslateInput {
+function toTranslateInput(text: PageText, seriesNotes: NotesEntry[], priorPages: PriorPage[]): TranslateInput {
   const items = [
     ...text.balloons.map((b) => ({ order: b.order, item: { id: b.id, kind: 'balloon' as const, 原文: b.原文, orientation: b.orientation } })),
     ...text.looseText.map((l) => ({ order: l.order, item: { id: l.id, kind: 'loose' as const, 原文: l.原文, orientation: l.orientation } })),
   ];
-  return { seriesNotes, items: items.sort((a, b) => a.order - b.order).map((i) => i.item) };
+  return { seriesNotes, priorPages, items: items.sort((a, b) => a.order - b.order).map((i) => i.item) };
 }
 
 function applyTranslation(text: PageText, output: TranslateOutput): PageText {
@@ -58,28 +62,53 @@ function applyTranslation(text: PageText, output: TranslateOutput): PageText {
 }
 
 export function createPageTranslation({ cache, ledger, translatorVersion }: PageTranslationDeps) {
-  /** 翻譯一頁；只有翻譯成功才寫快取。 */
-  async function translate({ text, translator, seriesId, pageHash, group }: TranslateRequest): Promise<Transcript> {
+  /** 還在背景跑的 ②。 */
+  const pendingNotes = new Set<Promise<void>>();
+
+  /**
+   * ②：這頁的原文＋① 的譯文送去整理 Notes。送出的這一刻拿號碼牌，notes_changes 依 ② 送出順序套用；
+   * Spread 的兩頁（同一組）共用一份快照。失敗就跳過，只讓出順序。
+   */
+  async function proposeNotes(translator: Translator, seriesId: string, pageHash: string, group: SnapshotGroup, text: PageText): Promise<void> {
+    const turn = ledger.checkout(seriesId, group);
+    const startedAt = Date.now();
+    let changes: NotesChanges;
+    try {
+      const output = await translator.proposeNotes({ seriesNotes: await turn.notes, items: pageLines(text) });
+      trace('notes:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage });
+      changes = output.notes_changes;
+    } catch (e) {
+      console.warn('notes update failed', e);
+      trace('notes:error', { pageHash, ms: Date.now() - startedAt, error: e });
+      turn.release();
+      return;
+    }
+    await turn.commit(changes, { pageHash, balloonTexts: text.balloons.map((b) => b.原文) });
+  }
+
+  function inBackground(work: Promise<void>): void {
+    pendingNotes.add(work);
+    void work.finally(() => pendingNotes.delete(work));
+  }
+
+  /** 翻譯一頁（①）；只有翻譯成功才寫快取，接著在背景整理 Notes（②）。 */
+  async function translate({ text, translator, seriesId, pageHash, group, priorPages }: TranslateRequest): Promise<Transcript> {
     if (!translator) return { state: 'done', text, translated: false };
-    // 送出的這一刻拿號碼牌：notes_changes 依送出順序套用
-    const turn = seriesId === undefined ? undefined : ledger.checkout(seriesId, group);
-    const seriesNotes = (await turn?.notes) ?? [];
+    // 送出時的 Notes 快照：送進 prompt，也是快取的 usedNotes
+    const seriesNotes = seriesId === undefined ? [] : await ledger.list(seriesId);
     let output: TranslateOutput;
     const startedAt = Date.now();
     try {
-      output = await translator.translatePage(toTranslateInput(text, seriesNotes));
-      trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage });
+      output = await translator.translatePage(toTranslateInput(text, seriesNotes, priorPages));
+      trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage, priorPages: priorPages.length });
     } catch (e) {
       // 429／5xx 的重試在 Translator 裡（claude-translator.ts）；這裡是重試後仍失敗
       console.warn('translate failed', e);
       trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });
-      turn?.release();
       return { state: 'done', text, translated: false, translateError: e instanceof Error ? e.message : String(e) };
     }
     const translated = applyTranslation(text, output);
     const { model, latencyMs, usage } = output;
-    // 套用後的條目：這頁剛新增或補上譯文的也算這頁用到的
-    const notes = turn ? await turn.commit(output.notes_changes, { pageHash, balloonTexts: text.balloons.map((b) => b.原文) }) : seriesNotes;
     if (seriesId !== undefined) {
       // 過時提示（#38）拿它跟目前的版本比，所以兩個欄位都記送出時的版本（同一個來源）。API 回報的模型 ID 可能跟送出的
       // 不同（例如帶日期），用它比對會讓每頁都過時；沒有版本資訊時才退回 API 回報的。
@@ -88,7 +117,7 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
         ...translated,
         seriesId,
         pageHash,
-        usedNotes: usedNotes(notes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
+        usedNotes: usedNotes(seriesNotes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
         model: version?.model ?? model,
         promptVersion: version?.promptVersion ?? '',
         usage,
@@ -97,8 +126,14 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
       };
       // 寫不進去只是下次要重翻，這次的結果照樣顯示。
       await cache.save(entry).catch((e: unknown) => console.warn('cache save failed', e));
+      inBackground(proposeNotes(translator, seriesId, pageHash, group, translated));
     }
     return { state: 'done', text: translated, translated: true, translation: { source: 'translated', model, latencyMs, usage } };
+  }
+
+  /** 背景的 ② 都套用完（或跳過）時 resolve，包含等待期間才送出的。 */
+  async function notesSettled(): Promise<void> {
+    while (pendingNotes.size > 0) await Promise.all(pendingNotes);
   }
 
   /** 快取的這頁過時了沒（#38）。讀不到 Notes 就當沒過時：只是少一個提示。 */
@@ -128,7 +163,7 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
     return { state: 'done', text: { balloons, looseText }, translated: true, translation: { source: 'cache', model, latencyMs, usage }, stale };
   }
 
-  return { translate, lookup, staleOf };
+  return { translate, lookup, staleOf, notesSettled };
 }
 
 export type PageTranslator = ReturnType<typeof createPageTranslation>;

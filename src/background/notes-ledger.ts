@@ -1,6 +1,7 @@
 /**
- * Series Notes 累積（#37、spec #27 第 3.4 節）：每頁送出 LLM 時拿一份 Notes 快照，回來後依「送出 LLM 的順序」
- * 套用 notes_changes——後送出的先回來也要等前面的套用完（或失敗放掉）。套用規則在 shared/series-notes.ts。
+ * Series Notes 累積（#37、spec #27 第 3.4 節、ADR 0005）：每頁送出整理 Notes 的呼叫（②）時拿一份 Notes 快照，
+ * 回來後依「② 送出的順序」套用 notes_changes——後送出的先回來也要等前面的套用完（或失敗放掉）。
+ * 翻譯（①）不排進這個順序，回來就顯示。套用規則在 shared/series-notes.ts。
  * 同一個 SnapshotGroup 的頁（Spread 的兩頁）拿到同一份快照：後送出的那頁不會看到先送出那頁的變更（spec 第 3.4 節）。
  *
  * 人在 side panel 的修改（#38：編輯條目、接受／忽略建議、匯入）也從這裡寫：每次「讀 → 改 → 寫」互斥，

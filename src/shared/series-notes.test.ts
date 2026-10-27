@@ -97,11 +97,25 @@ describe('applyNotesChanges（套用 LLM 的 notes_changes）', () => {
   it('filled 只補既有條目的空欄位；Notes 裡沒有的原文不會因此新增', () => {
     const result = applyNotesChanges(
       [entry('s', 'ミナ', '美娜', { 讀音: '' })],
-      { ...none, filled: [{ 原文: 'ミナ', fields: { 讀音: 'みな', 自稱: 'あたし' } }, { 原文: '潮見坂', fields: { 讀音: 'しおみざか' } }] },
+      { ...none, filled: [{ 原文: 'ミナ', fields: { 讀音: 'みな', 備註: '主角' } }, { 原文: '潮見坂', fields: { 讀音: 'しおみざか' } }] },
       page,
     );
 
-    expect(result.entries).toEqual([entry('s', 'ミナ', '美娜', { 讀音: 'みな', 自稱: 'あたし' })]);
+    expect(result.entries).toEqual([entry('s', 'ミナ', '美娜', { 讀音: 'みな', 備註: '主角' })]);
+  });
+
+  it('LLM 不填自稱、語氣、稱呼（ADR 0005）：新增與補空欄位裡的這三個欄位都不採用', () => {
+    const result = applyNotesChanges(
+      [entry('s', 'ミナ', '美娜')],
+      {
+        ...none,
+        added: [added('潮見坂', '潮見坡', { 類別: '地名', 自稱: '僕' })],
+        filled: [{ 原文: 'ミナ', fields: { 自稱: 'あたし', 語氣: '活潑', 稱呼: '湊くん', 讀音: 'みな' } }],
+      },
+      page,
+    );
+
+    expect(result.entries).toEqual([entry('s', 'ミナ', '美娜', { 讀音: 'みな' }), entry('s', '潮見坂', '潮見坡', { 類別: '地名' })]);
   });
 
   it('suggestions 變成帶來源 Page 的建議修改，條目本身不動；Notes 裡沒有的原文或譯文相同的建議不算', () => {
