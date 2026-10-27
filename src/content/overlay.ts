@@ -54,6 +54,14 @@ const STYLE = `${TOKENS}
 .tip-unreadable { color: var(--naru-tooltip-ink-3); text-decoration: line-through dotted; }
 .tip-zh { font-size: 1.15em; }
 .tip-note { margin-top: 0.3em; font-size: 0.75em; }
+.tip.learn .tip-ja { font-size: 1.4em; color: var(--naru-tooltip-ink); }
+.tip-reveal { display: flex; align-items: center; gap: 0.6em; box-sizing: border-box; min-height: 3em; margin: 0.3em 0;
+  padding: 0.6em 0.75em; border-radius: 0.6em; background: var(--naru-tooltip-chip-bg); border: 1px dashed var(--naru-tooltip-chip-line); }
+.tip-reveal.on { background: var(--naru-tooltip-chip-on-bg); border: 1px solid var(--naru-tooltip-chip-on-line); }
+.tip-reveal-label { flex: none; display: flex; align-items: center; justify-content: center; width: 1.7em; height: 1.7em;
+  border-radius: 0.45em; background: var(--naru-tooltip-ink); color: var(--naru-tooltip-bg); font-weight: 700; }
+.tip-reveal-body { color: var(--naru-tooltip-chip-hint); }
+.tip-reveal.on .tip-reveal-body { color: var(--naru-on-accent); font-size: 1.15em; }
 .hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: var(--naru-highlight);
   background: var(--naru-highlight-fill); }
 .hl.on { display: block; }
@@ -66,6 +74,15 @@ const FRAME_TIMEOUT_MS = 200;
 const TOOLTIP_SCREEN_PX = 13;
 /** 高亮框的畫面邊框粗細。 */
 const HIGHLIGHT_SCREEN_PX = 2;
+/**
+ * 學習時 tooltip 四周的緩衝（畫面 px）：tooltip 緊貼在句子的框旁邊，滑鼠從句子斜著移進 tooltip 時可能擦過框外一點點。
+ * 只在 tooltip 已經顯示時才算，而且只有這麼窄，不會吃掉閱讀網站翻頁感應區的正常使用（spec #70 Further Notes）。
+ */
+const TOOLTIP_BUFFER_SCREEN_PX = 8;
+
+/** 畫面座標 (x, y) 在 rect 往外擴 margin 的範圍內。 */
+const within = (r: DOMRect, x: number, y: number, margin = 0) =>
+  x >= r.left - margin && x <= r.right + margin && y >= r.top - margin && y <= r.bottom + margin;
 
 /** 頁面上可以 hover 的一句（Balloon 或 Loose Text），座標是 Page 原始像素。 */
 interface HoverLine {
@@ -169,6 +186,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   let hovered: { layer: PageLayer; line: HoverLine } | undefined;
   /** side panel 那邊滑過的那句。 */
   let panelHighlight: LineRef | undefined;
+  /** 學習時 tooltip 的「譯」區塊是否揭露中（滑鼠在區塊上）。 */
+  let revealed = false;
+  /** 顯示中的 tooltip 放在句子上方（揭露時長大要留在同一側）。 */
+  let tipAbove = false;
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
@@ -374,6 +395,12 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
    * 祖先 transform）換算回 Page 原始像素，找包含滑鼠的最小那句。
    */
   function updateHover(x: number, y: number): void {
+    // 學習時滑鼠在顯示中的 tooltip 上（含緩衝）：tooltip 留著，在「譯」區塊上就揭露譯文
+    if (hovered && pageMode === 'learn' && within(hovered.layer.tip.getBoundingClientRect(), x, y, TOOLTIP_BUFFER_SCREEN_PX)) {
+      const chip = hovered.layer.tip.querySelector('.tip-reveal');
+      setRevealed(chip !== null && within(chip.getBoundingClientRect(), x, y));
+      return;
+    }
     let hit: { layer: PageLayer; line: HoverLine; area: number } | undefined;
     for (const entry of entries.values()) {
       if (entry.host.style.visibility === 'hidden') continue;
@@ -404,9 +431,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     else if (previous) onHover?.(null);
   }
 
-  /** tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。學習時不顯示譯文。 */
+  /**
+   * tooltip：原文＋ルビ＋譯文（全文，第 3 階截斷的也看得到）＋「讀音為推測」。學習時譯文藏在「譯」區塊後面，
+   * 滑進區塊才揭露；每次顯示都重新藏起來。
+   */
   function showTooltip(layer: PageLayer, line: HoverLine): void {
     const { tip } = layer;
+    revealed = false;
     const ja = document.createElement('div');
     ja.className = 'tip-ja';
     ja.lang = 'ja';
@@ -433,16 +464,43 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         ja.append(line.原文, textDiv('tip-guess', display.fallback));
       }
       if (line.譯文 && pageMode === 'read') parts.push(textDiv('tip-zh', line.譯文));
+      if (line.譯文 && pageMode === 'learn') {
+        const chip = document.createElement('div');
+        renderRevealChip(chip, line.譯文);
+        parts.push(chip);
+      }
       if (line.讀音) parts.push(textDiv('tip-note', '讀音為推測'));
     }
+    tip.classList.toggle('learn', pageMode === 'learn');
     tip.replaceChildren(...parts);
     tip.classList.add('on');
-    // 置中在那句的框下方，夾在 Page 內；下方放不下就放上方
+    placeTooltip(layer, line);
+  }
+
+  /** 「譯」區塊（RevealChip 深色版）：未揭露時是提示，揭露後換成譯文。 */
+  function renderRevealChip(chip: Element, 譯文: string): void {
+    chip.className = revealed ? 'tip-reveal on' : 'tip-reveal';
+    chip.replaceChildren(textDiv('tip-reveal-label', '譯'), textDiv('tip-reveal-body', revealed ? 譯文 : '滑過這裡看譯文'));
+  }
+
+  function setRevealed(next: boolean): void {
+    const chip = hovered?.layer.tip.querySelector('.tip-reveal');
+    if (!hovered || !chip || next === revealed) return;
+    revealed = next;
+    renderRevealChip(chip, hovered.line.譯文);
+    // 區塊長大時 tooltip 留在同一側：下方的往下長、上方的往上長，水平仍置中，原本的範圍一定還在裡面，滑鼠不會跑出區塊
+    placeTooltip(hovered.layer, hovered.line, tipAbove);
+  }
+
+  /** 置中在那句的框下方，夾在 Page 內；下方放不下就放上方。above 有給就固定在那一側。 */
+  function placeTooltip(layer: PageLayer, line: HoverLine, above?: boolean): void {
+    const { tip } = layer;
     const { box } = line;
     const left = box.x + box.w / 2 - tip.offsetWidth / 2;
     tip.style.left = `${Math.max(0, Math.min(left, layer.size.width - tip.offsetWidth))}px`;
     const below = box.y + box.h;
-    tip.style.top = `${below + tip.offsetHeight <= layer.size.height ? below : Math.max(0, box.y - tip.offsetHeight)}px`;
+    tipAbove = above ?? below + tip.offsetHeight > layer.size.height;
+    tip.style.top = `${tipAbove ? Math.max(0, box.y - tip.offsetHeight) : below}px`;
   }
 
   /** 每個 Page 層最多一個高亮框：頁面 hover 優先，其次是 side panel 滑過的那句。 */

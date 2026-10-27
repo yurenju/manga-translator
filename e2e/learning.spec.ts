@@ -1,5 +1,6 @@
 /**
- * #39 學習模式：side panel 的全域顯示層級、振り仮名、頁面 ↔ panel 的 hover 同步。
+ * #39、#76 學習功能：side panel 逐字稿依 Page Mode 顯示（閱讀三種 Display Level；學習藏譯文＋振り仮名開關）、
+ * 頁面 ↔ panel 的 hover 同步。
  * 偵測＋OCR 是真的（wasm），讀音與譯文來自 FakeTranslator（ground truth）。
  */
 import type { Locator, Page } from '@playwright/test';
@@ -18,49 +19,95 @@ const firstTranscript = (panel: Page): Locator =>
 
 const level = (panel: Page, name: string) => panel.getByRole('group', { name: '顯示層級' }).getByRole('button', { name, exact: true });
 
-test('切換四種顯示層級時逐字稿內容正確', async ({ context, sw, extensionId, mockSite }) => {
+/** 逐字稿一行裡的日文原文（不含徽章與譯文）。 */
+const original = (line: Locator): Locator => line.locator('[lang="ja"]').first();
+/** 逐字稿一行裡的中文譯文。 */
+const translation = (line: Locator): Locator => line.locator('[lang="zh-Hant"]');
+
+test('閱讀時切換三種顯示層級，逐字稿內容正確', async ({ context, sw, extensionId, mockSite }) => {
   test.setTimeout(TIMEOUT + 30_000);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   const transcript = firstTranscript(panel);
-  await expect(transcript.getByRole('listitem').filter({ hasText: GREETING_ZH })).toBeVisible({ timeout: TIMEOUT });
-  // 只看日文時沒有譯文可以篩，先記下第幾行
-  const index = (await transcript.getByRole('listitem').allInnerTexts()).findIndex((t) => t.includes(GREETING_ZH));
-  const greeting = transcript.getByRole('listitem').nth(index);
-  const legend = panel.getByText('ルビ為 LLM 推測，義訓可能讀錯');
-  const original = greeting.locator('.original');
-  const translation = greeting.locator('.translation');
+  const greeting = transcript.getByRole('listitem').filter({ hasText: GREETING_ZH });
+  await expect(greeting).toBeVisible({ timeout: TIMEOUT });
 
-  // 預設：加振り仮名（原文帶ルビ＋譯文），上方標示讀音是推測
+  // 只有三個層級（「只看日文」由學習取代）；上方不再有ルビ說明框
+  await expect(panel.getByRole('group', { name: '顯示層級' }).getByRole('button')).toHaveText(['只看譯文', '原文＋譯文', '加振り仮名']);
+  await expect(panel.getByText('ルビ為 LLM 推測')).toHaveCount(0);
+
+  // 預設：加振り仮名（原文帶ルビ＋譯文），讀音是推測的那行標徽章
   await expect(level(panel, '加振り仮名')).toHaveAttribute('aria-pressed', 'true');
-  await expect(legend).toBeVisible();
-  await expect(original.locator('rt')).toHaveText(['きょう', 'はや']);
-  await expect(original.locator('ruby').first()).toContainText('今日');
-  await expect(translation).toHaveText(GREETING_ZH);
+  await expect(original(greeting).locator('rt')).toHaveText(['きょう', 'はや']);
+  await expect(original(greeting).locator('ruby').first()).toContainText('今日');
+  await expect(greeting.getByText('讀音為推測', { exact: true })).toBeVisible();
+  await expect(translation(greeting)).toHaveText(GREETING_ZH);
+  // 字級：日文約 17px、中文約 15px
+  await expect(original(greeting)).toHaveCSS('font-size', '17px');
+  await expect(translation(greeting)).toHaveCSS('font-size', '15px');
 
   await level(panel, '原文＋譯文').click();
   await expect(level(panel, '原文＋譯文')).toHaveAttribute('aria-pressed', 'true');
   await expect(level(panel, '加振り仮名')).toHaveAttribute('aria-pressed', 'false');
-  await expect(legend).toBeHidden();
   await expect(transcript.locator('rt')).toHaveCount(0);
-  await expect(original).toContainText('今日は早いね');
-  await expect(translation).toHaveText(GREETING_ZH);
+  await expect(transcript.getByText('讀音為推測')).toHaveCount(0);
+  await expect(original(greeting)).toContainText('今日は早いね');
+  await expect(translation(greeting)).toHaveText(GREETING_ZH);
 
   await level(panel, '只看譯文').click();
-  await expect(transcript.locator('.original, .loose')).toHaveCount(0);
-  await expect(translation).toHaveText(GREETING_ZH);
-
-  await level(panel, '只看日文').click();
-  await expect(transcript.locator('.translation')).toHaveCount(0);
-  await expect(transcript.locator('rt')).toHaveCount(0);
-  await expect(original).toContainText('今日は早いね');
-  await expect(legend).toBeHidden();
+  await expect(transcript.locator('[lang="ja"]')).toHaveCount(0);
+  await expect(translation(greeting)).toHaveText(GREETING_ZH);
 
   // 整頁一起切：第 2 頁也是
   const second = panel.getByRole('list', { name: '逐字稿' }).nth(1);
   await expect(second.getByRole('listitem').first()).toBeVisible({ timeout: TIMEOUT });
-  await expect(second.locator('.translation')).toHaveCount(0);
+  await expect(second.locator('[lang="ja"]')).toHaveCount(0);
   await level(panel, '加振り仮名').click();
   await expect(second.locator('rt').first()).toBeVisible();
+});
+
+test('學習時逐字稿藏譯文，滑過「譯」區塊才出現；振り仮名 Switch 開關ルビ', async ({ context, sw, extensionId, mockSite }) => {
+  test.setTimeout(TIMEOUT + 30_000);
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const transcript = firstTranscript(panel);
+  await expect(transcript.getByRole('listitem').filter({ hasText: GREETING_ZH })).toBeVisible({ timeout: TIMEOUT });
+  // 學習時譯文藏起來沒得篩，先記下第幾行
+  const index = (await transcript.getByRole('listitem').allInnerTexts()).findIndex((t) => t.includes(GREETING_ZH));
+  const greeting = transcript.getByRole('listitem').nth(index);
+
+  await pageMode(panel, '學習').click();
+  // 沒有 Display Level 切換，改成振り仮名 Switch（預設開）
+  await expect(panel.getByRole('group', { name: '顯示層級' })).toHaveCount(0);
+  const furigana = panel.getByRole('switch', { name: '逐字稿加振り仮名' });
+  await expect(furigana).toBeChecked();
+  await expect(original(greeting).locator('rt')).toHaveText(['きょう', 'はや']);
+  await expect(greeting.getByText('讀音為推測', { exact: true })).toBeVisible();
+  // 譯文藏在「譯」區塊後面
+  await expect(transcript).not.toContainText(GREETING_ZH);
+  const reveal = greeting.getByRole('group', { name: '譯' });
+  await expect(reveal).toContainText('滑過這裡看譯文');
+
+  // 背景分頁的 rAF 會停，Playwright 的 hover 要等穩定；panel 放到前景
+  await panel.bringToFront();
+  await reveal.hover();
+  await expect(reveal).toContainText(GREETING_ZH);
+  await panel.mouse.move(1, 1);
+  await expect(transcript).not.toContainText(GREETING_ZH);
+  await expect(reveal).toContainText('滑過這裡看譯文');
+
+  // 關掉振り仮名：ルビ與推測徽章都不見，原文還在、譯文仍藏著
+  await furigana.click();
+  await expect(furigana).not.toBeChecked();
+  await expect(transcript.locator('rt')).toHaveCount(0);
+  await expect(transcript.getByText('讀音為推測')).toHaveCount(0);
+  await expect(original(greeting)).toContainText('今日は早いね');
+  await expect(transcript).not.toContainText(GREETING_ZH);
+  await furigana.click();
+  await expect(original(greeting).locator('rt')).toHaveText(['きょう', 'はや']);
+
+  // 切回閱讀：Display Level 回來，譯文直接顯示
+  await pageMode(panel, '閱讀').click();
+  await expect(level(panel, '加振り仮名')).toHaveAttribute('aria-pressed', 'true');
+  await expect(translation(greeting)).toHaveText(GREETING_ZH);
 });
 
 /** 頁面上 p01 問候句的譯文元素（畫面座標的中心）。 */
@@ -144,10 +191,14 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   // 譯文元素藏起來後 rect 不變（visibility），還是拿它當 Balloon 的位置
   const center = await greetingOnPage(page);
+  // 學習時逐字稿也藏譯文，切換前先記下第幾行
+  const transcript = firstTranscript(panel);
+  await expect(transcript.getByRole('listitem').filter({ hasText: GREETING_ZH })).toBeVisible();
+  const index = (await transcript.getByRole('listitem').allInnerTexts()).findIndex((t) => t.includes(GREETING_ZH));
+  const line = transcript.getByRole('listitem').nth(index);
   await pageMode(panel, '學習').click();
   await expect(shownTranslations(page)).toHaveCount(0);
   await page.bringToFront();
-  const line = firstTranscript(panel).getByRole('listitem').filter({ hasText: GREETING_ZH });
   const tooltip = page.locator('[data-naruhodo-overlay] .tip.on');
 
   // 頁面 → panel
@@ -159,8 +210,36 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
   await expect(tooltip).toContainText('讀音為推測');
   await expect(tooltip).not.toContainText(GREETING_ZH);
   await expect(line).toHaveClass(/\bhl\b/);
+
+  // 逐步揭露（#75）：從 Balloon 一路移進 tooltip 的「譯」區塊，tooltip 不會消失；進了區塊才出現譯文
+  const chip = tooltip.getByText('滑過這裡看譯文');
+  await expect(chip).toBeVisible();
+  const chipBox = (await chip.boundingBox())!;
+  const inChip = { x: chipBox.x + chipBox.width / 2, y: chipBox.y + chipBox.height / 2 };
+  await page.mouse.move(inChip.x, inChip.y, { steps: 20 });
+  await expect(tooltip).toContainText(GREETING_ZH);
+  await expect(tooltip).toContainText('今日');
+  await expect(line).toHaveClass(/\bhl\b/);
+  // 區塊隨譯文長大，滑鼠仍在區塊裡：譯文持續顯示
+  await page.mouse.move(inChip.x + 1, inChip.y);
+  await expect(tooltip).toContainText(GREETING_ZH);
+
+  // 離開 tooltip 就收起；滑回同一句，譯文又藏起來
   await page.mouse.move(1, 1);
   await expect(tooltip).toHaveCount(0);
+  await expect(line).not.toHaveClass(/\bhl\b/);
+  await page.mouse.move(center.x, center.y);
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip).not.toContainText(GREETING_ZH);
+  await expect(chip).toBeVisible();
+  await page.mouse.move(1, 1);
+  await expect(tooltip).toHaveCount(0);
+
+  // tooltip 沒顯示時，緩衝區不生效：直接移到剛才 tooltip 的位置，不會叫出這句的 tooltip
+  await page.mouse.move(inChip.x, inChip.y);
+  await page.waitForTimeout(300);
+  await expect(tooltip.filter({ hasText: '今日' })).toHaveCount(0);
+  await page.mouse.move(1, 1);
 
   // panel → 頁面
   const highlight = page.locator('[data-naruhodo-overlay] .hl.on');

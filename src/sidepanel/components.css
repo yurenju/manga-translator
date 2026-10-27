@@ -78,6 +78,21 @@
 .naru-callout--warn { background: var(--naru-warn-bg); color: var(--naru-warn); }
 .naru-callout--danger { background: var(--naru-danger-bg); color: var(--naru-danger); }
 
+/* RevealChip（淺色）：虛線框＋「譯」標籤；揭露後換成實線，區塊隨內容長大 */
+.naru-reveal {
+  display: flex; align-items: baseline; gap: var(--naru-space-2);
+  margin-top: var(--naru-space-1); padding: var(--naru-space-1) var(--naru-space-2);
+  border: 1px dashed var(--naru-line-strong); border-radius: var(--naru-radius-sm);
+  background: var(--naru-surface-2); cursor: default;
+}
+.naru-reveal:focus-visible { outline: 2px solid var(--naru-accent); outline-offset: 2px; }
+.naru-reveal--on { border-style: solid; border-color: var(--naru-accent-weak); background: var(--naru-accent-weak); }
+.naru-reveal__tag {
+  flex: none; padding: 0 6px; border-radius: 4px;
+  font-size: 11px; font-weight: 700; line-height: 1.6; color: var(--naru-on-accent); background: var(--naru-accent);
+}
+.naru-reveal__hint { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+
 /* PageHeader：一行，圖示＋標題靠左、翻譯狀態靠右（窄的時候狀態換到下一行） */
 .naru-page-header {
   display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--naru-space-2); row-gap: 2px;

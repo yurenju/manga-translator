@@ -102,12 +102,12 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   const unreadable = transcript.getByRole('listitem').filter({ hasText: '無法辨識' });
   await expect(unreadable).toHaveCount(1);
   await expect(unreadable).toContainText('もちろん');
-  const original = unreadable.locator('.original');
+  const original = unreadable.locator('[lang="ja"]');
   await expect(original).toHaveCSS('text-decoration-line', 'line-through');
   // 灰＝design token --naru-ink-3（#75706A）
   await expect(original).toHaveCSS('color', 'rgb(117, 112, 106)');
-  await expect(unreadable.locator('.translation')).toHaveCount(0);
-  await expect(unreadable.locator('.untranslated')).toHaveCount(0);
+  await expect(unreadable.locator('[lang="zh-Hant"]')).toHaveCount(0);
+  await expect(unreadable.getByText('未翻譯')).toHaveCount(0);
 
   // key 不在任何 runtime 訊息裡，content script 也拿不到
   const panelSeen = await panel.evaluate(() => (globalThis as unknown as { __seen: string[] }).__seen);
