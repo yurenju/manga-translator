@@ -221,7 +221,7 @@ describe('Claude 翻譯：structured output 回應解析', () => {
 });
 
 describe('Claude 整理 Notes（②）', () => {
-  it('不關 thinking；只回 notes_changes；送這頁的原文與 ① 的譯文，Series Notes 在 system 第二段', async () => {
+  it('不關 thinking、effort high（仔細比對既有條目，#64）；只回 notes_changes；送這頁的原文與 ① 的譯文，Series Notes 在 system 第二段', async () => {
     const { translator, calls } = setup([okNotes]);
 
     await translator.proposeNotes(notesInput);
@@ -229,7 +229,7 @@ describe('Claude 整理 Notes（②）', () => {
     const sent = body(calls[0]!);
     expect(sent.model).toBe('claude-haiku-5-5');
     expect(sent).not.toHaveProperty('thinking');
-    expect(sent.output_config.effort).toBe('low');
+    expect(sent.output_config.effort).toBe('high');
     expect(Object.keys(sent.output_config.format.schema.properties)).toEqual(['notes_changes']);
     expect(sent.system).toHaveLength(2);
     expect(sent.system[1].text).toContain('霧島湊');
