@@ -18,6 +18,7 @@ import type {
   TestConnectionResponse,
   TranslationInfo,
 } from '../shared/messages.ts';
+import { Badge, Button, Callout, Switch } from './components.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 import { DEFAULT_LEVEL, LevelSwitch, Transcript, type Level } from './transcript.tsx';
 
@@ -47,12 +48,10 @@ function ModelStatusLine({ status, onRetry }: { status: ModelStatus; onRetry: ()
       return <p role="status">載入辨識模型中…</p>;
     case 'error':
       return (
-        <div role="alert">
+        <Callout tone="danger" role="alert">
           <p>辨識模型無法使用：{status.message}</p>
-          <button type="button" onClick={onRetry}>
-            重試
-          </button>
-        </div>
+          <Button onClick={onRetry}>重試</Button>
+        </Callout>
       );
     default:
       return null;
@@ -86,12 +85,10 @@ const STALE_TEXT: Record<StaleReason, string> = {
 /** 過時只提示、不自動重翻（spec #27 第 4.3 節）；按「重新翻譯」只重翻這一頁。 */
 function StaleHint({ reason, onRetranslate }: { reason: StaleReason; onRetranslate: () => void }) {
   return (
-    <div role="group" aria-label="過時提示" class="stale">
+    <Callout tone="warn" role="group" aria-label="過時提示">
       <span>{STALE_TEXT[reason]}</span>
-      <button type="button" onClick={onRetranslate}>
-        重新翻譯
-      </button>
-    </div>
+      <Button onClick={onRetranslate}>重新翻譯</Button>
+    </Callout>
   );
 }
 
@@ -114,8 +111,8 @@ function PageItem({
     <li>
       <img src={page.thumbnail} alt={`Page ${index + 1}`} />
       {transcript.state === 'analyzing' && <p>辨識中…</p>}
-      {transcript.state === 'pending' && <p class="hint">未翻譯（自動翻譯已關閉，按「翻譯此頁」）</p>}
-      {transcript.state === 'error' && <p class="error">辨識失敗：{transcript.message}</p>}
+      {transcript.state === 'pending' && <Callout>未翻譯（自動翻譯已關閉，按「翻譯此頁」）</Callout>}
+      {transcript.state === 'error' && <Callout tone="danger">辨識失敗：{transcript.message}</Callout>}
       {transcript.state === 'done' && transcript.translation && !transcript.translating && !transcript.translateError && (
         <TranslationStatusLine status={transcript.translation} />
       )}
@@ -124,12 +121,10 @@ function PageItem({
       )}
       {transcript.state === 'done' && transcript.translating && <p>翻譯中…</p>}
       {transcript.state === 'done' && transcript.translateError && (
-        <div role="alert">
-          <p class="error">翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
-          <button type="button" onClick={onRetry}>
-            重試
-          </button>
-        </div>
+        <Callout tone="danger" role="alert">
+          <p>翻譯失敗，改顯示 kuromoji 讀音：{transcript.translateError}</p>
+          <Button onClick={onRetry}>重試</Button>
+        </Callout>
       )}
       {transcript.state === 'done' && (
         <Transcript
@@ -177,9 +172,7 @@ function Backup() {
 
   return (
     <div class="backup">
-      <button type="button" onClick={() => void exportFile()}>
-        匯出 JSON
-      </button>
+      <Button onClick={() => void exportFile()}>匯出 JSON</Button>
       <label>
         匯入 JSON
         <input
@@ -240,20 +233,18 @@ function Settings({ onKeyChanged }: { onKeyChanged: (hasKey: boolean) => void })
 
   return (
     <>
-      <button type="button" class="gear" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
         ⚙ 設定
-      </button>
+      </Button>
       {open && (
         <section aria-label="設定" class="settings">
           {suffix === undefined ? null : suffix ? (
             <>
               <p>已設定 Claude API key（末四碼 {suffix}）</p>
-              <button type="button" onClick={() => void test()}>
-                測試連線
-              </button>
-              <button type="button" onClick={() => void remove()}>
-                刪除
-              </button>
+              <div class="actions">
+                <Button onClick={() => void test()}>測試連線</Button>
+                <Button onClick={() => void remove()}>刪除</Button>
+              </div>
             </>
           ) : (
             <form
@@ -272,7 +263,9 @@ function Settings({ onKeyChanged }: { onKeyChanged: (hasKey: boolean) => void })
                   onInput={(e) => setDraft((e.target as HTMLInputElement).value)}
                 />
               </label>
-              <button type="submit">儲存</button>
+              <Button variant="primary" type="submit">
+                儲存
+              </Button>
             </form>
           )}
           {connection && <p class="connection">{connection}</p>}
@@ -317,12 +310,7 @@ function OverlayToggle({ tabId }: { tabId: number }) {
     setEnabled(value);
     void send({ type: 'panel:setOverlay', tabId, enabled: value });
   };
-  return (
-    <label>
-      <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.currentTarget.checked)} />
-      覆蓋
-    </label>
-  );
+  return <Switch label="覆蓋" checked={enabled} onChange={toggle} />;
 }
 
 /** 自動翻譯開關（spec #27 第 3.4、8 節；預設開）；關掉後翻頁只顯示快取，其他要按「翻譯此頁」。 */
@@ -335,12 +323,7 @@ function AutoTranslateToggle({ tabId }: { tabId: number }) {
     setEnabled(value);
     void send({ type: 'panel:setAutoTranslate', tabId, enabled: value });
   };
-  return (
-    <label>
-      <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.currentTarget.checked)} />
-      自動翻譯
-    </label>
-  );
+  return <Switch label="自動翻譯" checked={enabled} onChange={toggle} />;
 }
 
 const NEW_SERIES = '__new__';
@@ -356,10 +339,10 @@ function NameForm({ label, submit, initial = '', onDone }: { label: string; subm
       }}
     >
       <input aria-label={label} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
-      <button type="submit">{submit}</button>
-      <button type="button" onClick={() => onDone(undefined)}>
-        取消
-      </button>
+      <Button variant="primary" type="submit">
+        {submit}
+      </Button>
+      <Button onClick={() => onDone(undefined)}>取消</Button>
     </form>
   );
 }
@@ -401,9 +384,9 @@ function SeriesPicker({ tabId }: { tabId: number }) {
         <option value={NEW_SERIES}>新增 Series…</option>
       </select>
       {editing === undefined && (
-        <button type="button" onClick={() => setEditing('rename')}>
+        <Button variant="ghost" onClick={() => setEditing('rename')}>
           改名
-        </button>
+        </Button>
       )}
       {editing === 'new' && (
         <NameForm
@@ -441,7 +424,7 @@ function SeriesPicker({ tabId }: { tabId: number }) {
               </option>
             ))}
           </select>
-          <button type="submit">合併</button>
+          <Button type="submit">合併</Button>
         </form>
       )}
     </div>
@@ -509,20 +492,24 @@ function App({ tabId }: { tabId: number | undefined }) {
     <>
       <main>
         <Title />
-        <p>已啟動</p>
-        <button type="button" onClick={() => void send({ type: 'panel:stop', tabId })}>
-          停止
-        </button>
-        {/* 翻頁會自動偵測（#34）；這顆給偵測漏掉時手動補一次。 */}
-        <button type="button" onClick={scan}>
-          重新擷取
-        </button>
-        <OverlayToggle tabId={tabId} />
-        <AutoTranslateToggle tabId={tabId} />
-        {settings}
-        <SeriesNotesSection tabId={tabId} />
+        <div class="toolbar">
+          <Badge tone="ok">已啟動</Badge>
+          <Button variant="ghost" onClick={() => void send({ type: 'panel:stop', tabId })}>
+            停止
+          </Button>
+          {/* 翻頁會自動偵測（#34）；這顆給偵測漏掉時手動補一次。 */}
+          <Button variant="ghost" onClick={scan}>
+            重新擷取
+          </Button>
+          <OverlayToggle tabId={tabId} />
+          <AutoTranslateToggle tabId={tabId} />
+          {settings}
+          <SeriesNotesSection tabId={tabId} />
+        </div>
         <ModelStatusLine status={modelStatus} onRetry={scan} />
-        {untranslated && !hasKey && <p class="hint">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</p>}
+        {untranslated && !hasKey && (
+          <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在「⚙ 設定」輸入 key。</Callout>
+        )}
         {done.length > 0 && <LevelSwitch level={level} onChange={setLevel} />}
         <ul aria-label="Page">
           {pages.map((page, i) => (
@@ -543,9 +530,9 @@ function App({ tabId }: { tabId: number | undefined }) {
         <SeriesPicker tabId={tabId} />
         <StatusText pages={pages} />
         {(done.length > 0 || pending) && (
-          <button type="button" onClick={translate}>
+          <Button variant={untranslated ? 'primary' : 'secondary'} onClick={translate}>
             {untranslated ? '翻譯此頁' : '重新翻譯'}
-          </button>
+          </Button>
         )}
       </footer>
     </>

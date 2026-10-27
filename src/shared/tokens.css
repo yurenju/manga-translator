@@ -1,0 +1,74 @@
+/*
+ * Naruhodo 的 design tokens（spec #70「Design tokens 與元件」、#71）。
+ * side panel 用 <link> 載入（:root）；content script 把這份打包成字串放進覆蓋層的 shadow DOM（:host），
+ * 兩邊吃同一份，顏色只寫在這裡。:host 的 `all: initial` 不會清掉自訂屬性。
+ * 只定義淺色；深色模式之後再加 prefers-color-scheme。
+ */
+:root,
+:host {
+  /* 文字 */
+  --naru-ink: #1F1D1A;
+  --naru-ink-2: #5B5750;
+  --naru-ink-3: #75706A;
+  --naru-on-accent: #FFFFFF;
+
+  /* 線與底 */
+  --naru-line: #E5E2DC;
+  --naru-line-strong: #C9C4BB;
+  --naru-surface: #FFFFFF;
+  --naru-surface-2: #F2F0EC;
+
+  /* 主色（藍染） */
+  --naru-accent: #2F4B7C;
+  --naru-accent-weak: #E7ECF5;
+
+  /* 頁面上的高亮框 */
+  --naru-highlight: #2F6FDB;
+  --naru-highlight-fill: rgba(47, 111, 219, 0.12);
+
+  /* 振り仮名（朱）：白底對比 6.9:1；舊的 #a07c00 不到 AA */
+  --naru-ruby: #9A3B22;
+
+  /* 語意色：狀聲詞、警告、錯誤、成功 */
+  --naru-sfx: #1F5A56;
+  --naru-sfx-bg: #E3F0EE;
+  --naru-warn: #6E5000;
+  --naru-warn-bg: #FBF3DC;
+  --naru-danger: #8C1D18;
+  --naru-danger-bg: #FBE9E7;
+  --naru-ok: #1F5C3A;
+  --naru-ok-bg: #E4F1E8;
+  --naru-ok-dot: #2E8B57;
+
+  /* 頁面 tooltip（深色）：ルビ用淺朱，深底對比 8:1 */
+  --naru-tooltip-bg: #23211E;
+  --naru-tooltip-ink: #F4F2EE;
+  --naru-tooltip-ink-2: #E2DED6;
+  --naru-tooltip-ink-3: #A8A29A;
+  --naru-tooltip-ruby: #F2A488;
+
+  /* 字型：系統字型堆疊，不從網路載入 */
+  --naru-font-sans: 'Noto Sans TC', 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+  --naru-font-ja: 'Noto Sans JP', 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Yu Gothic UI', 'Hiragino Sans', sans-serif;
+  --naru-font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* 字級 */
+  --naru-text-ja: 17px;
+  --naru-text-body: 15px;
+  --naru-text-label: 14px;
+  --naru-text-caption: 12px;
+
+  /* 間距 */
+  --naru-space-1: 4px;
+  --naru-space-2: 8px;
+  --naru-space-3: 12px;
+  --naru-space-4: 16px;
+  --naru-space-5: 24px;
+  --naru-space-6: 32px;
+
+  /* 圓角與陰影 */
+  --naru-radius-sm: 6px;
+  --naru-radius-md: 10px;
+  --naru-radius-pill: 999px;
+  --naru-shadow-1: 0 1px 3px rgba(31, 29, 26, 0.14);
+}

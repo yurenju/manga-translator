@@ -107,7 +107,7 @@ test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；
   await page.screenshot({ path: zoomed });
   await testInfo.attach('overlay-zoomed', { path: zoomed, contentType: 'image/png' });
 
-  const toggle = panel.getByRole('checkbox', { name: '覆蓋' });
+  const toggle = panel.getByRole('switch', { name: '覆蓋' });
   await expect(toggle).toBeChecked();
   await toggle.uncheck();
   await expect.poll(() => hostVisibility(page)).toEqual(['hidden', 'hidden']);
@@ -247,7 +247,7 @@ test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', ()
     const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?watermark=1&stacked=1` });
     await waitForOverlay(page);
     // 關掉覆蓋開關、點一下觸發重掃：版面已經穩定（截圖時的位置＝現在量到的位置），截圖裡也沒有自己的譯文
-    await panel.getByRole('checkbox', { name: '覆蓋' }).uncheck();
+    await panel.getByRole('switch', { name: '覆蓋' }).uncheck();
     await expect.poll(() => hostVisibility(page)).toEqual(['hidden', 'hidden']);
     const captures = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
     await page.mouse.click(5, 5);

@@ -1,0 +1,76 @@
+/* side panel 的版面樣式；顏色、字級、間距都取自 src/shared/tokens.css。元件樣式在 components.css。 */
+html { background: var(--naru-surface); }
+body {
+  margin: 0; padding: 0 var(--naru-space-3);
+  font-family: var(--naru-font-sans); font-size: var(--naru-text-label); line-height: 1.5;
+  color: var(--naru-ink); background: var(--naru-surface);
+}
+[lang='ja'] { font-family: var(--naru-font-ja); }
+/* 標題：logo＋名稱（#72） */
+.title {
+  display: flex; align-items: center; gap: var(--naru-space-2);
+  margin: var(--naru-space-3) 0 var(--naru-space-2);
+  font-size: var(--naru-text-body); font-weight: 700; color: var(--naru-ink);
+}
+main { padding-bottom: var(--naru-space-3); }
+input:not([type]), input[type='password'], select {
+  box-sizing: border-box; min-height: 32px; padding: 0 var(--naru-space-2);
+  border: 1px solid var(--naru-line-strong); border-radius: var(--naru-radius-sm);
+  font: inherit; color: var(--naru-ink); background: var(--naru-surface);
+}
+input:focus-visible, select:focus-visible { outline: 2px solid var(--naru-accent); outline-offset: 1px; }
+
+/* 頂部工具列 */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--naru-space-2); margin: var(--naru-space-3) 0; }
+/* 展開的設定、Series Notes 區塊自己佔一整行 */
+.toolbar > section { flex: 1 1 100%; box-sizing: border-box; min-width: 0; }
+
+/* 逐字稿 */
+[aria-label='Page'] { list-style: none; margin: 0; padding: 0; }
+[aria-label='Page'] > li { margin: var(--naru-space-3) 0 var(--naru-space-5); }
+[aria-label='Page'] img { max-width: 100%; border-radius: var(--naru-radius-sm); }
+[aria-label='逐字稿'] { padding-left: var(--naru-space-5); }
+[aria-label='逐字稿'] li {
+  display: flex; flex-direction: column; margin-bottom: var(--naru-space-2); padding: 2px var(--naru-space-1);
+  border-left: 3px solid transparent; border-radius: 0 var(--naru-radius-sm) var(--naru-radius-sm) 0;
+}
+[aria-label='逐字稿'] li.hl { background: var(--naru-accent-weak); border-left-color: var(--naru-accent); }
+.original, .loose { font-family: var(--naru-font-ja); font-size: 1.1em; line-height: 2; }
+.loose { font-style: italic; color: var(--naru-sfx); }
+.translation { font-size: var(--naru-text-label); }
+/* 振り仮名用朱色（白底與高亮底都過 WCAG AA） */
+rt, .reading { color: var(--naru-ruby); }
+.reading { display: block; font-size: 0.6em; line-height: 1.4; }
+.levels { margin: var(--naru-space-2) 0; }
+.untranslated { color: var(--naru-ink-3); font-size: var(--naru-text-caption); }
+.unreadable { color: var(--naru-ink-3); text-decoration: line-through; }
+.unreadable-label { color: var(--naru-ink-3); font-size: var(--naru-text-caption); }
+.translation-status { margin: var(--naru-space-1) 0; color: var(--naru-ink-3); font-size: var(--naru-text-caption); }
+.hint { color: var(--naru-ink-3); font-size: var(--naru-text-caption); }
+
+/* 設定、Series Notes 區塊 */
+.settings, .notes {
+  margin: var(--naru-space-2) 0; padding: var(--naru-space-3);
+  border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md);
+}
+.settings form, .settings .actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--naru-space-2); }
+.settings label { display: flex; flex-direction: column; gap: var(--naru-space-1); }
+.notes table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.notes td, .notes th { border-bottom: 1px solid var(--naru-line); padding: var(--naru-space-1); text-align: left; }
+.notes th { color: var(--naru-ink-3); font-weight: 500; font-size: var(--naru-text-caption); }
+.notes h2 { font-size: var(--naru-text-label); margin: var(--naru-space-1) 0; }
+.notes ul { padding-left: var(--naru-space-4); }
+.notes li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--naru-space-1); margin-bottom: var(--naru-space-1); }
+.note-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--naru-space-1); }
+.note-form label { display: flex; flex-direction: column; font-size: var(--naru-text-caption); color: var(--naru-ink-2); }
+.backup { display: flex; flex-wrap: wrap; gap: var(--naru-space-2); align-items: center; margin: var(--naru-space-2) 0; }
+.backup p { margin: 0; }
+
+/* 底部固定列 */
+footer {
+  position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: var(--naru-space-2); padding: var(--naru-space-2) 0;
+  background: var(--naru-surface); border-top: 1px solid var(--naru-line);
+  font-size: var(--naru-text-caption); color: var(--naru-ink-2);
+}
+.series, .series form { display: flex; flex-wrap: wrap; gap: var(--naru-space-1); align-items: center; }

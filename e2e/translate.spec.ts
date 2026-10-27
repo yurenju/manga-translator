@@ -104,7 +104,8 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await expect(unreadable).toContainText('もちろん');
   const original = unreadable.locator('.original');
   await expect(original).toHaveCSS('text-decoration-line', 'line-through');
-  await expect(original).toHaveCSS('color', 'rgb(136, 136, 136)');
+  // 灰＝design token --naru-ink-3（#75706A）
+  await expect(original).toHaveCSS('color', 'rgb(117, 112, 106)');
   await expect(unreadable.locator('.translation')).toHaveCount(0);
   await expect(unreadable.locator('.untranslated')).toHaveCount(0);
 

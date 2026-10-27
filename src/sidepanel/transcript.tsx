@@ -5,6 +5,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { PageText } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
+import { Callout, SegmentedControl } from './components.tsx';
 
 /** 全域顯示層級：整頁一起切。 */
 export const LEVELS = ['只看譯文', '原文＋譯文', '加振り仮名', '只看日文'] as const;
@@ -13,16 +14,10 @@ export const DEFAULT_LEVEL: Level = '加振り仮名';
 
 export function LevelSwitch({ level, onChange }: { level: Level; onChange: (level: Level) => void }) {
   return (
-    <>
-      <div role="group" aria-label="顯示層級" class="levels">
-        {LEVELS.map((l) => (
-          <button key={l} type="button" aria-pressed={l === level} onClick={() => onChange(l)}>
-            {l}
-          </button>
-        ))}
-      </div>
-      {level === '加振り仮名' && <p class="ruby-legend">ルビ為 LLM 推測，義訓可能讀錯（例：本気 マジ）。滑過頁面上的 Balloon 看提示。</p>}
-    </>
+    <div class="levels">
+      <SegmentedControl label="顯示層級" options={LEVELS.map((l) => ({ value: l, label: l }))} value={level} onChange={onChange} />
+      {level === '加振り仮名' && <Callout tone="warn">ルビ為 LLM 推測，義訓可能讀錯（例：本気 マジ）。滑過頁面上的 Balloon 看提示。</Callout>}
+    </div>
   );
 }
 

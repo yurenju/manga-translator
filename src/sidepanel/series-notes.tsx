@@ -6,6 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Message, NotesResponse } from '../shared/messages.ts';
 import type { EditableFields, NotesSuggestion } from '../shared/series-notes.ts';
 import type { NotesEntry } from '../shared/translator.ts';
+import { Button, Callout } from './components.tsx';
 
 const send = <R,>(message: Message) => chrome.runtime.sendMessage<Message, R>(message);
 
@@ -28,10 +29,10 @@ function EntryForm({ entry, onDone }: { entry: NotesEntry; onDone: (fields: Edit
           <input value={draft[field]} onInput={(e) => setDraft({ ...draft, [field]: (e.target as HTMLInputElement).value })} />
         </label>
       ))}
-      <button type="submit">儲存</button>
-      <button type="button" onClick={() => onDone(undefined)}>
+      <Button variant="primary" type="submit">儲存</Button>
+      <Button onClick={() => onDone(undefined)}>
         取消
-      </button>
+      </Button>
     </form>
   );
 }
@@ -45,9 +46,9 @@ function EntryRow({ entry, onEdit }: { entry: NotesEntry; onEdit: () => void }) 
       <td>{entry.類別}</td>
       <td>{entry.locked && <span title="人改過：LLM 只能提建議">🔒</span>}</td>
       <td>
-        <button type="button" aria-label={`編輯 ${entry.原文}`} onClick={onEdit}>
+        <Button variant="ghost" aria-label={`編輯 ${entry.原文}`} onClick={onEdit}>
           編輯
-        </button>
+        </Button>
       </td>
     </tr>
   );
@@ -59,12 +60,12 @@ function SuggestionItem({ suggestion, current, tabId }: { suggestion: NotesSugge
     <li>
       <span lang="ja">{suggestion.原文}</span>：{current} → {suggestion.建議譯文}
       {suggestion.理由 && <span class="hint">（{suggestion.理由}）</span>}
-      <button type="button" onClick={() => void send({ type: 'panel:acceptSuggestion', tabId, suggestion: ref })}>
+      <Button onClick={() => void send({ type: 'panel:acceptSuggestion', tabId, suggestion: ref })}>
         接受
-      </button>
-      <button type="button" onClick={() => void send({ type: 'panel:ignoreSuggestion', tabId, suggestion: ref })}>
+      </Button>
+      <Button onClick={() => void send({ type: 'panel:ignoreSuggestion', tabId, suggestion: ref })}>
         忽略
-      </button>
+      </Button>
     </li>
   );
 }
@@ -74,24 +75,17 @@ function ClearCache({ tabId }: { tabId: number }) {
   const [state, setState] = useState<'idle' | 'confirm' | 'done'>('idle');
   if (state === 'confirm')
     return (
-      <p>
+      <Callout tone="warn">
         確定清除這部 Series 的翻譯快取？之後的頁會重新翻譯（要花費用）。
-        <button
-          type="button"
-          onClick={() => void send({ type: 'panel:clearCache', tabId }).then(() => setState('done'))}
-        >
+        <Button variant="primary" onClick={() => void send({ type: 'panel:clearCache', tabId }).then(() => setState('done'))}>
           清除
-        </button>
-        <button type="button" onClick={() => setState('idle')}>
-          取消
-        </button>
-      </p>
+        </Button>
+        <Button onClick={() => setState('idle')}>取消</Button>
+      </Callout>
     );
   return (
     <p>
-      <button type="button" onClick={() => setState('confirm')}>
-        清除這部 Series 的快取
-      </button>
+      <Button onClick={() => setState('confirm')}>清除這部 Series 的快取</Button>
       {state === 'done' && <span role="status"> 已清除快取</span>}
     </p>
   );
@@ -122,9 +116,9 @@ export function SeriesNotesSection({ tabId }: { tabId: number }) {
   const translationOf = (原文: string) => notes?.entries.find((e) => e.原文 === 原文)?.譯文;
   return (
     <>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <Button variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)}>
         📒 Series Notes
-      </button>
+      </Button>
       {open && notes && (
         <section aria-label="Series Notes" class="notes">
           {notes.suggestions.length > 0 && (
@@ -138,7 +132,7 @@ export function SeriesNotesSection({ tabId }: { tabId: number }) {
             </>
           )}
           {notes.entries.length === 0 ? (
-            <p class="hint">還沒有條目：翻譯時 LLM 會把人名、用語記下來。</p>
+            <Callout>還沒有條目：翻譯時 LLM 會把人名、用語記下來。</Callout>
           ) : (
             <table>
               <thead>
