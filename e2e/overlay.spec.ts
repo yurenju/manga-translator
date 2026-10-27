@@ -4,7 +4,7 @@
  */
 import type { Page, Worker } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
 import { WATERMARK_TEXT } from './mock-site/jumpplus.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
@@ -244,10 +244,16 @@ test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', ()
 
   test('pointer-events: none 的浮水印被藏起來、不進 OCR；疊在上面的另一張 img 不藏（可能是漫畫本身）', async ({ context, sw, extensionId, mockSite }) => {
     test.setTimeout(OVERLAY_TIMEOUT + 30_000);
-    const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?watermark=1&stacked=1` });
-    // 覆蓋層出現前的截圖（之後補記帶覆蓋層樣子的那次會截到自己的譯文）
+    const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?watermark=1&stacked=1` });
+    await waitForOverlay(page);
+    // 關掉覆蓋開關、點一下觸發重掃：版面已經穩定（截圖時的位置＝現在量到的位置），截圖裡也沒有自己的譯文
+    await panel.getByRole('checkbox', { name: '覆蓋' }).uncheck();
+    await expect.poll(() => hostVisibility(page)).toEqual(['hidden', 'hidden']);
+    const captures = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
+    await page.mouse.click(5, 5);
+    await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(captures);
     await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
-    const screenshot = await sw.evaluate(() => globalThis.__captures![0]!);
+    const screenshot = await sw.evaluate(() => globalThis.__captures!.at(-1)!);
     const watermark = await colorFractions(page, screenshot, '#watermark');
     expect(watermark.magenta, '截圖裡的浮水印').toBeLessThan(0.01);
     const stacked = await colorFractions(page, screenshot, '#stacked');
@@ -255,8 +261,7 @@ test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', ()
     // 對照：畫面上浮水印確實蓋在 Page 上
     expect((await colorFractions(page, await page.screenshot().then((b) => `data:image/png;base64,${b.toString('base64')}`), '#watermark')).magenta).toBeGreaterThan(0.5);
 
-    await waitForOverlay(page);
-    const sent = await sw.evaluate(() => (globalThis.__translateInputs ?? []).flatMap((input) => input.items.map((item) => item.原文)));
+    const sent = await sentOriginals(sw);
     expect(sent.length).toBeGreaterThan(0);
     expect(sent.filter((s) => normalize(s).includes(normalize(WATERMARK_TEXT)))).toEqual([]);
   });

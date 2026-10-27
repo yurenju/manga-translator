@@ -98,7 +98,8 @@ export function hideOccluders(elements: Element[]): HiddenOccluders {
   });
   if (targets.length === 0) return { count: 0, restore: () => true };
   const sheet = new CSSStyleSheet();
-  sheet.replaceSync(`${targets.map((t) => t.selector).join(',\n')} { opacity: 0 !important; transition: none !important; }`);
+  // 一條 selector 一條規則：selector 清單裡只要一個無效，整條規則都會被丟掉
+  sheet.replaceSync(targets.map((t) => `${t.selector} { opacity: 0 !important; transition: none !important; }`).join('\n'));
   document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
   return {
     count: targets.length,
@@ -110,7 +111,7 @@ export function hideOccluders(elements: Element[]): HiddenOccluders {
 }
 
 /** trace 用：tag#id.class。 */
-export function describe(element: Element): string {
+export function describeElement(element: Element): string {
   const cls = typeof element.className === 'string' ? element.className.trim().split(/\s+/).slice(0, 2).join('.') : '';
   return `${element.localName}${element.id ? `#${element.id}` : ''}${cls ? `.${cls}` : ''}`;
 }

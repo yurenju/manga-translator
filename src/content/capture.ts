@@ -3,7 +3,7 @@
  * 等瀏覽器重繪完才讓 SW 截；截完立刻還原。
  */
 import { createTrace } from '../shared/trace.ts';
-import { describe, findOccluders, hideOccluders, type HiddenOccluders } from './occlusion.ts';
+import { describeElement, findOccluders, hideOccluders, type HiddenOccluders } from './occlusion.ts';
 import { untilRepainted, type Overlay } from './overlay.ts';
 
 const trace = createTrace('content');
@@ -29,8 +29,14 @@ export function createCapturePrep({ overlay, anchors, isOwn }: {
     const startedAt = performance.now();
     const found = findOccluders(anchors(), isOwn);
     occluders = hideOccluders(found);
-    if (__DEBUG__) trace('capture:prepare', { hideOverlay, ms: performance.now() - startedAt, occluders: found.slice(0, 10).map(describe) });
-    await Promise.all([hideOverlay ? overlay.hideForCapture() : undefined, occluders.count > 0 ? untilRepainted() : undefined]);
+    if (__DEBUG__) trace('capture:prepare', { hideOverlay, ms: performance.now() - startedAt, occluders: found.slice(0, 10).map(describeElement) });
+    try {
+      await Promise.all([hideOverlay ? overlay.hideForCapture() : undefined, occluders.count > 0 ? untilRepainted() : undefined]);
+    } catch (e) {
+      // SW 收到失敗就不會叫 finish：自己先還原，網站的元素才不會一直藏著
+      finish();
+      throw e;
+    }
   }
 
   function finish(): CaptureFinished {

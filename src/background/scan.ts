@@ -92,13 +92,14 @@ export function createScanner(deps: ScannerDeps) {
 
   /** 截圖前後的準備一律做（藏網站的遮擋物）；hideOverlay 決定要不要連自己的覆蓋層一起藏。 */
   async function capture(windowId: number, tabId: number, hideOverlay: boolean): Promise<{ screenshot: string; stable: boolean }> {
-    await deps.prepareCapture(tabId, hideOverlay);
     let screenshot: string;
     try {
+      await deps.prepareCapture(tabId, hideOverlay);
       lastCaptureAt = Date.now();
       screenshot = await deps.captureWindow(windowId);
     } catch (e) {
-      await deps.finishCapture(tabId);
+      // 還原失敗（例如 content script 已經斷線）不蓋掉原本的錯誤
+      await deps.finishCapture(tabId).catch(() => {});
       throw e;
     }
     const { stable } = await deps.finishCapture(tabId);
@@ -130,8 +131,12 @@ export function createScanner(deps: ScannerDeps) {
       const keep = !forceHide && canKeepOverlay(tabId, before.candidates);
       const { screenshot, stable } = await capture(windowId, tabId, !keep);
       // side panel 剛打開造成重排、使用者在截圖時捲動、藏起來的元素被換掉（藏不到新的）……截圖不可靠就重來。
-      if (!stable || !sameLayout(before, await deps.findPageCandidates(tabId))) {
-        trace('scan:layoutChanged', { tabId, attempt, occludersChanged: !stable });
+      if (!stable) {
+        trace('scan:occludersChanged', { tabId, attempt });
+        continue;
+      }
+      if (!sameLayout(before, await deps.findPageCandidates(tabId))) {
+        trace('scan:layoutChanged', { tabId, attempt });
         continue;
       }
       const request: CropRequest = { screenshot, ...before };

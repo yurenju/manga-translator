@@ -360,6 +360,25 @@ describe('scan', () => {
     });
   });
 
+  it('截圖前的準備失敗也會還原（網站的元素不會一直藏著），而且丟出原本的錯誤', async () => {
+    const chrome = fakeDeps();
+    const scanner = createScanner({
+      ...chrome.deps,
+      prepareCapture: async () => {
+        chrome.events.push('prepare failed');
+        throw new Error('prepare failed');
+      },
+      finishCapture: async () => {
+        chrome.events.push('restore');
+        throw new Error('content script gone');
+      },
+    });
+
+    await expect(settle(scanner.scan(1))).rejects.toThrow('prepare failed');
+
+    expect(chrome.events).toEqual(['prepare failed', 'restore']);
+  });
+
   it('截圖失敗也會還原覆蓋層', async () => {
     const chrome = fakeDeps();
     const scanner = createScanner({

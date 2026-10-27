@@ -5,7 +5,7 @@
 import type { Page, Worker } from '@playwright/test';
 import { hammingDistance, pageHash, SAME_PAGE_MAX_DISTANCE } from '../src/shared/page-hash.ts';
 import { cropGray, readGray, readGroundTruth, type GtText } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -159,7 +159,7 @@ const TOOLBAR_TEXTS = ['ライブラリ', 'サンプル作品', '期間限定', 
 
 /** 送進 LLM 的原文（= OCR 讀到的）裡有沒有工具列上的文字。 */
 async function toolbarTextsSent(sw: Worker): Promise<string[]> {
-  const sent = await sw.evaluate(() => (globalThis.__translateInputs ?? []).flatMap((input) => input.items.map((item) => item.原文)));
+  const sent = await sentOriginals(sw);
   return TOOLBAR_TEXTS.filter((t) => sent.some((s) => normalize(s).includes(normalize(t))));
 }
 

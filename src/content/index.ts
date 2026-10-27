@@ -98,16 +98,14 @@ if (!globalThis.__mangaTranslator) {
     },
   });
 
-  const capturePrep = createCapturePrep({
-    overlay,
-    anchors: () => [...anchors.values()],
-    isOwn: (el) => el.closest(`[${HOST_ATTRIBUTE}]`) !== null,
-  });
+  /** 在自己的覆蓋層（shadow host）裡。 */
+  const inOverlayHost = (el: Element) => el.closest(`[${HOST_ATTRIBUTE}]`) !== null;
+  const capturePrep = createCapturePrep({ overlay, anchors: () => [...anchors.values()], isOwn: inOverlayHost });
 
   // 翻頁訊號 → SW 截圖比對 hash（#34）。
   // 覆蓋層改過 position 的父元素，之後它的 style 變動一律當成自己的（頁面改它的 style 會漏掉，接受）
   const isOwn = (node: Node, attribute?: string) =>
-    node instanceof Element && (node.closest(`[${HOST_ATTRIBUTE}]`) !== null || (attribute === 'style' && overlay.ownsStyleOf(node)));
+    node instanceof Element && (inOverlayHost(node) || (attribute === 'style' && overlay.ownsStyleOf(node)));
   // 還沒量到任何 Page（剛啟動、上次沒有完整可見的 Page）時一律算，免得漏掉第一頁
   const relatesToPage = (node: Node, added: boolean) => {
     if (anchors.size === 0) return true;
