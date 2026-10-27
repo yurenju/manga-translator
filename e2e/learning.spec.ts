@@ -159,8 +159,36 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
   await expect(tooltip).toContainText('讀音為推測');
   await expect(tooltip).not.toContainText(GREETING_ZH);
   await expect(line).toHaveClass(/\bhl\b/);
+
+  // 逐步揭露（#75）：從 Balloon 一路移進 tooltip 的「譯」區塊，tooltip 不會消失；進了區塊才出現譯文
+  const chip = tooltip.getByText('滑過這裡看譯文');
+  await expect(chip).toBeVisible();
+  const chipBox = (await chip.boundingBox())!;
+  const inChip = { x: chipBox.x + chipBox.width / 2, y: chipBox.y + chipBox.height / 2 };
+  await page.mouse.move(inChip.x, inChip.y, { steps: 20 });
+  await expect(tooltip).toContainText(GREETING_ZH);
+  await expect(tooltip).toContainText('今日');
+  await expect(line).toHaveClass(/\bhl\b/);
+  // 區塊隨譯文長大，滑鼠仍在區塊裡：譯文持續顯示
+  await page.mouse.move(inChip.x + 1, inChip.y);
+  await expect(tooltip).toContainText(GREETING_ZH);
+
+  // 離開 tooltip 就收起；滑回同一句，譯文又藏起來
   await page.mouse.move(1, 1);
   await expect(tooltip).toHaveCount(0);
+  await expect(line).not.toHaveClass(/\bhl\b/);
+  await page.mouse.move(center.x, center.y);
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip).not.toContainText(GREETING_ZH);
+  await expect(chip).toBeVisible();
+  await page.mouse.move(1, 1);
+  await expect(tooltip).toHaveCount(0);
+
+  // tooltip 沒顯示時，緩衝區不生效：直接移到剛才 tooltip 的位置，不會叫出這句的 tooltip
+  await page.mouse.move(inChip.x, inChip.y);
+  await page.waitForTimeout(300);
+  await expect(tooltip.filter({ hasText: '今日' })).toHaveCount(0);
+  await page.mouse.move(1, 1);
 
   // panel → 頁面
   const highlight = page.locator('[data-naruhodo-overlay] .hl.on');
