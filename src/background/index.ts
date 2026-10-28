@@ -1,5 +1,6 @@
 import { CLAUDE_MODEL, PROMPT_VERSION } from '../offscreen/claude-translator.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
+import { hasDataConsent } from '../shared/data-consent.ts';
 import { FAKE_VERSION } from '../shared/fake-translator.ts';
 import type {
   AnalyzeResponse,
@@ -142,10 +143,13 @@ const offscreenTranslator: Translator = {
   },
 };
 
-/** 沒有 key 時不排 LLM 工作（spec 第 5 節）。 */
+/**
+ * 沒有 key（spec 第 5 節）或還沒同意資料使用（shared/data-consent.ts）時不排 LLM 工作。
+ * 翻譯與 Series Notes 都從這裡拿 Translator，所以送到 Anthropic 的呼叫都會先過這道檢查。
+ */
 async function getTranslator(): Promise<Translator | undefined> {
   if (__E2E__ && fakeTranslator && !requireApiKey) return offscreenTranslator;
-  return (await apiKeys.has()) ? offscreenTranslator : undefined;
+  return (await apiKeys.has()) && (await hasDataConsent()) ? offscreenTranslator : undefined;
 }
 
 /** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 key 時不比。 */
