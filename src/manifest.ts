@@ -19,7 +19,8 @@ export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: bo
     manifest_version: 3,
     name: e2e ? 'Naruhodo (e2e)' : debug ? 'Naruhodo (debug)' : 'Naruhodo',
     version: pkg.version,
-    description: '把畫面上的日文漫畫原地翻成繁體中文',
+    // 也是 Web Store 的摘要（最多 132 字），見 docs/webstore/listing.md
+    description: '把畫面上的日文漫畫原地翻成繁體中文，並列出原文、讀音與譯文，邊看邊學日文',
     minimum_chrome_version: '116',
     icons,
     permissions: ['activeTab', 'scripting', 'sidePanel', 'offscreen', 'storage', 'unlimitedStorage'],
