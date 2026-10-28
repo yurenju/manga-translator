@@ -17,6 +17,10 @@ on:
         description: 指定版本號，例如 0.2.0（選填，必須比目前版本大）
         type: string
         required: false
+      webstore:
+        description: 同時上傳到 Chrome Web Store 並送審
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -94,3 +98,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: gh release create "v$VERSION" naruhodo.zip --title "v$VERSION" --generate-notes
+
+      # 放在 GitHub Release 之後：Web Store 出錯不影響 GitHub 上的發版，失敗時手動到 Dashboard 上傳同一個 zip。
+      # 還沒設定 secret（第一次上架前）就跳過，不讓 release 失敗。
+      - name: 上傳到 Chrome Web Store 並送審
+        if: inputs.webstore
+        env:
+          CWS_SERVICE_ACCOUNT_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_KEY }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+        run: |
+          if [ -z "$CWS_SERVICE_ACCOUNT_KEY" ] || [ -z "$CWS_PUBLISHER_ID" ] || [ -z "$CWS_EXTENSION_ID" ]; then
+            echo "::warning::沒有設定 CWS_SERVICE_ACCOUNT_KEY、CWS_PUBLISHER_ID 或 CWS_EXTENSION_ID，跳過 Web Store 上傳"
+            exit 0
+          fi
+          node scripts/webstore-publish.ts naruhodo.zip

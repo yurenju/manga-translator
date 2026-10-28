@@ -58,6 +58,10 @@ test('頂部只有 logo、名稱、狀態、停止、⚙ 與 Page Mode 切換', 
 
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('Naruhodo');
   await expect(main.getByText('已啟動')).toBeVisible();
+  // 還沒同意資料使用時，說明卡片固定在最上面（translate.spec.ts 測它）；同意後才是平常的版面
+  const consent = main.getByRole('region', { name: '資料使用說明' });
+  await consent.getByRole('button', { name: '同意並啟用翻譯' }).click();
+  await expect(consent).toHaveCount(0);
   // Page 列表與逐字稿之前的控制項：停止、⚙（只有圖示）、Page Mode 兩格（含副標）。顯示層級要等逐字稿出來，不在這裡
   await expect(main.getByRole('button').filter({ visible: true })).toHaveText(['停止', '', /^閱讀/, /^學習/]);
   await expect(main.getByRole('button', { name: '設定', exact: true })).toHaveAttribute('aria-expanded', 'false');

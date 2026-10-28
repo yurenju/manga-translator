@@ -72,6 +72,11 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await expect(transcript.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
   await expect(transcript.getByText('未翻譯').first()).toBeVisible();
   await expect(panel.getByText('尚未設定 API key')).toBeVisible();
+  // 第一次打開就先說明資料會送到 Anthropic（Web Store 的 prominent disclosure）
+  const consent = panel.getByRole('region', { name: '資料使用說明' });
+  await expect(consent).toContainText('Anthropic');
+  await expect(consent).toContainText('不會上傳圖片');
+  await expect(consent.getByRole('link', { name: '隱私權政策' })).toHaveAttribute('href', /PRIVACY\.md$/);
 
   // ⚙ 選單的「API key 與模型」：輸入 key，只顯示末四碼
   await chooseFromPanelMenu(panel, 'API key 與模型');
@@ -85,7 +90,15 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   expect(await panel.locator('body').innerText()).not.toContain(FAKE_KEY);
   await expect(panel.getByText('尚未設定 API key')).toHaveCount(0);
 
-  // 翻譯此頁
+  // 有 key 但還沒同意：按「翻譯此頁」也不送出
+  await panel.getByRole('button', { name: '翻譯此頁' }).click();
+  await expect(transcript.getByText('未翻譯').first()).toBeVisible();
+  await panel.waitForTimeout(1000);
+  expect(await sw.evaluate(() => globalThis.__translateCalls)).toBe(0);
+
+  // 同意之後卡片消失，按「翻譯此頁」才翻
+  await consent.getByRole('button', { name: '同意並啟用翻譯' }).click();
+  await expect(consent).toHaveCount(0);
   await panel.getByRole('button', { name: '翻譯此頁' }).click();
   await expect(transcript.getByText('早安！今天好早喔')).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
   // 讀音換成 Translator 的整句讀音（おはよう！きょうははやいね），以ルビ對齊回漢字
@@ -121,6 +134,10 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await settings.getByRole('button', { name: '刪除' }).click();
   await expect(settings.getByLabel('Claude API key')).toBeVisible();
   await expect(settings).not.toContainText('末四碼');
+
+  // 撤回同意：卡片回來
+  await settings.getByRole('button', { name: '撤回資料使用同意' }).click();
+  await expect(consent).toBeVisible();
 });
 
 test('從 Chrome 內建 side panel 選單打開（沒有啟動 tab）也能設定 API key', async ({ context, extensionId }) => {

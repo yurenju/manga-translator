@@ -1,6 +1,7 @@
 import { render } from 'preact';
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
+import { grantDataConsent, revokeDataConsent, watchDataConsent } from '../shared/data-consent.ts';
 import type { StaleReason } from '../shared/series-notes.ts';
 import type { BackupFile } from '../background/backup.ts';
 import type {
@@ -226,11 +227,59 @@ function Backup() {
   );
 }
 
+const PRIVACY_URL = 'https://github.com/yurenju/naruhodo-manga-translator/blob/main/PRIVACY.md';
+
+/**
+ * 資料使用說明（shared/data-consent.ts）：還沒同意就固定顯示在最上面，啟動前、從內建選單打開時都一樣。
+ * 內容要跟 PRIVACY.md 一致；資料處理方式改了，兩邊一起改，並把 DATA_CONSENT_VERSION 加一。
+ */
+function DataConsentCard({ onAccept }: { onAccept: () => void }) {
+  return (
+    <section aria-label="資料使用說明">
+      <Callout tone="warn">
+        <p>
+          <strong>翻譯前請先確認資料怎麼使用</strong>
+        </p>
+        <ul>
+          <li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
+          <li>辨識出的日文文字、同一部作品前幾頁的原文與譯文、作品的譯名表，會用你的 API key 直接送到 Anthropic 翻譯。</li>
+          <li>API key、翻譯快取與作品筆記只存在這台電腦。開發者沒有伺服器，收不到你的任何資料。</li>
+        </ul>
+        <p>
+          詳見
+          <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
+            隱私權政策
+          </a>
+          。不同意也能使用，只會顯示原文與讀音。
+        </p>
+        <Button variant="primary" onClick={onAccept}>
+          同意並啟用翻譯
+        </Button>
+      </Callout>
+    </section>
+  );
+}
+
+/** undefined＝還在讀。 */
+function useDataConsent(): boolean | undefined {
+  const [consented, setConsented] = useState<boolean | undefined>(undefined);
+  useEffect(() => watchDataConsent(setConsented), []);
+  return consented;
+}
+
 /**
  * 設定區（spec #27 第 5 節）：API key 存在外掛 origin 的 IndexedDB，只顯示末四碼。
  * side panel 自己讀寫 key；「測試連線」由 offscreen 讀 key 呼叫 API，訊息裡不帶 key。從 ⚙ 選單打開（#77）。
  */
-function Settings({ onKeyChanged, onClose }: { onKeyChanged: (hasKey: boolean) => void; onClose: () => void }) {
+function Settings({
+  consented,
+  onKeyChanged,
+  onClose,
+}: {
+  consented: boolean | undefined;
+  onKeyChanged: (hasKey: boolean) => void;
+  onClose: () => void;
+}) {
   /** undefined＝還在讀；''＝沒有 key */
   const [suffix, setSuffix] = useState<string | undefined>(undefined);
   const [draft, setDraft] = useState('');
@@ -302,6 +351,11 @@ function Settings({ onKeyChanged, onClose }: { onKeyChanged: (hasKey: boolean) =
         </form>
       )}
       {connection && <p class="connection">{connection}</p>}
+      {consented && (
+        <div class="actions">
+          <Button onClick={() => void revokeDataConsent()}>撤回資料使用同意</Button>
+        </div>
+      )}
       <Backup />
       <p class="hint">
         建議在 Anthropic Console 為這個外掛建立專用的 API key，並為它的 workspace 設定花費上限。key 只存在這台電腦的外掛裡，不會交給網頁，也不會出現在匯出檔。
@@ -606,6 +660,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const display: Display = pageMode === 'learn' ? { mode: 'learn', furigana } : { mode: 'read', level };
   const [hovered, setHovered] = useState<TranscriptSync['hovered']>(undefined);
   const [section, setSection] = useState<PanelSection | undefined>(undefined);
+  const consented = useDataConsent();
 
   useEffect(() => {
     void apiKeys.get().then((key) => setHasKey(Boolean(key)));
@@ -644,11 +699,13 @@ function App({ tabId }: { tabId: number | undefined }) {
       <PanelMenu tabId={running ? tabId : undefined} onOpen={(s) => setSection(section === s ? undefined : s)} />
     </div>
   );
-  const settings = section === 'settings' && <Settings onKeyChanged={setHasKey} onClose={close} />;
+  const settings = section === 'settings' && <Settings consented={consented} onKeyChanged={setHasKey} onClose={close} />;
+  const consentCard = consented === false && <DataConsentCard onAccept={() => void grantDataConsent()} />;
   if (!running)
     return (
       <main>
         {header}
+        {consentCard}
         <p>請點外掛圖示啟動</p>
         {settings}
       </main>
@@ -669,6 +726,7 @@ function App({ tabId }: { tabId: number | undefined }) {
     <>
       <main>
         {header}
+        {consentCard}
         <PageModeSwitch mode={pageMode} choose={choosePageMode} />
         {settings}
         {section === 'notes' && <SeriesNotesSection tabId={tabId} onClose={close} />}
