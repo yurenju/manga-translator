@@ -55,3 +55,33 @@ _Avoid_: context, glossary (ambiguous with this file), dictionary
 **Prior Pages** (前頁)
 The Pages the reader saw just before the ones on screen, in the same tab, with their text and translations; sent along when a Page is translated so the translator can follow the conversation and keep its wording. Follows what the reader actually saw, so after a jump or a page back they are not the previous Pages of the Episode.
 _Avoid_: context (that word is avoided for Series Notes), history
+
+## Accounts and billing
+
+**Hosted Translation** (內建翻譯)
+The default way Pages get translated: our service calls the translator and pays for it. Requires an Account and uses up Translated Pages.
+_Avoid_: cloud mode, server mode, official API
+
+**Own API Key** (自備金鑰)
+The optional, less prominent way Pages get translated: the reader supplies their own Anthropic API key and pays the translator directly. Needs no Account and has no limits.
+_Avoid_: BYOK (fine in code and docs, not in the UI), developer mode
+
+**Account** (帳號)
+A reader identified by an email address, needed for Hosted Translation. Holds that reader's Free Pages and Subscription, and nothing about what they read.
+_Avoid_: user (ambiguous with reader), member, profile
+
+**Translated Page** (已翻譯頁)
+The unit every limit counts: one Page whose translation came back from Hosted Translation, including one the reader asked to translate again. Viewing an already translated Page again, or a translation that failed, is not a Translated Page; a Spread is two.
+_Avoid_: credit, token, request
+
+**Free Pages** (免費頁數)
+The 50 Translated Pages every new Account gets once, roughly two Episodes. Never reset.
+_Avoid_: trial, free tier
+
+**Subscription** (訂閱)
+A paid yearly plan on an Account that grants a Monthly Page Limit.
+_Avoid_: membership, license
+
+**Monthly Page Limit** (每月頁數上限)
+How many Translated Pages a Subscription allows in each month of its year.
+_Avoid_: quota (when meaning this specific limit), allowance
