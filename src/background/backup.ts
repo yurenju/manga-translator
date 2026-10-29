@@ -68,7 +68,9 @@ export function createBackup(deps: BackupDeps) {
   const { repo } = deps;
   return {
     async exportAll(): Promise<BackupFile> {
-      return { format: FORMAT, version: 1, exportedAt: deps.now(), ...(await repo.dump()) };
+      // 只挑這五個陣列：repo 多讀了別的 store（例如 apiKeys）也不會跟著寫進檔案
+      const { series, urlPatterns, seriesNotes, notesSuggestions, pageTranslations } = await repo.dump();
+      return { format: FORMAT, version: 1, exportedAt: deps.now(), series, urlPatterns, seriesNotes, notesSuggestions, pageTranslations };
     },
 
     /** 回傳 Notes 有寫入的 Series ID（要通知 side panel）。 */
