@@ -10,7 +10,7 @@
 - **假 OCR 切在 `Engine`（`detect`／`recognize`）。** 分組、閱讀順序、座標換算、擦除底色仍是真的程式。很多 browser test 在驗證「譯文落在 Balloon 內」，等於在測座標換算，切在整個 `analyze` 會讓它們失去意義。
 - **FakeEngine 重播真模型錄下來的結果，不是 ground truth。** `npm run record:ocr` 用真模型跑每張合成頁（Spread 再加上切開的每一頁），存成 `testdata/synthetic/recorded-ocr.json`；FakeEngine 把錄到的框換回偵測結果、用框對回錄到的字。
 - **FakeEngine 用縮圖比對認出是哪個錄製範圍。** 外掛送進 `Engine` 之前已經去掉黑邊、把 Spread 切成兩頁，拿到的圖就是某個範圍縮放後的樣子；白底的仿 Kindle 不去邊，就照等比例縮放置中去比。最小的差異仍超過門檻就 throw，讓測試明確失敗，不會默默給錯的答案。
-- **e2e 只留主要流程：** OCR 指標、模型下載與 SHA-256 檢查、仿 Jump+ 覆蓋、仿 Kindle Spread、翻頁後自動翻譯、仿 Kindle 工具列開關。它們標 `@e2e`，browser test 也用 FakeEngine 跑一次。
+- **e2e 只留主要流程：** OCR 指標、模型下載與 SHA-256 檢查、仿 Jump+ 覆蓋、仿 Kindle Spread、翻頁後自動翻譯、仿 Kindle 工具列開關。它們標 `@e2e`，browser test 也用 FakeEngine 跑一次。（後來 #100 訂了 e2e 的入選標準「真模型會讓結果不一樣嗎」，翻頁後自動翻譯不符合，改成只在 browser test 跑；現況見 `docs/agents/testing.md`。）
 
 ## 不直覺的地方
 

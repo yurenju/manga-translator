@@ -1,5 +1,7 @@
 import type { PageView } from '../shared/messages.ts';
-import type { SpreadSide } from './components.tsx';
+
+/** Page 在 Spread 裡的哪一邊；undefined＝不是 Spread。 */
+export type SpreadSide = 'right' | 'left';
 
 /** 頁首：單頁是「第 N 頁」；Spread 是「右頁」＋「先讀」。 */
 export interface PageHeading {
@@ -24,6 +26,8 @@ export interface SidePanelView {
   pages: PageEntry[];
   status: OverallStatus;
 }
+
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} 秒`;
 
 const centerX = (page: PageView) => page.subRect && page.subRect.x + page.subRect.w / 2;
 
@@ -61,10 +65,9 @@ function translationStatus({ transcript }: PageView): string | undefined {
   if (transcript.state !== 'done' || !transcript.translation || transcript.translating || transcript.translateError) return undefined;
   const { source, model, latencyMs, usage } = transcript.translation;
   const label = source === 'cache' ? '快取' : '已翻譯';
-  return `${label}・${model}・${(latencyMs / 1000).toFixed(1)} 秒・$${usage.costUsd.toFixed(4)}`;
+  return `${label}・${model}・${seconds(latencyMs)}・$${usage.costUsd.toFixed(4)}`;
 }
 
-const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} 秒`;
 const dollars = (usd: number) => (Number.isNaN(usd) ? '費用未知' : `$${usd.toFixed(5)}`);
 
 /** 底部狀態列（spec #27 第 8 節）：已翻譯・模型・秒數・費用。多個 Page 時加總。 */

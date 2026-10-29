@@ -44,7 +44,7 @@ const currentSeries = async (panel: Page, tabId: number) =>
 const seriesNamed = async (sw: Worker, name: string) => (await readStore<Series>(sw, 'series')).find((s) => s.name === name);
 
 // 規則（網址模式怎麼比對、預選時不再建 Provisional、改名 ID 不變、合併時快取與 Notes 怎麼併）在 series 與 series-catalog
-// 的 unit；這裡只確認 side panel 的操作會經過 SW 寫進 IndexedDB，下一次啟動讀得回來。
+// 的 unit；這裡只確認 side panel 的操作會經過 SW 寫進 IndexedDB（預選那條再確認下一次啟動讀得回來）。
 
 test('選 Series 後重新整理再啟動，自動預選同一部 Series', async ({ context, sw, extensionId, mockSite }) => {
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
@@ -56,10 +56,9 @@ test('選 Series 後重新整理再啟動，自動預選同一部 Series', async
   await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
 });
 
-test('Provisional Series 在 side panel 改名：顯示新名稱，store 裡同一個 ID 改了名', async ({ context, sw, extensionId, mockSite }) => {
+test('Provisional Series 在 side panel 改名：顯示新名稱，也寫進 store', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await expect(seriesRow(panel)).toContainText(/未歸類（/);
-  const [provisional] = await readStore<Series>(sw, 'series');
 
   // 平常只是文字；點鉛筆才出現輸入框
   await expect(footer(panel).getByRole('textbox')).toHaveCount(0);
@@ -67,7 +66,8 @@ test('Provisional Series 在 side panel 改名：顯示新名稱，store 裡同�
   await panel.getByRole('textbox', { name: '新名稱' }).fill('火ノ丸相撲');
   await panel.getByRole('button', { name: '儲存' }).click();
   await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
-  expect(await seriesNamed(sw, '火ノ丸相撲')).toEqual({ ...provisional, name: '火ノ丸相撲', provisional: false });
+  // 改名後 ID 不變、不再是 Provisional 是 series-catalog 的 unit；這裡只確認改名有經過 SW 寫進去
+  await expect.poll(() => seriesNamed(sw, '火ノ丸相撲')).toBeDefined();
 });
 
 test.describe('合併（FakeTranslator）', () => {
@@ -96,6 +96,7 @@ test.describe('合併（FakeTranslator）', () => {
     await expect.poll(async () => (await readStore<Series>(sw, 'series')).some((s) => s.id === provisionalId)).toBe(false);
     const cached = await readStore<PageTranslation>(sw, 'pageTranslations');
     expect(cached.filter((t) => t.seriesId === provisionalId)).toEqual([]);
+    // 兩集是同一個仿 Jump+：hash 相同，保留目標原本的兩頁，不會變成 4 頁
     expect(cached.filter((t) => t.seriesId === target.id)).toHaveLength(2);
     expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(calls);
   });

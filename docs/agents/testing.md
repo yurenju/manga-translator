@@ -25,6 +25,8 @@ A bug reproduced on Jump+ or Kindle ([real-site debugging](real-site-debugging.m
 
 - **Each test gets its own Chromium context and mock site**, not one shared per worker: extension state (`chrome.storage`, IndexedDB, activation) would leak into the next test and make it flaky.
 - **vitest has no DOM environment** (happy-dom, jsdom): component logic is pulled out into plain functions instead, so no test depends on happy-dom behaving like real Chrome; real rendering stays in browser tests. Revisit only if a large piece of logic cannot leave the DOM.
+- **The side panel opens in its own window** (`openSidePanel` in `browser/fixtures.ts`): in the page's window it would be a background tab once the page is brought to the front, its `requestAnimationFrame` stops, and every Playwright click waits about 2 seconds for the element to be stable. The real side panel is visible next to the page too.
+- **Timeouts**: browser tests use the config defaults (30 s per test, 10 s per `expect`) and do not set longer ones; a slow wait under FakeEngine is a bug to fix, not a timeout to raise. The long timeouts real OCR needs live only in `playwright.e2e.config.ts`.
 
 ## When to run e2e
 
@@ -40,7 +42,7 @@ Browser tests replace the ONNX models with FakeEngine (`src/offscreen/fake-engin
 
 Re-record when the models, detection or OCR change: `npm run record:ocr`, then commit the JSON and run e2e. If FakeEngine throws "認不出這是哪張合成頁", the page it was given is not one of the recorded ranges (a new mock-site layout, or a crop the extension did not make before).
 
-FakeEngine is near-instant. A test that relies on OCR being slow (queue scheduling, the side panel before the transcript arrives) sets `test.use({ fakeOcrDelayMs })`. Don't add a delay just to make a flaky test pass: instant OCR has already exposed a real product race on the mock Kindle (ADR 0007).
+FakeEngine is near-instant. A test that relies on OCR being slow (the side panel layout before the transcript arrives) sets `test.use({ fakeOcrDelayMs })`; rules about OCR being slower than page turns, such as queue scheduling, are unit tests. Don't add a delay just to make a flaky test pass: instant OCR has already exposed a real product race on the mock Kindle (ADR 0007).
 
 ## Flaky tests
 

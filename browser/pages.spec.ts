@@ -64,6 +64,7 @@ test('捲動後重新擷取：上下都只露出一部分時只列中間那頁',
 test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀」，右頁在前；沒有縮圖', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
 
+  // 左右頁怎麼判斷、頁首文字是 view.test.ts 的 unit；這是唯一一條讓真的 Spread（SW 切成兩頁）一路畫到 side panel 的
   await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
   await expect(pageList(panel).getByRole('img')).toHaveCount(0);
   // 頁首圖示畫兩格（Spread）
@@ -76,7 +77,8 @@ test('每個 Page 的翻譯狀態在頁首右側，跟標題同一行', async ({
   for (const name of ['第 1 頁', '第 2 頁']) {
     const item = pageList(panel).getByRole('listitem', { name });
     const status = item.getByRole('status', { name: '翻譯狀態' });
-    await expect(status).toHaveText(/^已翻譯・fake・/);
+    // 狀態列的格式在 view.test.ts；這裡只看它畫在哪裡
+    await expect(status).toHaveText(/^已翻譯・/);
     const heading = (await item.getByRole('heading', { name }).boundingBox())!;
     const box = (await status.boundingBox())!;
     expect(box.x, `${name} 狀態在標題右邊`).toBeGreaterThan(heading.x + heading.width);

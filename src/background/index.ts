@@ -35,10 +35,10 @@ import { createScanner } from './scan.ts';
 import { createSeriesCatalog } from './series-catalog.ts';
 import { indexedDbBackupRepo, indexedDbNotesStore, indexedDbSeriesRepo } from './series-store.ts';
 import { indexedDbTabStore } from './tab-store.ts';
-import { createTranscriber, type JobEvent } from './transcribe.ts';
+import { createTranscriber } from './transcribe.ts';
 
 declare global {
-  /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
+  /** e2e build 才有：每次 captureVisibleTab 開始的時間，給測試數截了幾次、等截圖停下來。 */
   var __captureLog: number[] | undefined;
   /** e2e build 才有：最近 3 張截好的圖（data URL）與開始截的時間，給測試確認截圖裡沒有覆蓋層。 */
   var __captures: { startedAt: number; screenshot: string }[] | undefined;
@@ -50,8 +50,6 @@ declare global {
   var __translateInputs: TranslateInput[] | undefined;
   /** e2e build 才有：每次送給 FakeTranslator 整理 Notes（②）的內容。 */
   var __notesInputs: NotesInput[] | undefined;
-  /** e2e build 才有：翻譯佇列的事件（#34），給測試確認後進先出與丟棄。 */
-  var __jobLog: (JobEvent & { at: number })[] | undefined;
   /** e2e build 才有：記下過幾個 Page「帶覆蓋層的樣子」（scan.ts），給測試等它做完。 */
   var __overlaidRecords: number | undefined;
 }
@@ -189,7 +187,6 @@ const transcriber = createTranscriber({
   },
   onJobEvent(event) {
     trace('job', { ...event });
-    if (__E2E__) (globalThis.__jobLog ??= []).push({ ...event, at: Date.now() });
   },
 });
 
@@ -208,7 +205,6 @@ if (__E2E__) {
     globalThis.__translateCalls = 0;
     globalThis.__translateInputs = [];
     globalThis.__notesInputs = [];
-    globalThis.__jobLog = [];
     fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [], notes: config.fakeNotes ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
   };

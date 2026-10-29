@@ -4,7 +4,7 @@
  */
 import type { ButtonHTMLAttributes, ComponentChildren, HTMLAttributes } from 'preact';
 import { useId, useState } from 'preact/hooks';
-import type { PageHeading } from './view.ts';
+import type { PageHeading, SpreadSide } from './view.ts';
 
 const cx = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(' ');
 
@@ -159,9 +159,6 @@ export function RevealChip({ children }: { children: ComponentChildren }) {
     </div>
   );
 }
-
-/** Page 在 Spread 裡的哪一邊；undefined＝不是 Spread。 */
-export type SpreadSide = 'right' | 'left';
 
 /** 小圖示：Spread 畫兩格、亮起的那格是這個 Page；單頁畫一格。標題已經說了是哪頁，圖示只是裝飾。 */
 function PageIcon({ side }: { side: SpreadSide | undefined }) {
