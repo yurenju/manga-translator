@@ -164,11 +164,9 @@ test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子�
   const translateCalls = await sw.evaluate(() => globalThis.__translateCalls ?? 0);
 
   // 覆蓋層顯示中再擷取一次（SW 的 captureVisibleTab）
-  const count = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
+  const requestedAt = await sw.evaluate(() => Date.now());
   await chooseFromPanelMenu(panel, '重新擷取頁面');
-  await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(count);
-  await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
-  const captured = (await sw.evaluate(() => globalThis.__captures!.at(-1)!)) as string;
+  const captured = await captureStartedAfter(sw, requestedAt);
 
   // 截圖裡有我們的中文（沒藏），覆蓋層一直是顯示的，頁也還認得（沒有重翻）
   const capturedDiff = await changedFraction(page, withoutOverlay, captured);
@@ -204,6 +202,16 @@ function changedFraction(page: Page, a: string, b: string): Promise<number> {
     },
     [a, b] as const,
   );
+}
+
+/**
+ * 等 SW 截好一張 time（SW 的 Date.now()）之後才開始截的圖。`__captureLog` 在開始截時就記，
+ * 看到它變多就讀 `__captures` 會拿到上一張（#103）。
+ */
+async function captureStartedAfter(sw: Worker, time: number): Promise<string> {
+  const find = () => sw.evaluate((t) => globalThis.__captures?.findLast((c) => c.startedAt > t)?.screenshot, time);
+  await expect.poll(find).toBeDefined();
+  return (await find())!;
 }
 
 /** content script（isolated world）記下的每次截圖時覆蓋層被藏了多久。 */
@@ -251,11 +259,10 @@ test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', ()
     // 切到學習、點一下觸發重掃：版面已經穩定（截圖時的位置＝現在量到的位置），截圖裡也沒有自己的譯文
     await pageMode(panel, '學習').click();
     await expect(shownTranslations(page)).toHaveCount(0);
-    const captures = await sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
+    const clickedAt = await sw.evaluate(() => Date.now());
     await page.mouse.click(5, 5);
-    await expect.poll(() => sw.evaluate(() => globalThis.__captureLog?.length ?? 0)).toBeGreaterThan(captures);
-    await expect.poll(() => sw.evaluate(() => globalThis.__captures?.length ?? 0)).toBeGreaterThan(0);
-    const screenshot = await sw.evaluate(() => globalThis.__captures!.at(-1)!);
+    // 在那之前截好的可能還帶著自己的譯文，蓋住疊上去的 img
+    const screenshot = await captureStartedAfter(sw, clickedAt);
     const watermark = await colorFractions(page, screenshot, '#watermark');
     expect(watermark.magenta, '截圖裡的浮水印').toBeLessThan(0.01);
     const stacked = await colorFractions(page, screenshot, '#stacked');

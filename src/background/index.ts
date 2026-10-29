@@ -40,8 +40,8 @@ import { createTranscriber, type JobEvent } from './transcribe.ts';
 declare global {
   /** e2e build 才有：每次 captureVisibleTab 的時間，給測試檢查限速。 */
   var __captureLog: number[] | undefined;
-  /** e2e build 才有：最近 3 張截圖（data URL），給測試確認截圖裡沒有覆蓋層。 */
-  var __captures: string[] | undefined;
+  /** e2e build 才有：最近 3 張截好的圖（data URL）與開始截的時間，給測試確認截圖裡沒有覆蓋層。 */
+  var __captures: { startedAt: number; screenshot: string }[] | undefined;
   /** e2e build 才有：在建立任何 Page 之前呼叫（browser/fixtures.ts）。 */
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
@@ -84,7 +84,7 @@ const scanner = createScanner({
     if (__E2E__) (globalThis.__captureLog ??= []).push(Date.now());
     const startedAt = Date.now();
     const screenshot = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
-    if (__E2E__) globalThis.__captures = [...(globalThis.__captures ?? []), screenshot].slice(-3);
+    if (__E2E__) globalThis.__captures = [...(globalThis.__captures ?? []), { startedAt, screenshot }].slice(-3);
     trace('capture', { windowId, ms: Date.now() - startedAt, screenshot });
     return screenshot;
   },
