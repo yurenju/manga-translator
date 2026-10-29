@@ -85,11 +85,12 @@ describe('seriesForUrl', () => {
     expect(db.patterns.size).toBe(0);
   });
 
-  it('選過 Series 的網址（忽略 query 與 hash）直接預選它', async () => {
-    const { catalog } = setup();
+  it('選過 Series 的網址（忽略 query 與 hash）直接預選它，不再建 Provisional Series', async () => {
+    const { db, catalog } = setup();
     const series = await catalog.create('火ノ丸相撲', EP1);
 
     expect(await catalog.seriesForUrl(`${EP1}?from=top#p3`)).toBe(series.id);
+    expect([...db.series.values()]).toEqual([series]);
   });
 
   it('同網站的另一個網址不預選，建 Provisional Series', async () => {

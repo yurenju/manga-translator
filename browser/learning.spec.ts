@@ -1,7 +1,7 @@
 /**
  * #39、#76 學習功能：side panel 逐字稿依 Page Mode 顯示（閱讀三種 Display Level；學習藏譯文＋振り仮名開關）、
  * 頁面 ↔ panel 的 hover 同步。
- * 偵測＋OCR 是真的（wasm），讀音與譯文來自 FakeTranslator（ground truth）。
+ * OCR 用 FakeEngine 重播（ADR 0007），讀音與譯文來自 FakeTranslator（ground truth）。
  */
 import type { Locator, Page } from '@playwright/test';
 import { activateOnJumpPlus, expect, test } from './fixtures.ts';
@@ -9,8 +9,6 @@ import { overlayTexts, pageMode, shownTranslations } from './overlay-helpers.ts'
 
 test.use({ viewport: null, fakeTranslator: true });
 
-/** 第一次載入模型＋兩頁 OCR。 */
-const TIMEOUT = 60_000;
 /** p01 t1：おはよう！今日は早いね（おはよう！きょうははやいね） */
 const GREETING_ZH = '早安！今天好早喔';
 
@@ -25,11 +23,10 @@ const original = (line: Locator): Locator => line.locator('[lang="ja"]').first()
 const translation = (line: Locator): Locator => line.locator('[lang="zh-Hant"]');
 
 test('閱讀時切換三種顯示層級，逐字稿內容正確', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(TIMEOUT + 30_000);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   const transcript = firstTranscript(panel);
   const greeting = transcript.getByRole('listitem').filter({ hasText: GREETING_ZH });
-  await expect(greeting).toBeVisible({ timeout: TIMEOUT });
+  await expect(greeting).toBeVisible();
 
   // 只有三個層級（「只看日文」由學習取代）；上方不再有ルビ說明框
   await expect(panel.getByRole('group', { name: '顯示層級' }).getByRole('button')).toHaveText(['只看譯文', '原文＋譯文', '加振り仮名']);
@@ -59,17 +56,16 @@ test('閱讀時切換三種顯示層級，逐字稿內容正確', async ({ conte
 
   // 整頁一起切：第 2 頁也是
   const second = panel.getByRole('list', { name: '逐字稿' }).nth(1);
-  await expect(second.getByRole('listitem').first()).toBeVisible({ timeout: TIMEOUT });
+  await expect(second.getByRole('listitem').first()).toBeVisible();
   await expect(second.locator('[lang="ja"]')).toHaveCount(0);
   await level(panel, '加振り仮名').click();
   await expect(second.locator('rt').first()).toBeVisible();
 });
 
 test('學習時逐字稿藏譯文，滑過「譯」區塊才出現；振り仮名 Switch 開關ルビ', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(TIMEOUT + 30_000);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   const transcript = firstTranscript(panel);
-  await expect(transcript.getByRole('listitem').filter({ hasText: GREETING_ZH })).toBeVisible({ timeout: TIMEOUT });
+  await expect(transcript.getByRole('listitem').filter({ hasText: GREETING_ZH })).toBeVisible();
   // 學習時譯文藏起來沒得篩，先記下第幾行
   const index = (await transcript.getByRole('listitem').allInnerTexts()).findIndex((t) => t.includes(GREETING_ZH));
   const greeting = transcript.getByRole('listitem').nth(index);
@@ -86,8 +82,6 @@ test('學習時逐字稿藏譯文，滑過「譯」區塊才出現；振り仮�
   const reveal = greeting.getByRole('group', { name: '譯' });
   await expect(reveal).toContainText('滑過這裡看譯文');
 
-  // 背景分頁的 rAF 會停，Playwright 的 hover 要等穩定；panel 放到前景
-  await panel.bringToFront();
   await reveal.hover();
   await expect(reveal).toContainText(GREETING_ZH);
   await panel.mouse.move(1, 1);
@@ -114,14 +108,11 @@ test('學習時逐字稿藏譯文，滑過「譯」區塊才出現；振り仮�
 async function greetingOnPage(page: Page): Promise<{ x: number; y: number }> {
   let center: { x: number; y: number } | undefined;
   await expect
-    .poll(
-      async () => {
-        const text = (await overlayTexts(page)).find((t) => t.text.replace(/\s/g, '') === GREETING_ZH);
-        center = text && { x: text.rect.x + text.rect.width / 2, y: text.rect.y + text.rect.height / 2 };
-        return center !== undefined;
-      },
-      { timeout: TIMEOUT },
-    )
+    .poll(async () => {
+      const text = (await overlayTexts(page)).find((t) => t.text.replace(/\s/g, '') === GREETING_ZH);
+      center = text && { x: text.rect.x + text.rect.width / 2, y: text.rect.y + text.rect.height / 2 };
+      return center !== undefined;
+    })
     .toBe(true);
   return center!;
 }
@@ -132,7 +123,6 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   extensionId,
   mockSite,
 }) => {
-  test.setTimeout(TIMEOUT + 30_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   const center = await greetingOnPage(page);
   const line = firstTranscript(panel).getByRole('listitem').filter({ hasText: GREETING_ZH });
@@ -156,8 +146,6 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   // panel → 頁面：高亮框蓋住那個 Balloon
   const highlight = page.locator('[data-naruhodo-overlay] .hl.on');
   await expect(highlight).toHaveCount(0);
-  // 背景分頁的 rAF 會停，Playwright 的 hover 要等穩定；panel 放到前景（真的 side panel 跟頁面同時可見）
-  await panel.bringToFront();
   await line.hover();
   await expect(highlight).toHaveCount(1);
   const box = (await highlight.boundingBox())!;
@@ -167,7 +155,6 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   expect(center.y).toBeLessThan(box.y + box.height);
   await panel.mouse.move(1, 1);
   await expect(highlight).toHaveCount(0);
-  await page.bringToFront();
 
   // 覆蓋層 pointer-events:none：點在譯文上，點擊落到主頁面的 canvas（Jump+ 靠它翻頁）
   await page.evaluate(() => {
@@ -187,7 +174,6 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
   extensionId,
   mockSite,
 }) => {
-  test.setTimeout(TIMEOUT + 30_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   // 譯文元素藏起來後 rect 不變（visibility），還是拿它當 Balloon 的位置
   const center = await greetingOnPage(page);
@@ -243,12 +229,10 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
 
   // panel → 頁面
   const highlight = page.locator('[data-naruhodo-overlay] .hl.on');
-  await panel.bringToFront();
   await line.hover();
   await expect(highlight).toHaveCount(1);
   await panel.mouse.move(1, 1);
   await expect(highlight).toHaveCount(0);
-  await page.bringToFront();
 
   // 點擊落到主頁面的 canvas
   await page.evaluate(() => {

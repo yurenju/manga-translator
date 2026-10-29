@@ -484,6 +484,24 @@ describe('翻譯佇列（#34）', () => {
     expect(gate.calls).toEqual(['a1', 'a3', 'a2']);
   });
 
+  it('已排進佇列、還沒開始的工作，翻走之後也丟掉', async () => {
+    const gate = gatedAnalyze();
+    const { transcriber } = setup({ analyze: gate.analyze });
+
+    void transcriber.update(1, [thumb('a1')], capture);
+    await vi.waitFor(() => expect(gate.calls).toEqual(['a1']));
+    // 每翻一頁都等它排進佇列（查完快取），才翻下一頁
+    void transcriber.update(1, [thumb('a2')], capture);
+    await flush();
+    void transcriber.update(1, [thumb('a3')], capture);
+    await flush();
+    await gate.finishNext();
+    await gate.finishNext();
+    await flush();
+
+    expect(gate.calls).toEqual(['a1', 'a3']);
+  });
+
   it('已開始的工作翻走後照樣做完、寫進快取，但不顯示也不覆蓋', async () => {
     const gate = gatedAnalyze();
     const cache = memoryCache();
@@ -1064,6 +1082,20 @@ describe('Spread（#35）', () => {
       ['a1', RIGHT],
       ['a1', LEFT],
     ]);
+  });
+
+  it('本機段忙著時翻到 Spread：兩頁依閱讀順序排，右頁先做', async () => {
+    const gate = gatedAnalyze();
+    const { transcriber } = setup({ analyze: gate.analyze });
+
+    void transcriber.update(1, [thumb('a3')], capture);
+    await vi.waitFor(() => expect(gate.calls).toEqual(['a3']));
+    void transcriber.update(1, spread(), capture);
+    await flush();
+    await gate.finishNext();
+    await gate.finishNext();
+
+    expect(gate.analyze.mock.calls.slice(1).map(([request]) => request.subRect)).toEqual([RIGHT, LEFT]);
   });
 
   it('右頁先送出 LLM，即使左頁的快取查詢先回來', async () => {

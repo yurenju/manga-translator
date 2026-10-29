@@ -8,7 +8,9 @@ export default defineConfig<TestOptions>({
   testIgnore: ['smoke/**', 'record-ocr.spec.ts'],
   grep: /@e2e/,
   globalSetup: './browser/global-setup.ts',
-  timeout: 30_000,
+  // 真 OCR 第一次要下載＋編譯模型，每頁也要好幾秒；spec 檔裡不寫 OCR 的 timeout，統一在這裡放寬
+  timeout: 150_000,
+  expect: { timeout: 60_000 },
   // 一次一個瀏覽器，不互搶 CPU；真的太慢再加
   workers: 1,
   // 真模型受機器負載影響；重跑才過的會在 list reporter 標成 flaky
