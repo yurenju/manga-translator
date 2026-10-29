@@ -15,7 +15,7 @@
 ## 不直覺的地方
 
 - **一開始用 ground truth 合成「完美的 OCR」，後來改成重播。** ground truth 的框比真模型小一圈，仿 Kindle 縮小 Spread 後，譯文用最小字級排在小框裡就超出 Balloon；真模型把 p02 的旁白框當成框外文字、p07 的卻當成 Balloon，沒有規則推得出來。原本的測試都是對著真模型的行為寫的，重播才對得上。代價是換模型時要重錄。
-- **OCR 變快會暴露原本被蓋住的時序問題。** 仿 Kindle 的測試在 FakeEngine 不延遲時，右頁上方的譯文有時往上偏約一個工具列高（工具列開關的測試每次都會），每頁慢 3 秒就不會。真實網站上用 WebGPU 時 OCR 也可能很快，值得另外查；查清楚之前 `kindle.spec.ts` 用 `fakeOcrDelayMs` 以接近真 OCR 的速度跑。有些測試本來就假設 OCR 比翻頁、比畫面慢（佇列排程、逐字稿出來之前的版面），也用 `fakeOcrDelayMs` 明確寫出來。
+- **OCR 變快會暴露原本被蓋住的時序問題。** 仿 Kindle 的測試在 FakeEngine 不延遲時，右頁的譯文被拉長、往上偏。原因是產品的 bug：開 side panel 讓視窗變窄、合成圖重畫之前的第一張截圖量到不一樣的 subRect（同一頁、hash 一樣），OCR 一快，這一頁就用舊的 subRect 先覆蓋了；之後帶正確 subRect 的那次，content script 另外疊一層、舊層沒拿掉，overlay-sync 也可能因為結果一樣就不重送。真 OCR 慢到第二次擷取之後才翻好，所以一直沒露出來（WebGPU 一樣可能很快）。修好後 `kindle.spec.ts` 不再延遲。有些測試本來就假設 OCR 比翻頁、比畫面慢（佇列排程、逐字稿出來之前的版面），也用 `fakeOcrDelayMs` 明確寫出來。
 - **browser test 不設 retry，e2e 設 1 次。** FakeEngine 是確定性的，browser test 出現 flaky 就代表程式本身有 race condition，應該直接紅；e2e 受機器負載影響，偶發逾時不值得擋住合併。e2e 一次只開一個瀏覽器，不互搶 CPU。
 
 ## 不採用的做法

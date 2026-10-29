@@ -17,10 +17,18 @@ export interface OverlaySyncDeps {
   show(show: OverlayShow): void;
 }
 
-/** 送過的一筆：哪個 anchor 上的哪一頁、送的是哪一份結果。 */
+/** 送過的一筆：哪個 anchor 上的哪一頁、送的是哪一份結果、蓋在 anchor 的哪個範圍。 */
 interface Sent extends PageOnAnchor {
   text: PageText;
+  subRect?: RatioRect;
 }
+
+/**
+ * 同一個範圍。視窗大小一變，合成圖重畫前後的截圖會量到不一樣的 subRect（同一頁、hash 一樣）；
+ * 結果比較早翻好時用的是舊截圖量的，下一次擷取量到新的就要重送，覆蓋才不會留在舊的位置。
+ */
+const sameSubRect = (a: RatioRect | undefined, b: RatioRect | undefined) =>
+  a === b || (a !== undefined && b !== undefined && a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h);
 
 export function createOverlaySync(deps: OverlaySyncDeps) {
   /** 每個 tab 送過、應該還顯示著的覆蓋；transcriber 每次 publish 都帶整串 Page，同一份結果不重送。 */
@@ -34,9 +42,9 @@ export function createOverlaySync(deps: OverlaySyncDeps) {
     for (const page of pages) {
       const { transcript } = page;
       if (transcript.state !== 'done' || !transcript.translated) continue;
-      if (list.some((s) => s.text === transcript.text && isSamePage(s, page))) continue;
+      if (list.some((s) => s.text === transcript.text && isSamePage(s, page) && sameSubRect(s.subRect, page.subRect))) continue;
       const others = list.filter((s) => !isSamePage(s, page));
-      list.splice(0, list.length, ...others, { anchorId: page.anchorId, pageHash: page.pageHash, text: transcript.text });
+      list.splice(0, list.length, ...others, { anchorId: page.anchorId, pageHash: page.pageHash, text: transcript.text, subRect: page.subRect });
       deps.show({ tabId, anchorId: page.anchorId, pageHash: page.pageHash, subRect: page.subRect, text: transcript.text });
     }
     sent.set(tabId, list);

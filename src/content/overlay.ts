@@ -2,7 +2,7 @@
  * 原地覆蓋（spec #27 第 7 節、#19 的變體 B）。
  *
  * 每個 anchor 後面插一個 shadow host 當兄弟節點（position:absolute、pointer-events:none），同一個 anchor 上的
- * 多個 Page（Spread 的 subRect）共用一個 host、各自一個 Page 層。Page 層用 Page 原始像素排版，整層
+ * 多個 Page（Spread 的 subRect）共用一個 host、各自一個 Page 層（同一個 Page 只留一層）。Page 層用 Page 原始像素排版，整層
  * translate＋scale 對到 anchor 的 offset*×subRect，捲動、祖先 transform、overflow 裁切都由瀏覽器自然套用。
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛；
  * img 換了 src（Kindle 翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
@@ -12,6 +12,7 @@
  * 高亮框兩種模式都照常運作。
  */
 import type { LineRef } from '../shared/messages.ts';
+import { findSamePage } from '../shared/page-hash.ts';
 import type { PageMode } from '../shared/page-mode.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
@@ -353,11 +354,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
     element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
 
-    const old = entry.layers.get(subKey(sub));
-    if (old && hovered?.layer === old) setHovered(undefined);
+    // 換掉同一個範圍上的舊層，以及同一個 Page 在別的範圍上的舊層：視窗大小變了、合成圖重畫後，同一頁量到的
+    // subRect 會變，舊的那層不拿掉就會留在舊位置、跟新的疊在一起
+    const olds = [...entry.layers].filter(([key, l]) => key === subKey(sub) || (pageHash !== '' && findSamePage([l], pageHash)));
+    for (const [key, old] of olds) {
+      if (hovered?.layer === old) setHovered(undefined);
+      entry.layers.delete(key);
+    }
     entry.layers.set(subKey(sub), layer);
     entry.root.append(element);
-    old?.element.remove();
+    for (const [, old] of olds) old.element.remove();
     place(entry);
 
     // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算，起始字級每框各自估（#80、#81）。

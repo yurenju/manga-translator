@@ -8,9 +8,7 @@ import { cropGray, readGray, readGroundTruth, type GtText } from '../src/testing
 import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
-// OCR 幾乎不花時間時（FakeEngine），右頁上方的譯文有時往上偏約一個工具列的高度（工具列開關的測試每次都會）；
-// 每頁慢 3 秒（接近真 OCR）就不會。在查清楚之前，這個檔案用接近真實的速度跑
-test.use({ viewport: null, fakeTranslator: true, fakeOcrDelayMs: 3_000 });
+test.use({ viewport: null, fakeTranslator: true });
 
 /** 第一次載入模型＋兩頁 OCR。 */
 const FIRST_SPREAD_TIMEOUT = 90_000;

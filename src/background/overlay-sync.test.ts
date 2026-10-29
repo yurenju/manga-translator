@@ -74,6 +74,19 @@ describe('overlay sync', () => {
     expect(subs).toEqual([sub]);
   });
 
+  it('同一頁、同一份結果，但這次擷取量到的 subRect 不一樣（視窗大小變了、合成圖重畫）：帶新的 subRect 再送一次', () => {
+    const { sync, subs } = setup();
+    const done: PageView['transcript'] = { state: 'done', text: TEXT, translated: true };
+    const stale = { x: 0.5, y: 0.17, w: 0.5, h: 0.65 };
+    const fresh = { x: 0.5, y: 0.27, w: 0.5, h: 0.45 };
+
+    sync.publish(1, [{ ...page('a1', done), subRect: stale }]);
+    sync.publish(1, [{ ...page('a1', done), subRect: fresh }]);
+    sync.publish(1, [{ ...page('a1', done), subRect: { ...fresh } }]);
+
+    expect(subs).toEqual([stale, fresh]);
+  });
+
   it('重新擷取時 anchor 上已經沒有這頁的覆蓋（例如 img 換了 src 又換回來、視窗大小變了重畫）：再送一次', () => {
     const { sync, shown } = setup();
     const done: PageView['transcript'] = { state: 'done', text: TEXT, translated: true };

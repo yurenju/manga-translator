@@ -30,7 +30,7 @@ Browser tests replace the ONNX models with FakeEngine (`src/offscreen/fake-engin
 
 Re-record when the models, detection or OCR change: `npm run record:ocr`, then commit the JSON and run e2e. If FakeEngine throws "認不出這是哪張合成頁", the page it was given is not one of the recorded ranges (a new mock-site layout, or a crop the extension did not make before).
 
-FakeEngine is near-instant. A test that relies on OCR being slow (queue scheduling, the side panel before the transcript arrives) sets `test.use({ fakeOcrDelayMs })`. `kindle.spec.ts` runs at near-real speed because instant OCR exposes an overlay-offset race there that is not fixed yet (ADR 0007).
+FakeEngine is near-instant. A test that relies on OCR being slow (queue scheduling, the side panel before the transcript arrives) sets `test.use({ fakeOcrDelayMs })`. Don't add a delay just to make a flaky test pass: instant OCR has already exposed a real product race on the mock Kindle (ADR 0007).
 
 ## Flaky tests
 
