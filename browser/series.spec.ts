@@ -43,6 +43,9 @@ const currentSeries = async (panel: Page, tabId: number) =>
 
 const seriesNamed = async (sw: Worker, name: string) => (await readStore<Series>(sw, 'series')).find((s) => s.name === name);
 
+// 規則（網址模式怎麼比對、預選時不再建 Provisional、改名 ID 不變、合併時快取與 Notes 怎麼併）在 series 與 series-catalog
+// 的 unit；這裡只確認 side panel 的操作會經過 SW 寫進 IndexedDB，下一次啟動讀得回來。
+
 test('選 Series 後重新整理再啟動，自動預選同一部 Series', async ({ context, sw, extensionId, mockSite }) => {
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await expect(seriesRow(panel)).toContainText(/未歸類（未命名・127\.0\.0\.1・/);
@@ -51,48 +54,26 @@ test('選 Series 後重新整理再啟動，自動預選同一部 Series', async
   await stopReloadActivate(page, panel, tabId);
 
   await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
-  // 預選到的不會再建 Provisional Series：只有第一次啟動那一個＋火ノ丸相撲
-  expect(await readStore<Series>(sw, 'series')).toHaveLength(2);
 });
 
-test('同網站的另一個網址不會被預選，建立 Provisional Series', async ({ context, sw, extensionId, mockSite }) => {
-  const first = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await createSeries(first.panel, '火ノ丸相撲');
+test('Provisional Series 在 side panel 改名：顯示新名稱，store 裡同一個 ID 改了名', async ({ context, sw, extensionId, mockSite }) => {
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  await expect(seriesRow(panel)).toContainText(/未歸類（/);
+  const [provisional] = await readStore<Series>(sw, 'series');
 
-  const other = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: new URL('episode-2/', mockSite.jumpPlusUrl).href });
-
-  await expect(seriesRow(other.panel)).toContainText(/未歸類（/);
-  // 「火ノ丸相撲」仍在選單裡，而且是最近用過的，排在最上面
-  await openSeriesEditor(other.panel);
-  await expect(seriesSelect(other.panel).locator('option').first()).toHaveText('火ノ丸相撲');
+  // 平常只是文字；點鉛筆才出現輸入框
+  await expect(footer(panel).getByRole('textbox')).toHaveCount(0);
+  await openSeriesEditor(panel);
+  await panel.getByRole('textbox', { name: '新名稱' }).fill('火ノ丸相撲');
+  await panel.getByRole('button', { name: '儲存' }).click();
+  await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
+  expect(await seriesNamed(sw, '火ノ丸相撲')).toEqual({ ...provisional, name: '火ノ丸相撲', provisional: false });
 });
 
-test.describe('歸類（FakeTranslator）', () => {
+test.describe('合併（FakeTranslator）', () => {
   test.use({ fakeTranslator: true });
 
-  test('Provisional Series 改名後 ID 不變、快取仍命中', async ({ context, sw, extensionId, mockSite }) => {
-    const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-    const statusLines = panel.getByRole('status', { name: '翻譯狀態' });
-    await expect(statusLines.filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
-    const [provisional] = await readStore<Series>(sw, 'series');
-    const calls = await sw.evaluate(() => globalThis.__translateCalls ?? 0);
-
-    // 平常只是文字；點鉛筆才出現輸入框
-    await expect(footer(panel).getByRole('textbox')).toHaveCount(0);
-    await openSeriesEditor(panel);
-    await panel.getByRole('textbox', { name: '新名稱' }).fill('火ノ丸相撲');
-    await panel.getByRole('button', { name: '儲存' }).click();
-    await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
-    expect(await seriesNamed(sw, '火ノ丸相撲')).toEqual({ ...provisional, name: '火ノ丸相撲', provisional: false });
-
-    await stopReloadActivate(page, panel, tabId);
-
-    await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
-    await expect(statusLines.filter({ hasText: /^快取・/ })).toHaveCount(2);
-    expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(calls);
-  });
-
-  test('Provisional Series 合併進既有 Series：快取改用目標 ID、刪掉臨時 Series、不重翻', async ({ context, sw, extensionId, mockSite }) => {
+  test('Provisional Series 合併進既有 Series：store 裡快取改掛目標、臨時 Series 刪掉，不重翻', async ({ context, sw, extensionId, mockSite }) => {
     const first = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
     const statusLines = first.panel.getByRole('status', { name: '翻譯狀態' });
     await expect(statusLines.filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
@@ -115,7 +96,6 @@ test.describe('歸類（FakeTranslator）', () => {
     await expect.poll(async () => (await readStore<Series>(sw, 'series')).some((s) => s.id === provisionalId)).toBe(false);
     const cached = await readStore<PageTranslation>(sw, 'pageTranslations');
     expect(cached.filter((t) => t.seriesId === provisionalId)).toEqual([]);
-    // 同一個仿 Jump+：hash 相同，保留目標原本的兩頁
     expect(cached.filter((t) => t.seriesId === target.id)).toHaveLength(2);
     expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(calls);
   });
