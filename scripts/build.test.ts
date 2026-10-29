@@ -65,6 +65,9 @@ describe('正式 build', () => {
     const offscreen = await readText(prodDir, 'offscreen.js');
     expect(offscreen).not.toContain('FakeTranslator：找不到對應的原文');
     expect(offscreen).not.toContain('早安！今天好早喔');
+    // FakeEngine 與錄好的 OCR 結果（ADR 0007）
+    expect(offscreen).not.toContain('FakeEngine 認不出這是哪張合成頁');
+    expect(offscreen).not.toContain('おはよう');
   });
 
   it('不包含除錯記錄（debug build 才有）', async () => {

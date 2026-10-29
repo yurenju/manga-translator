@@ -4,6 +4,8 @@
  */
 import type { ModelStatus, PipelineConfig } from '../shared/messages.ts';
 import type { PageText } from '../shared/page-text.ts';
+import recordedOcr from '../../testdata/synthetic/recorded-ocr.json' with { type: 'json' };
+import { createFakeEngine, type RecordedOcr } from './fake-engine.ts';
 import { createKuromojiReading } from './kuromoji-reading.ts';
 import { MODEL_SETS, type ExecutionProvider } from './models/model-files.ts';
 import { createModelStore, MODEL_CACHE } from './models/model-store.ts';
@@ -50,6 +52,11 @@ export function createLocalPipeline({ onStatus, idleMs = IDLE_RELEASE_MS }: Loca
   }
 
   async function createEngine(): Promise<OrtEngine> {
+    if (__E2E__ && config.fakeOcr) {
+      const engine = await createFakeEngine(recordedOcr as unknown as RecordedOcr[], (id) => chrome.runtime.getURL(`synthetic/${id}.png`), config.fakeOcrDelayMs);
+      onStatus({ state: 'ready', executionProvider: engine.executionProvider, threads: engine.threads });
+      return engine;
+    }
     try {
       const preferred = config.executionProvider ?? (await detectExecutionProvider());
       let engine: OrtEngine;
@@ -99,7 +106,7 @@ export function createLocalPipeline({ onStatus, idleMs = IDLE_RELEASE_MS }: Loca
 
   return {
     analyze,
-    /** 只有 e2e 會改：模型下載來源、強制 wasm（spec 第 12 節：自動測試預設跑 wasm）。 */
+    /** 只有 e2e build 會改：模型下載來源、強制 wasm（spec 第 12 節：自動測試預設跑 wasm）、FakeEngine。 */
     configure(next: PipelineConfig) {
       config = next;
     },

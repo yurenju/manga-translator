@@ -1,6 +1,6 @@
 /**
  * 自動測試用的模型快取：放在 repo 外（~/.cache/naruhodo/models/<sha256>），每個 worktree 共用、不 commit。
- * 第一次跑時從 Hugging Face 的固定 revision 下載並驗證 SHA-256；之後 mock site 從這裡提供給外掛（e2e/mock-site/server.ts）。
+ * 第一次跑時從 Hugging Face 的固定 revision 下載並驗證 SHA-256；之後 mock site 從這裡提供給外掛（browser/mock-site/server.ts）。
  * 自動測試預設跑 wasm（spec #27 第 12 節），所以只準備 wasm 那一組（約 128 MB）。
  */
 import { createHash } from 'node:crypto';

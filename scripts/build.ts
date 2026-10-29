@@ -51,11 +51,14 @@ export async function overlayFontFiles(): Promise<string[]> {
   return [...new Set([...css.matchAll(/url\(\.\/files\/([^)]+\.woff2)\)/g)].map((m) => m[1]!))];
 }
 
-/** e2e build 才有：量 #7 指標用的流水線測試頁（e2e/ocr-accuracy.spec.ts）、覆蓋渲染測試頁（e2e/overlay-render.spec.ts）。 */
+/** e2e build 才有：量 #7 指標用的流水線測試頁（browser/ocr-accuracy.spec.ts）、覆蓋渲染測試頁（browser/overlay-render.spec.ts）。 */
 const E2E_STATIC_FILES: [string, string][] = [
   ['src/test-pipeline/test-pipeline.html', 'test-pipeline.html'],
   ['src/test-overlay/test-overlay.html', 'test-overlay.html'],
 ];
+
+/** e2e build 才有：FakeEngine 認頁用的合成圖（src/offscreen/fake-engine.ts）。 */
+const E2E_STATIC_DIRS: [string, string][] = [['testdata/synthetic/out', 'synthetic']];
 
 async function copyFonts(outDir: string): Promise<void> {
   await mkdir(join(outDir, 'fonts'), { recursive: true });
@@ -105,7 +108,7 @@ export async function build({ e2e, debug = false, outDir }: { e2e: boolean; debu
       await copyFile(join(root, from), join(outDir, to));
     }),
     copyFonts(outDir),
-    ...STATIC_DIRS.map(([from, to]) => cp(join(root, from), join(outDir, to), { recursive: true })),
+    ...[...STATIC_DIRS, ...(e2e ? E2E_STATIC_DIRS : [])].map(([from, to]) => cp(join(root, from), join(outDir, to), { recursive: true })),
     writeFile(join(outDir, 'manifest.json'), JSON.stringify(buildManifest({ e2e, debug }), null, 2)),
   ]);
 }

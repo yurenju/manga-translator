@@ -53,13 +53,16 @@ export async function launchWithExtension(
 }
 
 /**
- * e2e 的本機流水線設定：模型從 mock site 下載、強制 wasm；Playwright 平行開好幾個瀏覽器，
+ * 測試的本機流水線設定：模型從 mock site 下載、強制 wasm；Playwright 平行開好幾個瀏覽器，
  * 每個都開滿執行緒會互搶 CPU，讓不相干的測試（截圖、縮圖）逾時，所以限 2 條（仍可驗證多執行緒有開）。
+ * fakeOcr：browser test 用 FakeEngine 取代模型（ADR 0007）。
  */
-export const E2E_PIPELINE = (site: MockSite): PipelineConfig => ({
+export const E2E_PIPELINE = (site: MockSite, fakeOcr = false, fakeOcrDelayMs = 0): PipelineConfig => ({
   modelBaseUrl: site.modelBaseUrl,
   executionProvider: 'wasm',
   maxThreads: 2,
+  fakeOcr,
+  fakeOcrDelayMs,
 });
 
 /**
@@ -71,11 +74,18 @@ export async function configuredServiceWorker(
   site: MockSite,
   fakeTranslator = false,
   translatorOptions: Pick<TestConfig, 'requireApiKey' | 'unreadableTexts' | 'fakeNotes'> = {},
+  fakeOcr = false,
+  fakeOcrDelayMs = 0,
 ): Promise<Worker> {
   const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
-  const config: TestConfig = { pipeline: E2E_PIPELINE(site), fakeTranslator, ...translatorOptions };
+  const config: TestConfig = { pipeline: E2E_PIPELINE(site, fakeOcr, fakeOcrDelayMs), fakeTranslator, ...translatorOptions };
   await sw.evaluate((config) => globalThis.__configureForTest!(config), config);
   return sw;
+}
+
+/** playwright.config.ts／playwright.e2e.config.ts 的 use 設定的選項。 */
+export interface TestOptions {
+  fakeOcr: boolean;
 }
 
 export const test = base.extend<{
@@ -84,6 +94,10 @@ export const test = base.extend<{
    * devicePixelRatio，captureVisibleTab 的截圖仍是 1×，而且不能跟 viewport: null 一起用。
    */
   realDeviceScaleFactor: number | undefined;
+  /** 用 FakeEngine 取代 OCR 模型（ADR 0007）。browser test 的設定檔設成 true，e2e 與 smoke 用預設的 false。 */
+  fakeOcr: boolean;
+  /** FakeEngine 每頁故意花的時間：測佇列排程的測試需要 OCR 慢到翻頁時還沒做完。 */
+  fakeOcrDelayMs: number;
   /** 用 FakeTranslator（合成頁 ground truth 的讀音與譯文）；預設 false＝沒有 API key。 */
   fakeTranslator: boolean;
   /** 跟正式 build 一樣要先在設定區存 API key 才翻譯；預設 false＝FakeTranslator 不需要 key。 */
@@ -103,12 +117,14 @@ export const test = base.extend<{
     await use(context);
     await context.close();
   },
+  fakeOcr: [false, { option: true }],
+  fakeOcrDelayMs: [0, { option: true }],
   fakeTranslator: [false, { option: true }],
   requireApiKey: [false, { option: true }],
   unreadableTexts: [[], { option: true }],
   fakeNotes: [[], { option: true }],
-  sw: async ({ context, mockSite, fakeTranslator, requireApiKey, unreadableTexts, fakeNotes }, use) => {
-    await use(await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts, fakeNotes }));
+  sw: async ({ context, mockSite, fakeOcr, fakeOcrDelayMs, fakeTranslator, requireApiKey, unreadableTexts, fakeNotes }, use) => {
+    await use(await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts, fakeNotes }, fakeOcr, fakeOcrDelayMs));
   },
   extensionId: async ({ sw }, use) => {
     await use(new URL(sw.url()).host);

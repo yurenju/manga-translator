@@ -8,7 +8,9 @@ import { cropGray, readGray, readGroundTruth, type GtText } from '../src/testing
 import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
-test.use({ viewport: null, fakeTranslator: true });
+// OCR 幾乎不花時間時（FakeEngine），右頁上方的譯文有時往上偏約一個工具列的高度（工具列開關的測試每次都會）；
+// 每頁慢 3 秒（接近真 OCR）就不會。在查清楚之前，這個檔案用接近真實的速度跑
+test.use({ viewport: null, fakeTranslator: true, fakeOcrDelayMs: 3_000 });
 
 /** 第一次載入模型＋兩頁 OCR。 */
 const FIRST_SPREAD_TIMEOUT = 90_000;
@@ -52,7 +54,7 @@ async function overlaidTexts(page: Page, id: string): Promise<{ gt: GtText; rect
   });
 }
 
-/** ground truth 的 Balloon（Spread 原圖像素）換成畫面座標：合成圖是等比例縮放置中、周圍黑邊（e2e/mock-site/kindle.ts）。 */
+/** ground truth 的 Balloon（Spread 原圖像素）換成畫面座標：合成圖是等比例縮放置中、周圍黑邊（browser/mock-site/kindle.ts）。 */
 function balloonOnScreen(id: string, bbox: GtText['bbox'], img: KindleOverlay['img']): ScreenRect {
   const gt = readGroundTruth(id);
   const s = Math.min(img.naturalWidth / gt.width, img.naturalHeight / gt.height);
@@ -104,7 +106,7 @@ async function turnTo(page: Page, key: 'ArrowLeft' | 'ArrowRight', index: number
   await page.locator(`body[data-ready="true"][data-page-index="${index}"]`).waitFor();
 }
 
-test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先送出 LLM；祖先 transform 後仍對齊', async ({ context, sw, extensionId, mockSite }, testInfo) => {
+test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先送出 LLM；祖先 transform 後仍對齊', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
   test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
   await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
@@ -180,7 +182,7 @@ test('多張 img 輪流用（visibility 切換）：翻頁後藏起來的那張�
   await expectAligned(page, 'p08-action', '翻回來後');
 });
 
-/** 仿 Kindle 工具列上的文字（e2e/mock-site/kindle.ts）：截到工具列的話 OCR 會讀到。 */
+/** 仿 Kindle 工具列上的文字（browser/mock-site/kindle.ts）：截到工具列的話 OCR 會讀到。 */
 const TOOLBAR_TEXTS = ['ライブラリ', 'サンプル作品', '期間限定', '無料試し読み', 'ページ'];
 
 /** 送進 LLM 的原文（= OCR 讀到的）裡有沒有工具列上的文字。 */
@@ -213,7 +215,7 @@ for (const bg of ['black', 'white'] as const) {
   });
 }
 
-test('#55 工具列開了又收起：同一頁命中快取、不重翻', async ({ context, sw, extensionId, mockSite }) => {
+test('#55 工具列開了又收起：同一頁命中快取、不重翻', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }) => {
   test.setTimeout(FIRST_SPREAD_TIMEOUT + SPREAD_TIMEOUT);
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
   await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
