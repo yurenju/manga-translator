@@ -80,8 +80,27 @@ export function createActivation(deps: ActivationDeps) {
     deps.onStatusChanged(tabId, false);
   }
 
-  /** 對應 chrome.tabs.onUpdated 的 changeInfo。 */
-  async function handleTabUpdated(tabId: number, change: { url?: string; status?: string }): Promise<void> {
+  /** 每個 tab 正在處理的 onUpdated 事件，後到的排在它後面。 */
+  const tabUpdates = new Map<number, Promise<void>>();
+
+  /**
+   * 對應 chrome.tabs.onUpdated 的 changeInfo。
+   * Chrome 不等 listener 的 promise，同一個 tab 的事件要排隊：否則換 origin 那個還在清狀態時，
+   * 載入完成那個先讀到舊狀態，就把 content script 注入到新 origin。
+   */
+  function handleTabUpdated(tabId: number, change: { url?: string; status?: string }): Promise<void> {
+    // 前一個失敗也照樣處理這一個
+    const previous = tabUpdates.get(tabId)?.catch(() => {}) ?? Promise.resolve();
+    const next = previous.then(() => applyTabUpdate(tabId, change));
+    tabUpdates.set(tabId, next);
+    const forget = () => {
+      if (tabUpdates.get(tabId) === next) tabUpdates.delete(tabId);
+    };
+    next.then(forget, forget);
+    return next;
+  }
+
+  async function applyTabUpdate(tabId: number, change: { url?: string; status?: string }): Promise<void> {
     const state = await deps.store.get(tabId);
     if (!state) return;
     if (change.url !== undefined && new URL(change.url).origin !== state.origin) {

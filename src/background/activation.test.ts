@@ -147,6 +147,21 @@ describe('tab 生命週期', () => {
     ]);
   });
 
+  it('換 origin 的事件還沒處理完，載入完成的事件就到了，也不注入', async () => {
+    // Chrome 不等上一個 listener 的 promise，兩個 onUpdated 事件會同時在處理
+    const chrome = fakeChrome({ 1: JUMP });
+    const activation = createActivation(chrome.deps);
+    await activation.activate(1);
+
+    chrome.urls[1] = 'https://example.com/';
+    const urlChanged = activation.handleTabUpdated(1, { status: 'loading', url: chrome.urls[1] });
+    const loaded = activation.handleTabUpdated(1, { status: 'complete' });
+    await Promise.all([urlChanged, loaded]);
+
+    expect(await activation.isActive(1)).toBe(false);
+    expect(chrome.calls.injected).toEqual([1]);
+  });
+
   it('沒啟動的 tab 載入完成不注入', async () => {
     const chrome = fakeChrome({ 1: JUMP });
     const activation = createActivation(chrome.deps);
