@@ -4,9 +4,6 @@
 import type { Page } from '@playwright/test';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, openPanelMenu, test } from './fixtures.ts';
 
-/** 第一次載入模型（從 mock site 下載＋wasm 編譯）加上兩頁 OCR。 */
-const TRANSCRIPT_TIMEOUT = 60_000;
-
 /** Chrome side panel 能拉到的最窄寬度附近。 */
 const NARROW = { width: 320, height: 800 };
 
@@ -25,11 +22,8 @@ async function expectNoHorizontalScroll(panel: Page): Promise<void> {
 test.use({ fakeTranslator: true, viewport: null });
 
 test('窄寬度下 side panel 沒有水平捲軸', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await expect(panel.getByRole('status', { name: '翻譯狀態' }).filter({ hasText: /^已翻譯・/ })).toHaveCount(2, {
-    timeout: TRANSCRIPT_TIMEOUT,
-  });
+  await expect(panel.getByRole('status', { name: '翻譯狀態' }).filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
   // mock 網站的臨時名稱很短；真實網站的作品名與網域長得多，舊版的下拉選單縮不到比最長選項窄
   const footer = panel.getByRole('contentinfo', { name: '狀態列' });
   await footer.getByRole('button', { name: '改系列名稱' }).click();

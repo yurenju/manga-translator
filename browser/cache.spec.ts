@@ -13,9 +13,6 @@ import { activateOnJumpPlus, expect, readStore, testActivate, test } from './fix
 /** 跟 pages.spec.ts 一樣用真的視窗：截圖與 rect 才對得上。 */
 test.use({ viewport: null, fakeTranslator: true });
 
-/** 第一次載入模型（從 mock site 下載＋wasm 編譯）加上兩頁 OCR。 */
-const TRANSCRIPT_TIMEOUT = 60_000;
-
 const translateCalls = (sw: Worker) => sw.evaluate(() => globalThis.__translateCalls ?? 0);
 
 const statusLines = (panel: Page) => panel.getByRole('status', { name: '翻譯狀態' });
@@ -29,10 +26,9 @@ async function currentHashes(panel: Page, tabId: number): Promise<string[]> {
 }
 
 test('翻譯 → 重新整理 → 再啟動：直接用快取，FakeTranslator 沒有再被呼叫', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(TRANSCRIPT_TIMEOUT + 60_000);
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
-  await expect(statusLines(panel)).toHaveCount(2, { timeout: TRANSCRIPT_TIMEOUT });
+  await expect(statusLines(panel)).toHaveCount(2);
   await expect(statusLines(panel).first()).toHaveText(/^已翻譯・fake・0\.0 秒・\$0\.0000$/);
   const callsAfterFirst = await translateCalls(sw);
   expect(callsAfterFirst).toBe(2);
@@ -43,7 +39,7 @@ test('翻譯 → 重新整理 → 再啟動：直接用快取，FakeTranslator �
   await page.bringToFront();
   await testActivate(panel, tabId);
 
-  await expect(statusLines(panel).filter({ hasText: /^快取・/ })).toHaveCount(2, { timeout: 15_000 });
+  await expect(statusLines(panel).filter({ hasText: /^快取・/ })).toHaveCount(2);
   await expect(statusLines(panel).first()).toHaveText('快取・fake・0.0 秒・$0.0000');
   await expect(panel.getByRole('list', { name: '逐字稿' }).first().getByText('早安！今天好早喔')).toBeVisible();
   expect(await translateCalls(sw)).toBe(callsAfterFirst);
@@ -68,9 +64,8 @@ test('截圖（顯示寬 430 px）算出的 hash 跟 Node 對原始合成頁算�
 });
 
 test('沒有網址模式時建立 Provisional Series，快取寫在它的 ID 下；停止後再啟動是新的一個', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(TRANSCRIPT_TIMEOUT + 60_000);
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await expect(statusLines(panel)).toHaveCount(2, { timeout: TRANSCRIPT_TIMEOUT });
+  await expect(statusLines(panel)).toHaveCount(2);
 
   const series = await readStore<Series>(sw, 'series');
   expect(series).toHaveLength(1);
@@ -87,7 +82,7 @@ test('沒有網址模式時建立 Provisional Series，快取寫在它的 ID 下
   const callsBefore = await translateCalls(sw);
   await page.bringToFront();
   await testActivate(panel, tabId);
-  await expect(statusLines(panel).filter({ hasText: /^已翻譯・/ })).toHaveCount(2, { timeout: TRANSCRIPT_TIMEOUT });
+  await expect(statusLines(panel).filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
   expect(await translateCalls(sw)).toBe(callsBefore + 2);
   const after = await readStore<Series>(sw, 'series');
   expect(after).toHaveLength(2);

@@ -155,11 +155,18 @@ export async function tabIdOf(sw: Worker, url: string): Promise<number> {
 /**
  * 把 side panel 當一般分頁打開。給 tabId 就等同點圖示後打開的 tab 專屬 panel；
  * 不給就等同從 Chrome 內建 side panel 選單打開。
+ * 開在自己的視窗：跟頁面同一個視窗的話，頁面切回前景後 panel 是背景分頁，rAF 停掉，
+ * Playwright 每次 click 等元素穩定都要約 2 秒。真的 side panel 也跟頁面同時可見。
  */
 export async function openSidePanel(context: BrowserContext, extensionId: string, tabId?: number): Promise<Page> {
-  const panel = await context.newPage();
   const query = tabId === undefined ? '' : `?tabId=${tabId}`;
-  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html${query}`);
+  const url = `chrome-extension://${extensionId}/sidepanel.html${query}`;
+  const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+  const [panel] = await Promise.all([
+    context.waitForEvent('page'),
+    sw.evaluate((url) => chrome.windows.create({ url, focused: false }), url),
+  ]);
+  await panel.waitForURL(url);
   return panel;
 }
 
@@ -190,8 +197,8 @@ export async function chooseFromPanelMenu(panel: Page, item: string): Promise<vo
 
 /**
  * 打開仿 Jump+ 與它的 side panel，透過測試入口啟動，等 panel 顯示「已啟動」。
- * side panel 在這裡是另一個分頁，所以啟動前把仿 Jump+ 切回前景，跟真的點圖示時一樣是作用中 tab，
- * captureVisibleTab 才截得到它。
+ * 啟動前把仿 Jump+ 切到前景，跟真的點圖示時一樣是它視窗裡的作用中 tab，captureVisibleTab 才截得到它
+ * （同一個測試開第二個仿 Jump+ 時，兩個在同一個視窗）。
  */
 export async function activateOnJumpPlus(
   {
