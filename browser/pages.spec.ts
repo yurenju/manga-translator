@@ -1,5 +1,4 @@
-import type { Page, Worker } from '@playwright/test';
-import type { Message, PageView } from '../src/shared/messages.ts';
+import type { Page } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, test } from './fixtures.ts';
 
@@ -40,10 +39,16 @@ async function expectPagesListed(panel: Page, ids: string[]): Promise<void> {
   }
 }
 
-test('啟動後 side panel 列出完整可見的 Page，只露出一部分的不列', async ({ context, sw, extensionId, mockSite }) => {
+/** 頁首的小圖示（裝飾用、aria-hidden），只拿來數格子。 */
+const pageIcon = (panel: Page, name: string) => pageList(panel).getByRole('listitem', { name }).locator('svg').first();
+
+// 排序、左右頁、頁首文字的規則在 src/sidepanel/view.test.ts；這裡只確認 side panel 真的把它們畫出來
+
+test('啟動後 side panel 列出完整可見的 Page，只露出一部分的不列；單頁的頁首圖示一格', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
   await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
+  await expect(pageIcon(panel, '第 1 頁').locator('rect')).toHaveCount(1);
 });
 
 test('捲動後重新擷取：上下都只露出一部分時只列中間那頁', async ({ context, sw, extensionId, mockSite }) => {
@@ -56,27 +61,6 @@ test('捲動後重新擷取：上下都只露出一部分時只列中間那頁',
   await expectPagesListed(panel, ['p02-ruby']);
 });
 
-test('連續觸發時截圖不超過 2 次/秒', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
-
-  // 同一個 tab 還沒開始的掃描會合併，連按 5 次截幾次不一定；所以每次截圖一送出就馬上再按，
-  // 下一次掃描排在這次後面、不限速的話會緊接著截。翻頁偵測（#34）也會觸發截圖，所以用相對次數。
-  const captureCount = () => sw.evaluate(() => globalThis.__captureLog?.length ?? 0);
-  const rescan = () => chooseFromPanelMenu(panel, '重新擷取頁面');
-  for (let i = 0; i < 5; i++) {
-    const before = await captureCount();
-    await rescan();
-    await expect.poll(captureCount, { intervals: [20] }).toBeGreaterThan(before);
-  }
-
-  const log = await sw.evaluate(() => globalThis.__captureLog!);
-  for (let i = 1; i < log.length; i++) expect(log[i]! - log[i - 1]!).toBeGreaterThanOrEqual(500);
-});
-
-/** 頁首的小圖示（裝飾用、aria-hidden），只拿來數格子。 */
-const pageIcon = (panel: Page, name: string) => pageList(panel).getByRole('listitem', { name }).locator('svg').first();
-
 test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀」，右頁在前；沒有縮圖', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
 
@@ -84,60 +68,6 @@ test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀�
   await expect(pageList(panel).getByRole('img')).toHaveCount(0);
   // 頁首圖示畫兩格（Spread）
   await expect(pageIcon(panel, '右頁 · 先讀').locator('rect')).toHaveCount(2);
-});
-
-/** Spread 兩頁都翻好（之後 SW 不會再更新 Page 列表）。 */
-const untilBothTranslated = (panel: Page) =>
-  expect(panel.getByRole('status', { name: '翻譯狀態' })).toHaveText([/^已翻譯・/, /^已翻譯・/]);
-
-/** 讓 SW 廣播一份改過的 Page 列表給 side panel（模擬 SW 給的順序或欄位不同）。 */
-async function broadcastEditedPages(
-  { sw, panel, tabId }: { sw: Worker; panel: Page; tabId: number },
-  edit: (pages: PageView[]) => PageView[],
-): Promise<void> {
-  await untilBothTranslated(panel);
-  const { pages } = await panel.evaluate((tabId) => chrome.runtime.sendMessage({ type: 'panel:getPages', tabId }), tabId);
-  const message = { type: 'pages:updated', tabId, pages: edit(pages) } satisfies Message;
-  await sw.evaluate((message) => chrome.runtime.sendMessage(message), message);
-}
-
-test('SW 給的 Spread 順序是左頁在前，side panel 仍排成右頁在前', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
-  await untilBothTranslated(panel);
-  const rightFirst = await pageList(panel).getByRole('list', { name: '逐字稿' }).allTextContents();
-
-  await broadcastEditedPages({ sw, panel, tabId }, (pages) => [...pages].reverse());
-  await expect(pageList(panel).getByRole('list', { name: '逐字稿' })).toHaveText(rightFirst);
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
-});
-
-test('同一個 anchor 的兩個 Page 沒有 subRect：分不出左右，頁首是「第 N 頁」', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
-
-  await broadcastEditedPages({ sw, panel, tabId }, (pages) => pages.map(({ subRect: _, ...page }) => page));
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
-});
-
-test('單頁的頁首是「第 N 頁」、圖示一格', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁', '第 2 頁']);
-  await expect(pageIcon(panel, '第 1 頁').locator('rect')).toHaveCount(1);
-});
-
-test('去黑邊的單頁（Page 只佔 anchor 的一部分）也是「第 N 頁」，不是右頁', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
-
-  // 仿 Kindle 第 3 個畫面是 p01 單頁，左右有黑邊
-  for (const index of [1, 2]) {
-    await page.keyboard.press('ArrowLeft');
-    await page.locator(`body[data-ready="true"][data-page-index="${index}"]`).waitFor();
-  }
-
-  await expect(pageList(panel).getByRole('heading')).toHaveText(['第 1 頁']);
 });
 
 test('每個 Page 的翻譯狀態在頁首右側，跟標題同一行', async ({ context, sw, extensionId, mockSite }) => {

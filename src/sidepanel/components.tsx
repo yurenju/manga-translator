@@ -4,6 +4,7 @@
  */
 import type { ButtonHTMLAttributes, ComponentChildren, HTMLAttributes } from 'preact';
 import { useId, useState } from 'preact/hooks';
+import type { PageHeading } from './view.ts';
 
 const cx = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(' ');
 
@@ -184,27 +185,21 @@ function PageIcon({ side }: { side: SpreadSide | undefined }) {
 export function PageHeader({
   id,
   side,
-  number,
+  heading,
   status,
 }: {
   id: string;
   side: SpreadSide | undefined;
-  /** 不是 Spread 時標的頁數（從 1 起）。 */
-  number: number;
+  /** 頁首文字（view.ts 算好的）。 */
+  heading: PageHeading;
   status?: ComponentChildren;
 }) {
   return (
     <div class="naru-page-header">
       <PageIcon side={side} />
       <h2 id={id} class="naru-page-header__title">
-        {side === undefined ? (
-          `第 ${number} 頁`
-        ) : (
-          <>
-            {side === 'right' ? '右頁' : '左頁'}
-            <span class="naru-page-header__order"> · {side === 'right' ? '先讀' : '後讀'}</span>
-          </>
-        )}
+        {heading.title}
+        {heading.order && <span class="naru-page-header__order"> · {heading.order}</span>}
       </h2>
       {status && <div class="naru-page-header__status">{status}</div>}
     </div>
