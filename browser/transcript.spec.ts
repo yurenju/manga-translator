@@ -127,7 +127,8 @@ test.describe('FakeTranslator', () => {
   });
 });
 
-test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就能用', async ({ context, sw, extensionId, mockSite }) => {
+test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就能用', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite, fakeOcr }) => {
+  test.skip(fakeOcr, '需要真的模型，只在 e2e 跑');
   test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
   mockSite.corruptModel('onnx/decoder_model_quantized.onnx');
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
@@ -144,7 +145,8 @@ test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就�
   await expect(panel.getByRole('alert')).toHaveCount(0);
 });
 
-test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器後不再下載', async () => {
+test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器後不再下載', { tag: '@e2e' }, async ({ fakeOcr }) => {
+  test.skip(fakeOcr, '需要真的模型，只在 e2e 跑');
   test.setTimeout(2 * TRANSCRIPT_TIMEOUT + 30_000);
   const userDataDir = await mkdtemp(join(tmpdir(), 'manga-profile-'));
   const site = await startMockSite();

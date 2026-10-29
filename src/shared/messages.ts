@@ -258,6 +258,10 @@ export interface PipelineConfig {
   executionProvider?: ExecutionProvider;
   /** wasm 執行緒上限；e2e 平行跑好幾個瀏覽器時避免互搶 CPU。 */
   maxThreads?: number;
+  /** browser test：用 FakeEngine（合成頁的 ground truth）取代模型，不下載也不跑 ONNX（ADR 0007）。 */
+  fakeOcr?: boolean;
+  /** FakeEngine 每頁故意花的時間（測佇列排程時模擬 OCR 很慢）。 */
+  fakeOcrDelayMs?: number;
 }
 
 export interface AnalyzeRequest {

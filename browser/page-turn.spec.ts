@@ -49,7 +49,7 @@ async function visibleHashes(panel: Page, tabId: number): Promise<string[]> {
 
 const samePage = (a: string, b: string) => hammingDistance(a, b) <= SAME_PAGE_MAX_DISTANCE;
 
-test('翻頁後新 Page 自動翻譯並覆蓋；翻回來命中快取', async ({ context, sw, extensionId, mockSite }) => {
+test('翻頁後新 Page 自動翻譯並覆蓋；翻回來命中快取', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }) => {
   test.setTimeout(FIRST_PAGE_TIMEOUT + 2 * PAGE_TIMEOUT);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
 
@@ -73,38 +73,43 @@ test('翻頁後新 Page 自動翻譯並覆蓋；翻回來命中快取', async ({
   expect(await captureCount(sw)).toBeLessThanOrEqual(settled + 1);
 });
 
-test('快速連翻多頁：最後停下的那頁先做，中間翻過去還沒開始的丟掉', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_PAGE_TIMEOUT + 2 * PAGE_TIMEOUT);
-  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
-  // 第 1 頁開始跑本機流水線（第一次要載入模型，會跑一陣子）
-  await expect.poll(async () => (await jobLog(sw)).some((e) => e.event === 'start')).toBe(true);
+test.describe('OCR 比翻頁慢', () => {
+  // FakeEngine 幾乎不花時間，中間的頁會在被丟掉之前就做完；每頁 5 秒，比連翻三頁（約 3.6 秒）久
+  test.use({ fakeOcrDelayMs: 5_000 });
 
-  // 每次停一下，讓 debounce＋截圖跟得上（中間的頁都會被擷取、排進佇列）
-  for (let i = 0; i < 3; i++) {
-    await nextPage(page);
-    await page.waitForTimeout(1_200);
-  }
-  await expect(page.locator('body')).toHaveAttribute('data-page-index', '3');
+  test('快速連翻多頁：最後停下的那頁先做，中間翻過去還沒開始的丟掉', async ({ context, sw, extensionId, mockSite }) => {
+    test.setTimeout(FIRST_PAGE_TIMEOUT + 2 * PAGE_TIMEOUT);
+    const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+    // 第 1 頁開始跑本機流水線（第一次要載入模型，會跑一陣子）
+    await expect.poll(async () => (await jobLog(sw)).some((e) => e.event === 'start')).toBe(true);
 
-  await expectOverlaid(page, 3, FIRST_PAGE_TIMEOUT);
-  const [finalHash] = await visibleHashes(panel, tabId);
-  const log = await jobLog(sw);
-  console.log(
-    '佇列事件',
-    log.map((e) => `${e.event}:${e.pageHash.slice(0, 6)}`),
-  );
-  const finalEnqueued = log.findIndex((e) => e.event === 'enqueue' && samePage(e.pageHash, finalHash!));
-  expect(finalEnqueued).toBeGreaterThanOrEqual(0);
-  // 最後那頁排進去之後，第一個開始的就是它
-  const nextStart = log.slice(finalEnqueued).find((e) => e.event === 'start');
-  expect(samePage(nextStart!.pageHash, finalHash!)).toBe(true);
-  // 中間翻過去的頁（第 2、3 頁）在最後那頁做完之前都沒有做完
-  const finalDone = log.findIndex((e) => e.event === 'done' && samePage(e.pageHash, finalHash!));
-  const firstStarted = log.find((e) => e.event === 'start')!.pageHash;
-  const middleDoneBefore = log
-    .slice(0, finalDone)
-    .filter((e) => e.event === 'done' && !samePage(e.pageHash, firstStarted) && !samePage(e.pageHash, finalHash!));
-  expect(middleDoneBefore).toEqual([]);
+    // 每次停一下，讓 debounce＋截圖跟得上（中間的頁都會被擷取、排進佇列）
+    for (let i = 0; i < 3; i++) {
+      await nextPage(page);
+      await page.waitForTimeout(1_200);
+    }
+    await expect(page.locator('body')).toHaveAttribute('data-page-index', '3');
+
+    await expectOverlaid(page, 3, FIRST_PAGE_TIMEOUT);
+    const [finalHash] = await visibleHashes(panel, tabId);
+    const log = await jobLog(sw);
+    console.log(
+      '佇列事件',
+      log.map((e) => `${e.event}:${e.pageHash.slice(0, 6)}`),
+    );
+    const finalEnqueued = log.findIndex((e) => e.event === 'enqueue' && samePage(e.pageHash, finalHash!));
+    expect(finalEnqueued).toBeGreaterThanOrEqual(0);
+    // 最後那頁排進去之後，第一個開始的就是它
+    const nextStart = log.slice(finalEnqueued).find((e) => e.event === 'start');
+    expect(samePage(nextStart!.pageHash, finalHash!)).toBe(true);
+    // 中間翻過去的頁（第 2、3 頁）在最後那頁做完之前都沒有做完
+    const finalDone = log.findIndex((e) => e.event === 'done' && samePage(e.pageHash, finalHash!));
+    const firstStarted = log.find((e) => e.event === 'start')!.pageHash;
+    const middleDoneBefore = log
+      .slice(0, finalDone)
+      .filter((e) => e.event === 'done' && !samePage(e.pageHash, firstStarted) && !samePage(e.pageHash, finalHash!));
+    expect(middleDoneBefore).toEqual([]);
+  });
 });
 
 test('關掉自動翻譯後翻頁不會翻譯，按「翻譯此頁」才翻', async ({ context, sw, extensionId, mockSite }) => {

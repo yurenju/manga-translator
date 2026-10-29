@@ -15,7 +15,7 @@ const OVERLAY_TIMEOUT = 60_000;
 /** 偵測框與 ground truth 框的差距（畫面 px）。 */
 const TOLERANCE = 4;
 
-/** 仿 Jump+ 的頁面順序（e2e/mock-site/jumpplus.ts）。 */
+/** 仿 Jump+ 的頁面順序（browser/mock-site/jumpplus.ts）。 */
 const PAGES = ['p01-basic', 'p02-ruby', 'p03-shapes', 'p04-outside', 'p05-dense', 'p06-horizontal'];
 
 const normalize = (s: string) => s.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '');
@@ -80,7 +80,7 @@ async function expectAligned(page: Page, label: string): Promise<void> {
 const hostVisibility = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-naruhodo-overlay]')].map((h) => getComputedStyle(h).visibility));
 
-test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；Page Mode 切到學習時頁面沒有譯文',async ({ context, sw, extensionId, mockSite }, testInfo) => {
+test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；Page Mode 切到學習時頁面沒有譯文', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
   test.setTimeout(OVERLAY_TIMEOUT + 60_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await waitForOverlay(page);

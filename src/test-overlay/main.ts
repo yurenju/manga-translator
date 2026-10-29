@@ -1,4 +1,4 @@
-// e2e build 才有（spec #27 第 12 節第 2 層）：把合成頁的 ground truth 直接畫成覆蓋層，量譯文的 rect（e2e/overlay-render.spec.ts）。
+// e2e build 才有（spec #27 第 12 節第 2 層）：把合成頁的 ground truth 直接畫成覆蓋層，量譯文的 rect（browser/overlay-render.spec.ts）。
 // 跟 content script 用同一個 createOverlay 與字型載入器；這裡是外掛頁面，fetch 字型不需要 web_accessible_resources。
 import type { PageMode } from '../shared/page-mode.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';

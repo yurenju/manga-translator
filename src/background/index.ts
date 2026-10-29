@@ -42,7 +42,7 @@ declare global {
   var __captureLog: number[] | undefined;
   /** e2e build 才有：最近 3 張截圖（data URL），給測試確認截圖裡沒有覆蓋層。 */
   var __captures: string[] | undefined;
-  /** e2e build 才有：在建立任何 Page 之前呼叫（e2e/fixtures.ts）。 */
+  /** e2e build 才有：在建立任何 Page 之前呼叫（browser/fixtures.ts）。 */
   var __configureForTest: ((config: TestConfig) => void) | undefined;
   /** e2e build 才有：FakeTranslator 被呼叫的次數（確認命中快取時沒有翻譯）。 */
   var __translateCalls: number | undefined;

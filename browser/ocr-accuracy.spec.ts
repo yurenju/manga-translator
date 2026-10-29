@@ -16,7 +16,8 @@ const BASELINE = { recallOverlay: 1, ja: 0.9782798833819243, orderPairwise: 0.97
 
 const SYNTHETIC = new URL('../testdata/synthetic/out/', import.meta.url);
 
-test('合成頁上 Balloon 召回率、原文正確率、閱讀順序正確率不低於 #7', async ({ context, extensionId, mockSite }) => {
+test('合成頁上 Balloon 召回率、原文正確率、閱讀順序正確率不低於 #7', { tag: '@e2e' }, async ({ context, extensionId, mockSite, fakeOcr }) => {
+  test.skip(fakeOcr, '需要真的模型，只在 e2e 跑');
   test.setTimeout(5 * 60_000);
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/test-pipeline.html`);

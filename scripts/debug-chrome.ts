@@ -82,7 +82,7 @@ async function isListening(port: number): Promise<boolean> {
 
 async function launchChrome({ chrome, profile, port, loadExtension }: { chrome: string; profile: string; port: number; loadExtension: boolean }) {
   const args = [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check'];
-  // 跟 e2e/fixtures.ts 一樣兩個都要帶，Chromium 才會載入
+  // 跟 browser/fixtures.ts 一樣兩個都要帶，Chromium 才會載入
   if (loadExtension) args.push(`--disable-extensions-except=${EXTENSION_DIR}`, `--load-extension=${EXTENSION_DIR}`);
   // detached：錄製腳本結束（Ctrl+C）時 Chrome 繼續開著
   spawn(chrome, args, { detached: true, stdio: 'ignore' }).unref();
