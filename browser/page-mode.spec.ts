@@ -1,6 +1,7 @@
 /**
  * #73 Page Mode（閱讀／學習）：全域記住，學習時頁面保留日文原稿。OCR 用 FakeEngine 重播（ADR 0007），譯文來自 FakeTranslator。
  * 頁面上的內容與 hover 在 overlay.spec.ts、learning.spec.ts；這裡是記住設定、學習時認頁。
+ * 認頁與快取命中的規則在 page-hash 與 transcribe 的 unit。
  */
 import type { Page, Worker } from '@playwright/test';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test, testActivate } from './fixtures.ts';
@@ -38,14 +39,13 @@ test('Page Mode 在重開 side panel、新分頁啟動後沿用', async ({ conte
   await expect(shownTranslations(first.page)).not.toHaveCount(0);
 });
 
-test('學習時重新擷取同一頁不會重翻；翻頁後翻新的一頁、翻回來命中快取', async ({ context, sw, extensionId, mockSite }) => {
+test('學習時重新擷取：頁面上沒蓋東西的截圖也認得是同一頁，不重翻', async ({ context, sw, extensionId, mockSite }) => {
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
   await expect(statusLines(panel)).toHaveText([/^已翻譯・/]);
   await pageMode(panel, '學習').click();
   await expect(shownTranslations(page)).toHaveCount(0);
   expect(await translateCalls(sw)).toBe(1);
 
-  // 重新擷取：頁面上沒蓋東西，截到原稿也認得出同一頁
   const captures = await captureCount(sw);
   await chooseFromPanelMenu(panel, '重新擷取頁面');
   await expect.poll(() => captureCount(sw)).toBeGreaterThan(captures);
@@ -53,16 +53,6 @@ test('學習時重新擷取同一頁不會重翻；翻頁後翻新的一頁、�
   await page.waitForTimeout(1_000);
   expect(await translateCalls(sw)).toBe(1);
   await expect(statusLines(panel)).toHaveText([/^已翻譯・/]);
-
-  // 翻頁（← 是下一頁）：新的一頁照常翻譯；翻回來命中快取
-  await page.bringToFront();
-  await page.keyboard.press('ArrowLeft');
-  await expect.poll(() => translateCalls(sw)).toBe(2);
-  await expect(statusLines(panel)).toHaveText([/^已翻譯・/]);
-  await page.keyboard.press('ArrowRight');
-  await expect(statusLines(panel)).toHaveText([/^快取・/]);
-  expect(await translateCalls(sw)).toBe(2);
-  await expect(shownTranslations(page)).toHaveCount(0);
 });
 
 test('學習時重新整理再啟動（快取命中）：頁面上從頭到尾沒出現過譯文', async ({ context, sw, extensionId, mockSite }) => {

@@ -2,10 +2,10 @@
  * #35：仿 Kindle（整個 viewport 一張 blob img，Spread＋黑邊，翻頁換 src）。OCR 用 FakeEngine 重播
  * （ADR 0007；@e2e 那幾條在 e2e 跑真模型），譯文來自 FakeTranslator。
  * 外掛要去黑邊、從中縫切成兩個 Page，兩頁共用同一個 anchor 與 shadow host。
+ * Spread 右頁先送出 LLM 的規則在 transcribe 的 unit。
  */
 import type { Page, Worker } from '@playwright/test';
-import { hammingDistance, pageHash, SAME_PAGE_MAX_DISTANCE } from '../src/shared/page-hash.ts';
-import { cropGray, readGray, readGroundTruth, type GtText } from '../src/testing/synthetic.ts';
+import { readGroundTruth, type GtText } from '../src/testing/synthetic.ts';
 import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
@@ -88,20 +88,12 @@ async function expectAligned(page: Page, id: string, label: string): Promise<voi
   expect([...new Set(texts.map((t) => t.gt.page))].sort(), label).toEqual(overlayPages(id));
 }
 
-const jobLog = (sw: Worker) => sw.evaluate(() => globalThis.__jobLog ?? []);
-
-/** ground truth 單頁（原圖裁切）的 hash，依閱讀順序（0＝右頁）。 */
-function groundTruthHashes(id: string): string[] {
-  const image = readGray(id);
-  return readGroundTruth(id).pages.map((p) => pageHash(cropGray(image, p.bbox)));
-}
-
 async function turnTo(page: Page, key: 'ArrowLeft' | 'ArrowRight', index: number): Promise<void> {
   await page.keyboard.press(key);
   await page.locator(`body[data-ready="true"][data-page-index="${index}"]`).waitFor();
 }
 
-test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先送出 LLM；祖先 transform 後仍對齊', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
+test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內；祖先 transform 後仍對齊', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
   await waitForOverlay(page, 'p07-spread');
   await expectAligned(page, 'p07-spread', '剛覆蓋');
@@ -110,12 +102,6 @@ test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先�
   const shot = testInfo.outputPath('kindle-spread.png');
   await page.screenshot({ path: shot });
   await testInfo.attach('kindle-spread', { path: shot, contentType: 'image/png' });
-
-  // 送出 LLM 的順序：先右頁再左頁（hash 對 ground truth 的單頁）
-  const [right, left] = groundTruthHashes('p07-spread');
-  const llm = (await jobLog(sw)).filter((e) => e.event === 'llm').map((e) => e.pageHash);
-  const order = llm.map((h) => (hammingDistance(h, right!) <= SAME_PAGE_MAX_DISTANCE ? 'right' : hammingDistance(h, left!) <= SAME_PAGE_MAX_DISTANCE ? 'left' : 'other'));
-  expect(order).toEqual(['right', 'left']);
 
   // 仿 Kindle 縮放／拖曳：祖先元素的 transform（縮小，img 仍完整在畫面內）
   await page.evaluate(() => {
