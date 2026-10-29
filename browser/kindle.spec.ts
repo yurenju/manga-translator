@@ -1,6 +1,7 @@
 /**
- * #35：仿 Kindle（整個 viewport 一張 blob img，Spread＋黑邊，翻頁換 src）。偵測＋OCR 是真的（wasm），
- * 譯文來自 FakeTranslator。外掛要去黑邊、從中縫切成兩個 Page，兩頁共用同一個 anchor 與 shadow host。
+ * #35：仿 Kindle（整個 viewport 一張 blob img，Spread＋黑邊，翻頁換 src）。OCR 用 FakeEngine 重播
+ * （ADR 0007；@e2e 那幾條在 e2e 跑真模型），譯文來自 FakeTranslator。
+ * 外掛要去黑邊、從中縫切成兩個 Page，兩頁共用同一個 anchor 與 shadow host。
  */
 import type { Page, Worker } from '@playwright/test';
 import { hammingDistance, pageHash, SAME_PAGE_MAX_DISTANCE } from '../src/shared/page-hash.ts';
@@ -10,10 +11,6 @@ import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
 
-/** 第一次載入模型＋兩頁 OCR。 */
-const FIRST_SPREAD_TIMEOUT = 90_000;
-/** 模型已載入後的一個 Spread。 */
-const SPREAD_TIMEOUT = 60_000;
 /** 偵測框與 ground truth 框的差距（畫面 px）。 */
 const TOLERANCE = 4;
 
@@ -70,9 +67,9 @@ const OVERLAY_KINDS = new Set<GtText['kind']>(['balloon', 'thought', 'narration'
 const overlayPages = (id: string) => [...new Set(readGroundTruth(id).texts.filter((t) => OVERLAY_KINDS.has(t.kind)).map((t) => t.page))].sort();
 
 /** 有東西可蓋的每一頁都至少有一句譯文蓋上了。 */
-async function waitForOverlay(page: Page, id: string, timeout: number): Promise<void> {
+async function waitForOverlay(page: Page, id: string): Promise<void> {
   await expect
-    .poll(async () => [...new Set((await overlaidTexts(page, id)).map((t) => t.gt.page))].sort(), { timeout })
+    .poll(async () => [...new Set((await overlaidTexts(page, id)).map((t) => t.gt.page))].sort())
     .toEqual(overlayPages(id));
 }
 
@@ -105,9 +102,8 @@ async function turnTo(page: Page, key: 'ArrowLeft' | 'ArrowRight', index: number
 }
 
 test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先送出 LLM；祖先 transform 後仍對齊', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
-  test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
-  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p07-spread');
   await expectAligned(page, 'p07-spread', '剛覆蓋');
   // 兩頁共用同一個 anchor 的 shadow host
   expect(await overlayHostCount(page)).toBe(1);
@@ -129,14 +125,13 @@ test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內，右頁先�
 });
 
 test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中快取；重繪後 host 自動掛回', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_SPREAD_TIMEOUT + 2 * SPREAD_TIMEOUT);
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
-  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p07-spread');
 
   await turnTo(page, 'ArrowLeft', 1);
   // 舊的 p07 譯文不能留在新的圖上
   await expect.poll(async () => (await overlaidTexts(page, 'p07-spread')).length).toBe(0);
-  await waitForOverlay(page, 'p08-action', SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p08-action');
   await expectAligned(page, 'p08-action', '翻頁後');
   // p08 的兩頁都翻了（右頁沒有 Balloon，但一樣送出 LLM）
   await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(4);
@@ -144,7 +139,7 @@ test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中�
 
   // 翻回來：同一個 img 又換 src，p07 從記住的結果重新覆蓋，不重翻
   await turnTo(page, 'ArrowRight', 0);
-  await waitForOverlay(page, 'p07-spread', SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p07-spread');
   expect((await overlaidTexts(page, 'p08-action')).length).toBe(0);
   expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(translateCalls);
 
@@ -158,23 +153,22 @@ test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中�
 });
 
 test('多張 img 輪流用（visibility 切換）：翻頁後藏起來的那張上的舊譯文看不到，來回翻都只有目前的 Spread', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_SPREAD_TIMEOUT + 3 * SPREAD_TIMEOUT);
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.kindleUrl}?buffers=3` });
-  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p07-spread');
 
   await turnTo(page, 'ArrowLeft', 1);
-  await waitForOverlay(page, 'p08-action', SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p08-action');
   expect((await overlaidTexts(page, 'p07-spread')).length, '翻到 p08 後還看得到 p07 的譯文').toBe(0);
   await expectAligned(page, 'p08-action', '翻頁後');
 
   await turnTo(page, 'ArrowLeft', 2);
-  await waitForOverlay(page, 'p01-basic', SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p01-basic');
   expect((await overlaidTexts(page, 'p07-spread')).length, '翻到 p01 後還看得到 p07 的譯文').toBe(0);
   expect((await overlaidTexts(page, 'p08-action')).length, '翻到 p01 後還看得到 p08 的譯文').toBe(0);
 
   // 翻回來：p08 畫進又一張 img，從記住的結果重新覆蓋
   await turnTo(page, 'ArrowRight', 1);
-  await waitForOverlay(page, 'p08-action', SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p08-action');
   expect((await overlaidTexts(page, 'p01-basic')).length, '翻回 p08 後還看得到 p01 的譯文').toBe(0);
   expect((await overlaidTexts(page, 'p07-spread')).length, '翻回 p08 後還看得到 p07 的譯文').toBe(0);
   await expectAligned(page, 'p08-action', '翻回來後');
@@ -199,11 +193,10 @@ const captureCount = (sw: Worker) => sw.evaluate(() => globalThis.__captureLog?.
 
 for (const bg of ['black', 'white'] as const) {
   test(`#59 工具列蓋住頁面（${bg === 'black' ? '黑底' : '白底'}）：開著也翻，截圖前藏起工具列，譯文落在 Balloon 內`, async ({ context, sw, extensionId, mockSite }) => {
-    test.setTimeout(FIRST_SPREAD_TIMEOUT + 30_000);
     const url = `${mockSite.kindleUrl}?toolbar=shown&bg=${bg}`;
     const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url });
 
-    await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+    await waitForOverlay(page, 'p07-spread');
     await expectAligned(page, 'p07-spread', `工具列開著（${bg}）`);
     expect(await page.locator('#chrome').evaluate((el) => !el.classList.contains('hidden'))).toBe(true);
     // 截到的 Page 裡沒有工具列：OCR 沒讀到工具列上的字
@@ -214,9 +207,8 @@ for (const bg of ['black', 'white'] as const) {
 }
 
 test('#55 工具列開了又收起：同一頁命中快取、不重翻', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_SPREAD_TIMEOUT + SPREAD_TIMEOUT);
   const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
-  await waitForOverlay(page, 'p07-spread', FIRST_SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p07-spread');
   await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
 
   // 點擊會觸發掃描：工具列開著時截的圖（藏起工具列）跟收起時一樣，hash 認得出同一頁
@@ -225,7 +217,7 @@ test('#55 工具列開了又收起：同一頁命中快取、不重翻', { tag: 
   await expect.poll(() => captureCount(sw)).toBeGreaterThan(captures);
   await toggleToolbar(page);
   await page.locator('#chrome.hidden').waitFor({ state: 'attached' });
-  await waitForOverlay(page, 'p07-spread', SPREAD_TIMEOUT);
+  await waitForOverlay(page, 'p07-spread');
   await expectAligned(page, 'p07-spread', '工具列收起後');
   expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
   expect(await toolbarTextsSent(sw)).toEqual([]);

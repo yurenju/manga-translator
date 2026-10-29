@@ -1,6 +1,7 @@
 /**
- * #30：本機偵測＋OCR → side panel 逐字稿。模型從 mock site 下載（內容是 repo 外的模型快取），強制 wasm。
- * 仿 Jump+ 的頁面顯示寬 430 px，截圖裡的 Page 只有原圖約一半大，OCR 會比第 2 層（原圖）差一些，
+ * #30：本機偵測＋OCR → side panel 逐字稿。OCR 用 FakeEngine 重播（ADR 0007）；只對真模型有意義的（模型下載、
+ * SHA-256 檢查）標 @e2e、在 browser test 跳過，e2e 從 mock site 下載模型（內容是 repo 外的模型快取）、強制 wasm。
+ * 仿 Jump+ 的頁面顯示寬 430 px，截圖裡的 Page 只有原圖約一半大，重播的是真模型在這種截圖上的結果，
  * 所以這裡用相似度把每一行對回 ground truth，而不是要求逐字相同。
  */
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -20,9 +21,6 @@ import { startMockSite } from './mock-site/server.ts';
 
 /** 跟 pages.spec.ts 一樣用真的視窗：截圖與 rect 才對得上。第 1、2 頁完整可見。 */
 test.use({ viewport: null });
-
-/** 第一次載入模型（從 mock site 下載＋wasm 編譯）加上兩頁 OCR。 */
-const TRANSCRIPT_TIMEOUT = 60_000;
 
 const normalize = (s: string) => s.normalize('NFKC').replace(/\s/g, '');
 
@@ -72,11 +70,10 @@ async function lines(transcript: Locator) {
 
 test.describe('沒有 API key', () => {
   test('side panel 依閱讀順序顯示原文＋讀音＋「未翻譯」，Loose Text 標「框外文字」',async ({ context, sw, extensionId, mockSite }) => {
-    test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
     const first = transcriptOf(panel, 0);
-    await expect(first.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+    await expect(first.getByRole('listitem').first()).toBeVisible();
     const p01 = await lines(first);
     const p01Gt = readGroundTruth('p01-basic').texts;
     const matched = matchGroundTruth(p01.map((l) => l.original), p01Gt);
@@ -94,7 +91,7 @@ test.describe('沒有 API key', () => {
 
     // p02 的旁白「潮見坂高校 4月12日」在 Balloon 外，是 Loose Text
     const second = transcriptOf(panel, 1);
-    await expect(second.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+    await expect(second.getByRole('listitem').first()).toBeVisible();
     const p02 = await lines(second);
     console.log('p02 逐字稿', p02.map((l) => `[${l.loose ? '框外文字' : 'balloon'}] ${l.original}`).join(' / '));
     const narration = p02.find((l) => similarity(l.original, '潮見坂高校4月12日') >= 0.5);
@@ -112,11 +109,10 @@ test.describe('FakeTranslator', () => {
   test.use({ fakeTranslator: true });
 
   test('side panel 顯示譯文', async ({ context, sw, extensionId, mockSite }) => {
-    test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
     const first = transcriptOf(panel, 0);
-    await expect(first.getByText('早安！今天好早喔')).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+    await expect(first.getByText('早安！今天好早喔')).toBeVisible();
     const p01 = await lines(first);
     console.log('p01 譯文', p01.map((l) => `${l.original} → ${l.translation}（${l.reading}）`).join(' / '));
     const zh = new Set(readGroundTruth('p01-basic').texts.map((t) => t.zh));
@@ -129,11 +125,10 @@ test.describe('FakeTranslator', () => {
 
 test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就能用', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite, fakeOcr }) => {
   test.skip(fakeOcr, '需要真的模型，只在 e2e 跑');
-  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
   mockSite.corruptModel('onnx/decoder_model_quantized.onnx');
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
 
-  await expect(panel.getByRole('alert')).toContainText('SHA-256 不符', { timeout: TRANSCRIPT_TIMEOUT });
+  await expect(panel.getByRole('alert')).toContainText('SHA-256 不符');
   await expect(panel.getByRole('alert')).toContainText('decoder_model_quantized.onnx');
   await expect(panel.getByText('辨識失敗').first()).toBeVisible();
   await expect(panel.getByRole('list', { name: '逐字稿' })).toHaveCount(0);
@@ -141,13 +136,12 @@ test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就�
   mockSite.repairModels();
   // 重試會重新擷取：仿 Jump+ 維持在前景（跟真的 side panel 一樣），才截得到它
   await panel.getByRole('button', { name: '重試' }).click();
-  await expect(transcriptOf(panel, 0).getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+  await expect(transcriptOf(panel, 0).getByRole('listitem').first()).toBeVisible();
   await expect(panel.getByRole('alert')).toHaveCount(0);
 });
 
 test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器後不再下載', { tag: '@e2e' }, async ({ fakeOcr }) => {
   test.skip(fakeOcr, '需要真的模型，只在 e2e 跑');
-  test.setTimeout(2 * TRANSCRIPT_TIMEOUT + 30_000);
   const userDataDir = await mkdtemp(join(tmpdir(), 'manga-profile-'));
   const site = await startMockSite();
   try {
@@ -156,7 +150,7 @@ test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器�
     let sw = await configuredServiceWorker(context, site);
     let extensionId = new URL(sw.url()).host;
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite: site, beforeActivate: recordModelStatus });
-    await expect(transcriptOf(panel, 0).getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+    await expect(transcriptOf(panel, 0).getByRole('listitem').first()).toBeVisible();
     const firstRequests = site.modelRequests.length;
     expect(firstRequests).toBe(4); // detector、encoder、decoder、vocab
     const statuses = await panel.evaluate(() => (globalThis as unknown as { __statuses: ModelStatus[] }).__statuses);
@@ -178,7 +172,7 @@ test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器�
     sw = await configuredServiceWorker(context, site);
     extensionId = new URL(sw.url()).host;
     const second = await activateOnJumpPlus({ context, sw, extensionId, mockSite: site });
-    await expect(transcriptOf(second.panel, 0).getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+    await expect(transcriptOf(second.panel, 0).getByRole('listitem').first()).toBeVisible();
     expect(site.modelRequests.length).toBe(firstRequests);
     await context.close();
   } finally {

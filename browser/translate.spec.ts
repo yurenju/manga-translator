@@ -8,7 +8,6 @@ import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test } 
 
 test.use({ viewport: null, fakeTranslator: true, requireApiKey: true, unreadableTexts: ['もちろん！'] });
 
-const TRANSCRIPT_TIMEOUT = 60_000;
 const FAKE_KEY = 'sk-ant-e2e-not-a-real-key-WXYZ';
 
 const firstTranscript = (panel: Page) =>
@@ -63,13 +62,12 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   extensionId,
   mockSite,
 }) => {
-  test.setTimeout(TRANSCRIPT_TIMEOUT + 30_000);
   const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, beforeActivate: recordPanelMessages });
   await recordContentMessages(sw, tabId);
 
   // 還沒有 key：原文＋kuromoji 讀音、未翻譯
   const transcript = firstTranscript(panel);
-  await expect(transcript.getByRole('listitem').first()).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+  await expect(transcript.getByRole('listitem').first()).toBeVisible();
   await expect(transcript.getByText('未翻譯').first()).toBeVisible();
   await expect(panel.getByText('尚未設定 API key')).toBeVisible();
   // 第一次打開就先說明資料會送到 Anthropic（Web Store 的 prominent disclosure）
@@ -93,6 +91,7 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   // 有 key 但還沒同意：按「翻譯此頁」也不送出
   await panel.getByRole('button', { name: '翻譯此頁' }).click();
   await expect(transcript.getByText('未翻譯').first()).toBeVisible();
+  // 斷言「沒有送出」：等一段時間確認 FakeTranslator 沒被呼叫
   await panel.waitForTimeout(1000);
   expect(await sw.evaluate(() => globalThis.__translateCalls)).toBe(0);
 
@@ -100,7 +99,7 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await consent.getByRole('button', { name: '同意並啟用翻譯' }).click();
   await expect(consent).toHaveCount(0);
   await panel.getByRole('button', { name: '翻譯此頁' }).click();
-  await expect(transcript.getByText('早安！今天好早喔')).toBeVisible({ timeout: TRANSCRIPT_TIMEOUT });
+  await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
   // 讀音換成 Translator 的整句讀音（おはよう！きょうははやいね），以ルビ對齊回漢字
   await expect(transcript.getByRole('listitem').filter({ hasText: '早安！今天好早喔' }).locator('rt')).toHaveText(['きょう', 'はや']);
   const status = panel.getByRole('contentinfo', { name: '狀態列' });

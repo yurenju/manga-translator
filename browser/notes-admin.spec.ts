@@ -1,5 +1,5 @@
 /**
- * #38：Series Notes 管理與過時提示。仿 Jump+ 的翻頁版，偵測＋OCR 是真的（wasm）；FakeTranslator 在 Balloon 裡
+ * #38：Series Notes 管理與過時提示。仿 Jump+ 的翻頁版，OCR 用 FakeEngine 重播（ADR 0007）；FakeTranslator 在 Balloon 裡
  * 看到「パン」（p01）、「霧島湊」（p02）就新增條目，條目已經在 Notes 裡就補空欄位、譯文不同就提建議。
  */
 import { readFile } from 'node:fs/promises';
@@ -15,11 +15,6 @@ const 霧島湊 = { 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文
 
 // 陣列第二個元素是物件時，Playwright 會把它當成 [值, 選項]，所以要用 tuple 寫法
 test.use({ viewport: null, fakeTranslator: true, fakeNotes: [[パン, 霧島湊], { scope: 'test' }] });
-
-/** 第一次載入模型（從 mock site 下載＋wasm 編譯）加上一頁 OCR。 */
-const FIRST_PAGE_TIMEOUT = 60_000;
-/** 模型已載入後的一頁。 */
-const PAGE_TIMEOUT = 30_000;
 
 const statusLine = (panel: Page) => panel.getByRole('status', { name: '翻譯狀態' });
 const staleHint = (panel: Page) => panel.getByRole('group', { name: '過時提示' });
@@ -49,14 +44,13 @@ async function retranslateWithパン(sw: Parameters<typeof readStore>[0], panel:
   await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');
   await panel.getByRole('contentinfo', { name: '狀態列' }).getByRole('button', { name: '重新翻譯' }).click();
   await expect
-    .poll(async () => (await readStore<PageTranslation>(sw, 'pageTranslations')).flatMap((t) => t.usedNotes.map((u) => u.原文)), { timeout: PAGE_TIMEOUT })
+    .poll(async () => (await readStore<PageTranslation>(sw, 'pageTranslations')).flatMap((t) => t.usedNotes.map((u) => u.原文)))
     .toEqual(['パン']);
 }
 
 test('編輯條目後變 locked：之後 LLM 只能提建議，接受建議後改成建議的譯文', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_PAGE_TIMEOUT + 2 * PAGE_TIMEOUT);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
-  await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   await retranslateWithパン(sw, panel);
   await openNotes(panel);
   await expect(notesSection(panel).getByRole('row', { name: /パン/ })).toContainText('麵包');
@@ -68,7 +62,7 @@ test('編輯條目後變 locked：之後 LLM 只能提建議，接受建議後�
   await page.bringToFront();
   await staleHint(panel).getByRole('button', { name: '重新翻譯' }).click();
   const suggestion = notesSection(panel).getByRole('listitem').filter({ hasText: 'パン' });
-  await expect(suggestion).toContainText('麵包', { timeout: PAGE_TIMEOUT });
+  await expect(suggestion).toContainText('麵包');
   await expect(staleHint(panel)).toBeHidden();
   expect(await entryOf(sw, 'パン')).toMatchObject({ 譯文: '胖', 讀音: '', locked: true });
 
@@ -78,22 +72,21 @@ test('編輯條目後變 locked：之後 LLM 只能提建議，接受建議後�
 });
 
 test('改了某頁用到的條目譯文，回到那頁出現過時提示；只新增條目不出現', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_PAGE_TIMEOUT + 4 * PAGE_TIMEOUT);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
-  await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   await retranslateWithパン(sw, panel);
 
   // p02 新增了霧島湊；回到 p01（快取）不算過時
   await page.keyboard.press('ArrowLeft');
-  await expect.poll(async () => (await entryOf(sw, '霧島湊'))?.譯文, { timeout: PAGE_TIMEOUT }).toBe('霧島湊');
-  await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: PAGE_TIMEOUT });
+  await expect.poll(async () => (await entryOf(sw, '霧島湊'))?.譯文).toBe('霧島湊');
+  await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   await page.keyboard.press('ArrowRight');
-  await expect(statusLine(panel)).toHaveText([/^快取・/], { timeout: PAGE_TIMEOUT });
+  await expect(statusLine(panel)).toHaveText([/^快取・/]);
   await expect(staleHint(panel)).toBeHidden();
 
   // 在 p02 改パン（p02 沒用到它）
   await page.keyboard.press('ArrowLeft');
-  await expect(statusLine(panel)).toHaveText([/^快取・/], { timeout: PAGE_TIMEOUT });
+  await expect(statusLine(panel)).toHaveText([/^快取・/]);
   await openNotes(panel);
   await editNote(panel, 'パン', { 譯文: '胖' });
   await expect.poll(() => entryOf(sw, 'パン')).toMatchObject({ 譯文: '胖' });
@@ -101,14 +94,13 @@ test('改了某頁用到的條目譯文，回到那頁出現過時提示；只�
 
   await page.bringToFront();
   await page.keyboard.press('ArrowRight');
-  await expect(staleHint(panel)).toContainText('Series Notes 已更新', { timeout: PAGE_TIMEOUT });
+  await expect(staleHint(panel)).toContainText('Series Notes 已更新');
   await expect(panel.getByRole('contentinfo', { name: '狀態列' })).toContainText('Series Notes 已更新');
 });
 
 test('匯出再匯入到乾淨的 profile：Notes 與快取一致，匯出檔沒有 API key', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(FIRST_PAGE_TIMEOUT * 2);
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
-  await expect(statusLine(panel)).toHaveText([/^已翻譯・/], { timeout: FIRST_PAGE_TIMEOUT });
+  await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   // Notes 在背景整理（ADR 0005）：寫進去之後再匯出
   await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');
   const API_KEY = 'sk-ant-e2e-export-must-not-contain-this-key';

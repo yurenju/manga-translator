@@ -1,5 +1,6 @@
 /**
- * #32 第 3 層：整個外掛在仿 Jump+ 上原地覆蓋。偵測＋OCR 是真的（wasm），譯文來自 FakeTranslator。
+ * #32 第 3 層：整個外掛在仿 Jump+ 上原地覆蓋。OCR 用 FakeEngine 重播
+ * （ADR 0007；@e2e 那條在 e2e 跑真模型），譯文來自 FakeTranslator。
  * 覆蓋層的框來自偵測結果，跟 ground truth 的 Balloon 框不會完全一樣，所以對齊判斷留幾 px 容許誤差。
  */
 import type { Page, Worker } from '@playwright/test';
@@ -10,8 +11,6 @@ import { overlayHostCount, pageMode, shownErasers, shownTranslations, type Scree
 
 test.use({ viewport: null, fakeTranslator: true });
 
-/** 第一次載入模型＋兩頁 OCR。 */
-const OVERLAY_TIMEOUT = 60_000;
 /** 偵測框與 ground truth 框的差距（畫面 px）。 */
 const TOLERANCE = 4;
 
@@ -50,7 +49,7 @@ function mockOverlayTexts(page: Page): Promise<MockOverlayText[]> {
 /** 第 1、2 頁（完整可見的兩頁）都覆蓋好了。 */
 async function waitForOverlay(page: Page): Promise<void> {
   await expect
-    .poll(async () => new Set((await mockOverlayTexts(page)).map((t) => t.pageIndex)).size, { timeout: OVERLAY_TIMEOUT })
+    .poll(async () => new Set((await mockOverlayTexts(page)).map((t) => t.pageIndex)).size)
     .toBe(2);
 }
 
@@ -81,7 +80,6 @@ const hostVisibility = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll<HTMLElement>('[data-naruhodo-overlay]')].map((h) => getComputedStyle(h).visibility));
 
 test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；Page Mode 切到學習時頁面沒有譯文', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
-  test.setTimeout(OVERLAY_TIMEOUT + 60_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await waitForOverlay(page);
 
@@ -123,7 +121,6 @@ test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；
 });
 
 test('主頁面重繪把 host 拿掉後自動掛回；停止後所有 host 消失、position 還原', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(OVERLAY_TIMEOUT + 60_000);
   const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await waitForOverlay(page);
   const positions = () =>
@@ -150,11 +147,10 @@ test('主頁面重繪把 host 拿掉後自動掛回；停止後所有 host 消�
 });
 
 test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子認頁），也不會重翻', async ({ context, sw, extensionId, mockSite }) => {
-  test.setTimeout(OVERLAY_TIMEOUT + 60_000);
   const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   await waitForOverlay(page);
   // 覆蓋層畫好後 SW 會不藏覆蓋層補截一次（記下帶覆蓋層的樣子），等兩頁都記好
-  await expect.poll(() => sw.evaluate(() => globalThis.__overlaidRecords ?? 0), { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => sw.evaluate(() => globalThis.__overlaidRecords ?? 0)).toBeGreaterThanOrEqual(2);
   const screenshot = async () => `data:image/png;base64,${(await page.screenshot()).toString('base64')}`;
   const setHostDisplay = (display: string) =>
     page.evaluate((display) => {
@@ -180,6 +176,7 @@ test('已翻譯的頁重新擷取時不藏覆蓋層（用帶覆蓋層的樣子�
   expect(capturedDiff).toBeGreaterThan(0.005);
   expect((await overlayHiddenMs(sw, tabId)).length).toBe(hiddenBefore);
   await expect.poll(() => hostVisibility(page)).toEqual(['visible', 'visible']);
+  // 斷言「沒有重翻」：等一段時間確認翻譯次數沒變
   await page.waitForTimeout(1_000);
   expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(translateCalls);
   await waitForOverlay(page);
@@ -243,14 +240,12 @@ function colorFractions(page: Page, screenshot: string, selector: string): Promi
 
 test.describe('疊在 Page 上的網站元素：截圖前藏起來（#59）', () => {
   test('真實 Jump+ 的翻頁感應區（透明、半個畫面、貼邊小箭頭）蓋著也照常翻譯，譯文落在 Balloon 內', async ({ context, sw, extensionId, mockSite }) => {
-    test.setTimeout(OVERLAY_TIMEOUT + 30_000);
     const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?nav=1` });
     await waitForOverlay(page);
     await expectAligned(page, '翻頁感應區蓋著');
   });
 
   test('pointer-events: none 的浮水印被藏起來、不進 OCR；疊在上面的另一張 img 不藏（可能是漫畫本身）', async ({ context, sw, extensionId, mockSite }) => {
-    test.setTimeout(OVERLAY_TIMEOUT + 30_000);
     const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.jumpPlusUrl}?watermark=1&stacked=1` });
     await waitForOverlay(page);
     // 切到學習、點一下觸發重掃：版面已經穩定（截圖時的位置＝現在量到的位置），截圖裡也沒有自己的譯文
