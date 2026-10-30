@@ -1,0 +1,10 @@
+---
+/** 一段文案；裡面的 `[TBD]` 畫成未定案數字的標記（見 copy.ts）。 */
+interface Props {
+  text: string;
+}
+const parts = Astro.props.text.split('[TBD]');
+---
+{parts.map((part, i) => (
+  <>{part}{i < parts.length - 1 && <span class="tbd">TBD</span>}</>
+))}

@@ -1,0 +1,50 @@
+---
+/**
+ * 三份法律文件（#89）：內容是 repo 根目錄的 Markdown，建置時轉成 HTML，repo 裡沒有手寫的 HTML 副本。
+ * 一律英文、各自只有一個網址；頁首頁尾跟著讀者的語言，由最下面的 script 在瀏覽器決定。
+ */
+import { Content as Privacy } from '../../../PRIVACY.md';
+import { Content as Refund } from '../../../REFUND.md';
+import { Content as Terms } from '../../../TERMS.md';
+import L from '../components/L.astro';
+import Base from '../layouts/Base.astro';
+import { copy } from '../copy.ts';
+import { LEGAL_DOCS, type LegalDoc } from '../links.ts';
+import { byLocale } from '../locale.ts';
+
+export function getStaticPaths() {
+  return LEGAL_DOCS.map((doc) => ({ params: { doc } }));
+}
+
+const doc = Astro.params.doc as LegalDoc;
+const Content = { terms: Terms, refund: Refund, privacy: Privacy }[doc];
+---
+<Base locale="auto" title={`Naruhodo — ${copy.en.legal[doc]}`} alternates={byLocale((l) => `/${doc}?lang=${l}`)}>
+  <div class="wrap narrow">
+    <nav class="legal-tabs">
+      {LEGAL_DOCS.map((d) => (
+        <a href={`/${d}`} aria-current={d === doc ? 'page' : undefined}>{copy.en.legal[d]}</a>
+      ))}
+    </nav>
+    <article class="legal-page">
+      <L locale="auto" class="english-only" text={byLocale((l) => copy[l].legal.englishOnly)} />
+      <Content />
+    </article>
+  </div>
+  <script>
+    import { pickLocale } from '../locale.ts';
+    import { readSavedLocale } from '../saved-locale.ts';
+
+    const locale = pickLocale({
+      requested: new URLSearchParams(location.search).get('lang'),
+      saved: readSavedLocale(),
+      browserLanguages: navigator.languages,
+    });
+    // 文件本身是英文，<html lang> 維持 en；換語言的元素各自帶 lang（L.astro）
+    document.documentElement.dataset.locale = locale;
+    // 在三份文件之間切換時語言不變
+    for (const tab of document.querySelectorAll<HTMLAnchorElement>('.legal-tabs a')) {
+      tab.search = `?lang=${locale}`;
+    }
+  </script>
+</Base>

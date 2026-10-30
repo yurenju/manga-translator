@@ -1,0 +1,25 @@
+---
+/**
+ * 頁首頁尾裡一段跟著語言變的文字或連結。
+ * 有語系前綴的頁面（`locale` 是語系）只輸出那個語言；法律文件只有一個網址（`locale` 是 'auto'），
+ * 兩種語言都輸出，由 Base.astro 依讀者的語言把另一種藏起來。空字串代表那個語言不顯示。
+ */
+import type { Locale } from '../locale.ts';
+import { LOCALES, languageTag } from '../locale.ts';
+
+interface Props {
+  locale: Locale | 'auto';
+  text: Record<Locale, string>;
+  href?: Record<Locale, string>;
+  class?: string;
+}
+const { locale, text, href, class: className } = Astro.props;
+const shown = (locale === 'auto' ? LOCALES : [locale]).filter((l) => text[l] !== '');
+const auto = locale === 'auto';
+---
+{shown.map((l) => {
+  const attrs = auto ? { 'data-l': l, lang: languageTag(l) } : {};
+  return href
+    ? <a href={href[l]} class={className} {...attrs}>{text[l]}</a>
+    : <span class={className} {...attrs}>{text[l]}</span>;
+})}

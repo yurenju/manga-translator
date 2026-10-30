@@ -1,0 +1,119 @@
+---
+/**
+ * checkout 頁（#89）：#94 的 Worker 把讀者送到 `/<語系>/checkout?_ptxn=<transaction id>`，
+ * 這裡載入 Paddle.js，用 overlay 打開那筆 transaction。背景放 logo、狀態、方案摘要與法律連結。
+ * 付款相關的客戶資訊全由 Paddle（Merchant of Record）收集，網站不經手。
+ */
+import logo from '../../../../src/icons/naruhodo.svg';
+import Copy from '../../components/Copy.astro';
+import Base from '../../layouts/Base.astro';
+import { paddleLocale } from '../../checkout.ts';
+import { copy } from '../../copy.ts';
+import { LEGAL_DOCS, legalHref } from '../../links.ts';
+import { type Locale, LOCALES, byLocale } from '../../locale.ts';
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+const t = copy[locale].checkout;
+const legal = copy[locale].legal;
+---
+<Base locale={locale} title={`Naruhodo — ${t.title}`} alternates={byLocale((l) => `/${l}/checkout`)}>
+  <div class="wrap">
+    <div class="card checkout" data-checkout data-paddle-locale={paddleLocale(locale)}>
+      <img class="logo" src={logo.src} alt="" width="56" height="56" />
+      <div data-view="loading open">
+        <div class="spinner"></div>
+        <h1>{t.loading}</h1>
+      </div>
+      <div data-view="closed" hidden>
+        <h1>{t.closed}</h1>
+        <button class="btn btn-primary" data-action="reopen">{t.reopen}</button>
+      </div>
+      <div data-view="completed" hidden>
+        <p class="notice ok" role="status">{t.completed}</p>
+      </div>
+      <div data-view="failed" hidden>
+        <h1>{t.plan}</h1>
+        <p class="notice error" role="alert">{t.failed}</p>
+        <button class="btn btn-primary" data-action="retry">{t.retry}</button>
+      </div>
+      <div data-view="missing" hidden>
+        <h1>{t.plan}</h1>
+        <p class="notice error" role="alert">{t.missing}</p>
+      </div>
+      <p class="hint">{t.hint}</p>
+      <div class="summary">
+        <div><span>{t.plan}</span><strong><Copy text={copy[locale].pricing.sub.price} /> {copy[locale].pricing.sub.unit}</strong></div>
+        <div><span>{t.pagesPerMonth}</span><span><Copy text={t.pagesValue} /></span></div>
+      </div>
+      <p class="agree">
+        {t.agree}{' '}
+        {LEGAL_DOCS.map((doc, i) => (
+          <>{i > 0 && '・'}<a href={legalHref(doc, locale)}>{legal[doc]}</a></>
+        ))}
+      </p>
+    </div>
+  </div>
+  <script>
+    import { type CheckoutState, checkoutStateAfter, transactionIdFrom } from '../../checkout.ts';
+
+    // Paddle.js v2 用到的部分（https://developer.paddle.com/paddlejs/overview）
+    interface Paddle {
+      Environment: { set(environment: 'sandbox'): void };
+      Initialize(options: {
+        token: string;
+        checkout: { settings: { displayMode: 'overlay'; locale: string } };
+        eventCallback(event: { name?: string }): void;
+      }): void;
+      Checkout: { open(options: { transactionId: string }): void };
+    }
+    const PADDLE_JS = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+
+    const root = document.querySelector<HTMLElement>('[data-checkout]')!;
+    const transactionId = transactionIdFrom(location.search);
+    let state: CheckoutState = 'loading';
+
+    function show(next: CheckoutState) {
+      state = next;
+      for (const view of root.querySelectorAll<HTMLElement>('[data-view]')) {
+        view.hidden = !view.dataset.view!.split(' ').includes(state);
+      }
+    }
+
+    function initialize(paddle: Paddle, token: string, transactionId: string) {
+      if (import.meta.env.PUBLIC_PADDLE_ENVIRONMENT === 'sandbox') paddle.Environment.set('sandbox');
+      // 網址有 _ptxn 時，Initialize 會自動用 overlay 打開那筆 transaction
+      paddle.Initialize({
+        token,
+        checkout: { settings: { displayMode: 'overlay', locale: root.dataset.paddleLocale! } },
+        eventCallback: (event) => {
+          if (event.name) show(checkoutStateAfter(state, event.name));
+        },
+      });
+      root.querySelector('[data-action="reopen"]')!.addEventListener('click', () => {
+        show('loading');
+        paddle.Checkout.open({ transactionId });
+      });
+    }
+
+    const token = import.meta.env.PUBLIC_PADDLE_CLIENT_TOKEN;
+    // Initialize 只能呼叫一次，重試就重新載入整頁
+    root.querySelector('[data-action="retry"]')!.addEventListener('click', () => location.reload());
+
+    if (!transactionId) {
+      show('missing');
+    } else if (!token) {
+      console.error('沒有設定 PUBLIC_PADDLE_CLIENT_TOKEN（site/.env.local）');
+      show('failed');
+    } else {
+      const script = document.createElement('script');
+      script.src = PADDLE_JS;
+      script.onload = () => initialize((window as unknown as { Paddle: Paddle }).Paddle, token, transactionId);
+      script.onerror = () => show('failed');
+      document.head.append(script);
+    }
+  </script>
+</Base>
