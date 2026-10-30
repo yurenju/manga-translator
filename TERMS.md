@@ -36,7 +36,7 @@ Every new account gets a one-time allowance of free pages (currently 50). Free p
 - **What counts as a page.** A page counts when it is translated successfully. Viewing a page that was already translated, and failed translations, do not count. Asking for a page to be translated again counts as a new translation.
 - **Cancelling.** You can cancel at any time (Settings → Manage subscription). The subscription stays usable until the end of the year you paid for and then ends.
 - **Failed payments.** If a renewal payment fails, Paddle retries it for a period; you can keep using the subscription during that time. If payment cannot be collected, the subscription ends.
-- **Price and limit changes.** We may change the price or the monthly page limit. A price change applies from your next renewal, and we will tell you before it takes effect. If we lower the monthly page limit during a year you have paid for, you can request a pro-rated refund of the rest of that year.
+- **Price and limit changes.** We may change the price or the monthly page limit. A price change applies from your next renewal, and we will tell you before it takes effect. If a change does not suit you, you can cancel your subscription.
 - **Refunds.** See the [Refund Policy](/refund).
 
 ## 6. Acceptable use
@@ -59,11 +59,11 @@ We may limit, suspend or close accounts that break these rules.
 
 ## 8. Availability and changes to Naruhodo
 
-We work to keep Naruhodo available, but we do not guarantee that it will always work or be free of errors. We may change, add or remove features. If we stop offering Hosted Translation, we will give you at least 30 days' notice and a pro-rated refund for the unused part of a year you have paid for.
+We work to keep Naruhodo available, but we do not guarantee that it will always work or be free of errors. We may change, add or remove features, or stop offering Hosted Translation. If we stop offering it, we will tell you in advance, and refund any part of a year you have paid for where the law requires us to.
 
 ## 9. Ending your use
 
-You can stop using Naruhodo at any time by deleting your account and removing the extension. If we close your account because you broke these terms, you are not entitled to a refund, except where the law requires one. If we close your account for any other reason, we will refund the unused part of a year you have paid for.
+You can stop using Naruhodo at any time by deleting your account and removing the extension. We may close your account if you break these terms; you are then not entitled to a refund, except where the law requires one.
 
 ## 10. Disclaimer
 

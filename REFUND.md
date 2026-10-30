@@ -15,9 +15,9 @@ A refunded subscription is cancelled, so it stops working after the refund. Any 
 
 ## How to request a refund
 
-Refunds are handled by Paddle. To request one, contact Paddle's buyer support at [paddle.net](https://paddle.net), or use the link in the receipt email Paddle sent you. Paddle returns the money to the payment method you used.
+Refunds are handled by Paddle. To request one, go to Paddle's buyer support site at [paddle.net](https://paddle.net), find your order (the receipt email Paddle sent you has the details), and choose **Request refund**. Paddle returns the money to the payment method you used.
 
-If you have trouble getting a refund, write to us at dev@sadcoder.com.
+If Naruhodo does not work for you, you can also write to us at dev@sadcoder.com first, and we will try to fix the problem or arrange the refund with Paddle.
 
 ## Cancelling
 
