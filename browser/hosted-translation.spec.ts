@@ -18,7 +18,7 @@ import { createHmac } from 'node:crypto';
 import type { BrowserContext, Page } from '@playwright/test';
 import { DEV_FREE_PAGES_PATH, PADDLE_WEBHOOK_PATH } from '../src/shared/hosted-api.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, openPanelMenu, test } from './fixtures.ts';
-import { onboardingPage, signInFromPanel, signInWithEmail } from './sign-in.ts';
+import { finishOnboarding, onboardingPage, signInFromPanel, signInWithEmail } from './sign-in.ts';
 import { WORKER_URL } from './worker.ts';
 
 test.use({ viewport: null, fakeTranslator: true, requireApiKey: true });
@@ -43,7 +43,7 @@ test.describe('全新安裝', () => {
     await signInWithEmail(onboarding, email);
     await onboarding.getByRole('button', { name: '先用免費的 50 頁' }).click();
     await expect(onboarding.getByRole('heading', { name: '開始翻譯' })).toBeVisible();
-    await Promise.all([onboarding.waitForEvent('close'), onboarding.getByRole('button', { name: '完成' }).click()]);
+    await finishOnboarding(onboarding);
 
     // 設定完成：side panel 不再只顯示「完成設定」，自動翻譯直接經過 Worker 翻（同意在登入時取得，沒有資料使用說明卡）
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
