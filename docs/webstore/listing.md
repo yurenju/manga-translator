@@ -44,9 +44,9 @@ Naruhodo：邊看日文漫畫邊翻譯、邊學日文
 沒有翻譯時也能用，但只會顯示原文與讀音。
 
 ■ 付款與退款
-・訂閱由開發者 Sad Coder, Inc. 銷售，透過 Paddle.com（經銷商與 Merchant of Record）收款；賣方不是 Google，付款也不經過 Chrome Web Store。
+・訂閱由 Paddle.com（經銷商與 Merchant of Record）代開發者 Sad Coder, Inc. 銷售；賣方不是 Google，付款也不經過 Chrome Web Store。
 ・訂閱每年自動續訂，可以隨時取消：取消後到這一年結束前都能用，不會再扣款。
-・退款條件見退款政策：<REFUND_POLICY_URL>
+・每次付款後 14 天內可以全額退款，透過 Paddle 申請。詳見退款政策：<REFUND_POLICY_URL>
 ・服務條款：<TERMS_URL>
 
 ■ 隱私
@@ -65,7 +65,7 @@ Naruhodo：邊看日文漫畫邊翻譯、邊學日文
 原始碼以 MIT 授權公開在 GitHub：https://github.com/yurenju/naruhodo-manga-translator
 
 ---
-English: Naruhodo translates Japanese manga on the current tab into Traditional Chinese, in place, and lists the original text, furigana readings and translation side by side for language learners. Detection and OCR run locally. Translation is paid: sign up with your email for 50 free pages, then subscribe (US$20 per year, 800 pages per month), or use your own Anthropic API key instead. The subscription is sold by the developer, Sad Coder, Inc., through Paddle.com as reseller and Merchant of Record; Google is not the seller. Refund policy: <REFUND_POLICY_URL>
+English: Naruhodo translates Japanese manga on the current tab into Traditional Chinese, in place, and lists the original text, furigana readings and translation side by side for language learners. Detection and OCR run locally. Translation is paid: sign up with your email for 50 free pages, then subscribe (US$20 per year, 800 pages per month), or use your own Anthropic API key instead. The subscription is sold by Paddle.com, as reseller and Merchant of Record, on behalf of the developer, Sad Coder, Inc.; Google is not the seller. Refund policy: <REFUND_POLICY_URL>
 ```
 
 `<PRIVACY_POLICY_URL>`、`<TERMS_URL>`、`<REFUND_POLICY_URL>` 是產品網站的 `/privacy`、`/terms`、`/refund`（`site/src/pages/[doc].astro`，內容就是 repo 根目錄的 `PRIVACY.md`、`TERMS.md`、`REFUND.md`）。網站上線（#97）後填正式網域。

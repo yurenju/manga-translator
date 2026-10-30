@@ -84,7 +84,7 @@ Data on your computer stays until you delete it:
 ### On the Naruhodo service
 
 - Your account data is kept until you delete your account.
-- When you sign out, the service marks that sign-in token as signed out, and it stops working. Its record is kept until you delete your account. If the service cannot be reached when you sign out, the sign-in is still removed from your computer, and the token stops working after 180 days without use.
+- When you sign out, the service marks that sign-in token as signed out, and it stops working. If the service cannot be reached when you sign out, the sign-in is still removed from your computer, and the token stops working after 180 days without use. The record of a token that is signed out or has stopped working is deleted later, the next time anyone requests a sign-in code.
 - A sign-in code is deleted as soon as it is used. A code that is never used expires after 10 minutes and is deleted later, the next time anyone requests a sign-in code.
 
 **Deleting your account** (Settings → Delete account in the extension):
@@ -105,10 +105,28 @@ All connections use HTTPS. The Naruhodo service stores sign-in codes and sign-in
 
 Naruhodo's use and transfer of information complies with the [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/policies), including the Limited Use requirements. Data is used only to provide translation and the account and subscription that pay for it; it is not sold, not used for advertising, and not used to determine creditworthiness.
 
+## Your rights
+
+Wherever you live, you can:
+
+- **See your data.** The extension's settings show the email address and plan of your account. To get a copy of everything the Naruhodo service keeps about you, write to us.
+- **Correct your data.** Your account holds only your email address. To use a different one, delete the account and sign up with the new address, or write to us.
+- **Delete your data.** Delete your account in the extension, as described above, or write to us and we will delete it for you.
+- **Take your data with you.** The extension's export feature saves your local data to a file. Write to us for a copy of what the Naruhodo service keeps.
+- **Withdraw consent.** Sign out or delete your account (Hosted Translation), or delete your API key (Own API Key). Nothing more is sent after that.
+
+We do not sell or share your personal information for advertising, and we do not make automated decisions about you that have legal or similarly significant effects. If you are in the European Economic Area or the United Kingdom, we process your data to provide the service you asked for and to meet our legal obligations, and you can also complain to your local data protection authority.
+
+We answer requests within 30 days.
+
+## Children
+
+Naruhodo is not directed at children under 13, and we do not knowingly collect personal information from them. If you believe a child under 13 has created an account, write to us and we will delete it.
+
 ## Changes to this policy
 
 When our data handling changes, we will update this policy and its effective date, and the extension will explain the change and ask for your consent again before sending any more text. Past versions are available in this file's history on GitHub.
 
 ## Contact
 
-Questions, or requests to access or delete your data: dev@sadcoder.com
+Sad Coder, Inc., a Delaware corporation. Questions, or requests about your data: dev@sadcoder.com

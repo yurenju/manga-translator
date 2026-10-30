@@ -1,18 +1,34 @@
 # Naruhodo Refund Policy
 
-Effective date: TBD
+Effective date: 2026-10-30
 Publisher: Sad Coder, Inc.
 
-> **TO BE FILLED BY THE DEVELOPER.** The refund policy has not been written yet. This page is a placeholder.
+The Naruhodo subscription is sold by Paddle.com, our reseller and Merchant of Record, on behalf of Sad Coder, Inc. Paddle handles all payments and refunds. Google is not the seller, and payments do not go through the Chrome Web Store.
 
-## Refund conditions
+## 14-day refund
 
-> **TO BE FILLED BY THE DEVELOPER:** when a yearly subscription can be refunded and within how many days.
+You can get a full refund within 14 days of any payment for the Naruhodo subscription, whether it is your first payment or a yearly renewal. No reason is needed, and it does not matter how many pages you have translated.
+
+After 14 days, payments are not refundable, except where the law requires a refund.
+
+A refunded subscription is cancelled, so it stops working after the refund. Any free pages you had left before subscribing become available again once it ends.
 
 ## How to request a refund
 
-> **TO BE FILLED BY THE DEVELOPER:** refunds are processed by Paddle.com, our Merchant of Record.
+Refunds are handled by Paddle. To request one, contact Paddle's buyer support at [paddle.net](https://paddle.net), or use the link in the receipt email Paddle sent you. Paddle returns the money to the payment method you used.
 
-## Cancellation
+If you have trouble getting a refund, write to us at dev@sadcoder.com.
 
-> **TO BE FILLED BY THE DEVELOPER:** cancelling stops the next renewal; the subscription stays usable until the end of the paid year.
+## Cancelling
+
+Cancelling is different from a refund. You can cancel at any time in the extension: Settings → Manage subscription. After you cancel, the subscription will not renew, and you can keep using it until the end of the year you paid for. Cancelling does not refund the current year; to get your money back, request a refund within 14 days as described above.
+
+Deleting your Naruhodo account also cancels the subscription, but does not refund it.
+
+## Your statutory rights
+
+This policy does not limit any rights you have under the consumer protection laws of your country.
+
+## Changes to this policy
+
+If we change this policy, we will update it here and change its effective date. The policy in effect when you made a payment applies to that payment.
