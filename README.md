@@ -22,7 +22,14 @@
 
 ### 運作方式（簡述）
 
-文字偵測與 OCR 都在你的電腦上跑（[onnxruntime-web](https://onnxruntime.ai/)，有 WebGPU 就用 WebGPU，沒有就退回 wasm），只有辨識出來的**文字**會送到 Claude API 做讀音與翻譯，圖片不會上傳。預設使用 Claude Haiku，每頁大約幾秒鐘、花費不到一美分。
+文字偵測與 OCR 都在你的電腦上跑（[onnxruntime-web](https://onnxruntime.ai/)，有 WebGPU 就用 WebGPU，沒有就退回 wasm），只有辨識出來的**文字**會送去用 Claude 做讀音與翻譯，圖片與網址都不會送出。每頁大約幾秒鐘。
+
+翻譯有兩種用法，在 side panel 的 ⚙ →「設定」→「翻譯方式」隨時切換：
+
+- **內建翻譯**（預設）：用 email 註冊帳號就能翻譯，新帳號有 50 頁免費額度，不用輸入付款資料。用完之後訂閱（年繳 US$20，每月 800 頁，由 Paddle 處理付款）。文字經過 Naruhodo 的服務交給 Anthropic 翻譯，服務不保存這些文字。
+- **自備金鑰**：輸入你自己的 [Claude API key](https://console.anthropic.com/)，文字直接從你的瀏覽器送到 Anthropic，費用由你的 Anthropic 帳戶支付（用 Claude Haiku 每頁不到一美分），不用註冊帳號。
+
+兩種方式送出與保存的資料見 [隱私權政策](PRIVACY.md)。
 
 外掛只在你點圖示的那個分頁上作用（`activeTab` 權限），不會在背景讀取其他網站。
 
@@ -33,7 +40,7 @@
 ### 需要的東西
 
 - Chrome 116 以上
-- 一組 [Claude API key](https://console.anthropic.com/)（沒有 key 也能用，但只會顯示原文與讀音，不會翻譯）
+- 一個收得到信的 email（內建翻譯），或一組 [Claude API key](https://console.anthropic.com/)（自備金鑰）。兩個都沒有也能用，但只會顯示原文與讀音，不會翻譯
 
 ### 1. 下載
 
@@ -48,12 +55,14 @@
 3. 按「載入未封裝項目」（Load unpacked），選擇剛剛解壓縮的資料夾（裡面要直接看得到 `manifest.json`）。
 4. 建議把 Naruhodo 釘選到工具列，之後比較好點。
 
-### 3. 設定 API key
+### 3. 設定翻譯方式
 
-1. 打開任一網頁，點工具列的 Naruhodo 圖示，side panel 會打開。
-2. 在 side panel 右上角的 ⚙ 選單點「API key 與模型」，貼上 Claude API key。
+第一次載入時會自動打開設定頁：
 
-key 只存在這台電腦的外掛裡，不會交給網頁，也不會出現在匯出檔。建議在 Anthropic Console 為這個外掛建立專用的 key，並替它的 workspace 設定花費上限。
+- **內建翻譯**：按「開始設定」，輸入 email、按「同意並寄送驗證碼」，再輸入信裡的 6 位數驗證碼，就有 50 頁免費額度。之後可以在同一頁或 side panel 的設定裡訂閱。
+- **自備金鑰**：按設定頁下方的「使用自備金鑰」，貼上 Claude API key。key 只存在這台電腦的外掛裡，不會交給網頁，也不會出現在匯出檔。建議在 Anthropic Console 為這個外掛建立專用的 key，並替它的 workspace 設定花費上限。
+
+之後要換方式、登出、刪除帳號或改 key，都在 side panel 右上角的 ⚙ →「設定」。
 
 ### 更新到新版
 
@@ -105,6 +114,8 @@ npm run build
 | `npm run test:browser` | 用 mock 漫畫網站跑的 browser test（Playwright；OCR 重播錄好的結果，不跑模型） |
 | `npm run e2e` | 少數主要流程跑真的 OCR 模型（改到 OCR／流水線、或開整合 PR 前才跑） |
 | `npm run debug:chrome` | 開一個載入 debug build 的 Chrome，並記錄整個流水線的 trace |
+| `npm run site:dev` | 產品網站（`site/`，Astro）的開發伺服器，`http://localhost:4321`；checkout 頁需要 `site/.env.local` 的 `PUBLIC_PADDLE_CLIENT_TOKEN`、`PUBLIC_PADDLE_ENVIRONMENT`（從 Paddle sandbox 設定的 `PADDLE_CLIENT_TOKEN`、`PADDLE_ENVIRONMENT` 複製） |
+| `npm run site:build` | 產品網站的靜態檔，輸出到 `site/dist/` |
 | `bash scripts/paddle-sandbox-wizard.sh` | 一步一步設定 Paddle sandbox（API key、price、webhook），值存在 repo 外的 `~/.config/naruhodo/paddle-sandbox.env` |
 | `node scripts/paddle-tunnel.ts` | 開 cloudflared tunnel，讓 Paddle sandbox 的 webhook 送到本機 `wrangler dev`（`--echo`：Worker 還沒跑時只驗簽章） |
 

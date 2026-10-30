@@ -8,7 +8,10 @@ const DB_VERSION = 4;
 export const STORES = {
   /** 已啟動的 tab：key 是 tabId。 */
   activeTabs: 'activeTabs',
-  /** Claude 的 API key（spec #27 第 5 節）：key 是 API_KEY_ID。只有 offscreen 與 side panel 設定區讀值。 */
+  /**
+   * Claude 的 API key（spec #27 第 5 節）：key 是 API_KEY_ID。只有 offscreen 與 side panel 設定區讀值。
+   * Hosted Translation 的 session（#91）也放這裡，key 是 hostedSession（shared/hosted-session.ts）。
+   */
   apiKeys: 'apiKeys',
   /** Series（含 Provisional Series）：keyPath id。 */
   series: 'series',

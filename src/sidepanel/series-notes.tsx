@@ -6,7 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Message, NotesResponse } from '../shared/messages.ts';
 import type { EditableFields, NotesSuggestion } from '../shared/series-notes.ts';
 import type { NotesEntry } from '../shared/translator.ts';
-import { Button, Callout } from './components.tsx';
+import { Button, Callout } from '../ui/components.tsx';
 
 const send = <R,>(message: Message) => chrome.runtime.sendMessage<Message, R>(message);
 
@@ -92,7 +92,7 @@ function ClearCache({ tabId }: { tabId: number }) {
 }
 
 /** 從 ⚙ 選單打開（#77）；打開時才讀 Notes。 */
-export function SeriesNotesSection({ tabId, onClose }: { tabId: number; onClose: () => void }) {
+export function SeriesNotesSection({ tabId }: { tabId: number }) {
   const [notes, setNotes] = useState<NotesResponse | undefined>(undefined);
   const [editing, setEditing] = useState<string | undefined>(undefined);
 
@@ -116,12 +116,6 @@ export function SeriesNotesSection({ tabId, onClose }: { tabId: number; onClose:
   if (!notes) return null;
   return (
     <section aria-label="Series Notes" class="notes">
-      <div class="section-head">
-        <h2>Series Notes</h2>
-        <Button variant="ghost" onClick={onClose}>
-          關閉
-        </Button>
-      </div>
       {notes.suggestions.length > 0 && (
         <>
           <h2>建議修改</h2>

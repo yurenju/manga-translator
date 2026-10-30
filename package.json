@@ -15,12 +15,16 @@
     "debug:eval": "node scripts/debug-eval.ts",
     "debug:panel": "node scripts/debug-drive.ts panel",
     "debug:activate": "node scripts/debug-drive.ts activate",
-    "typecheck": "tsc --noEmit",
+    "site:dev": "astro dev --root site",
+    "site:build": "astro build --root site",
+    "site:preview": "astro preview --root site",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "test": "vitest run",
-    "test:browser": "npm run build:e2e && playwright test",
+    "test:browser": "npm run build:e2e && npm run site:build && playwright test",
     "e2e": "npm run build:e2e && playwright test --config playwright.e2e.config.ts",
     "record:ocr": "npm run build:e2e && playwright test --config playwright.record.config.ts",
-    "smoke": "vitest run --config vitest.smoke.config.ts && npm run build:e2e && playwright test --config playwright.smoke.config.ts"
+    "smoke": "vitest run --config vitest.smoke.config.ts && npm run build:e2e && playwright test --config playwright.smoke.config.ts",
+    "smoke:paddle": "npm run build:e2e && playwright test --config playwright.smoke-paddle.config.ts"
   },
   "dependencies": {
     "kuromoji": "0.1.2",
@@ -28,13 +32,17 @@
     "preact": "^11.0.2"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.11",
+    "@cloudflare/workers-types": "^5.20261030.1",
     "@fontsource/noto-sans-tc": "5.3.1",
     "@playwright/test": "^1.64.1",
     "@types/chrome": "^0.3.6",
     "@types/kuromoji": "0.1.3",
     "@types/node": "^26.6.5",
+    "astro": "^7.4.4",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.156.0"
   }
 }

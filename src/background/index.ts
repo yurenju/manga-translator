@@ -1,7 +1,8 @@
-import { CLAUDE_MODEL, PROMPT_VERSION } from '../offscreen/claude-translator.ts';
+import { CLAUDE_MODEL, PROMPT_VERSION } from '../shared/claude-request.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
-import { hasDataConsent } from '../shared/data-consent.ts';
+import { hasDataConsent, watchDataConsent } from '../shared/data-consent.ts';
 import { FAKE_VERSION } from '../shared/fake-translator.ts';
+import { clearHostedSession, HOSTED_API_URL, hostedSessionToken } from '../shared/hosted-session.ts';
 import type {
   AnalyzeResponse,
   AutoTranslateResponse,
@@ -24,11 +25,15 @@ import type {
   ProposeNotesResponse,
 } from '../shared/messages.ts';
 import { acceptSuggestion, editEntry, ignoreSuggestion, pendingSuggestions, type SeriesNotes, type TranslatorVersion } from '../shared/series-notes.ts';
+import { onboardingUrl, saveInstallState } from '../shared/onboarding.ts';
 import { createTrace } from '../shared/trace.ts';
+import { isTranslationModeSet, loadTranslationMode, saveTranslationMode, watchTranslationMode } from '../shared/translation-mode.ts';
 import type { NotesInput, TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { BACKUP_KEYS, createBackup } from './backup.ts';
 import { indexedDbPageCache } from './cache-store.ts';
+import { createHostedTranslator } from './hosted-translator.ts';
+import { installPlan } from './install.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
@@ -142,12 +147,48 @@ const offscreenTranslator: Translator = {
 };
 
 /**
- * 沒有 key（spec 第 5 節）或還沒同意資料使用（shared/data-consent.ts）時不排 LLM 工作。
- * 翻譯與 Series Notes 都從這裡拿 Translator，所以送到 Anthropic 的呼叫都會先過這道檢查。
+ * Hosted Translation：SW 直接 fetch Worker；沒有 session token（還沒登入）就不能翻。
+ * Worker 說 token 已失效（撤銷或閒置太久）：清掉它，side panel 回到「尚未登入」。
+ * 翻譯扣了一頁、或 Worker 說額度用完：通知 side panel 重新讀剩餘頁數。
+ */
+async function hostedTranslator(): Promise<Translator | undefined> {
+  const token = await hostedSessionToken();
+  if (!token) return undefined;
+  const onSignedOut = () => void clearHostedSession().then(() => notifyPanel({ type: 'session:changed' }));
+  const onQuotaChanged = () => notifyPanel({ type: 'quota:changed' });
+  return createHostedTranslator({
+    apiUrl: HOSTED_API_URL,
+    token,
+    fetch: (url, init) => fetch(url, init),
+    sleep,
+    now: () => performance.now(),
+    onSignedOut,
+    onQuotaChanged,
+  });
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    });
+  });
+}
+
+/**
+ * 依翻譯模式（shared/translation-mode.ts）決定能不能翻：Hosted Translation 要已登入，Own API Key 要有 key（spec 第 5 節）；
+ * 兩者都要同意資料使用（shared/data-consent.ts）。不符合就不排 LLM 工作，只顯示原文與讀音。
+ * 翻譯與 Series Notes 都從這裡拿 Translator，所以送出文字的呼叫都會先過這道檢查。
  */
 async function getTranslator(): Promise<Translator | undefined> {
   if (__E2E__ && fakeTranslator && !requireApiKey) return offscreenTranslator;
-  return (await apiKeys.has()) && (await hasDataConsent()) ? offscreenTranslator : undefined;
+  const mode = await loadTranslationMode();
+  // 同意依模式各自記：自備金鑰的同意不代表同意把文字送到 Naruhodo 的服務，反之亦然
+  if (!(await hasDataConsent(mode))) return undefined;
+  if (mode === 'hosted') return hostedTranslator();
+  return (await apiKeys.has()) ? offscreenTranslator : undefined;
 }
 
 /** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 key 時不比。 */
@@ -190,6 +231,32 @@ const transcriber = createTranscriber({
   },
 });
 
+/**
+ * 能不能翻譯變了（同意、切換翻譯模式、登入，#93）：已啟動的分頁直接翻還沒翻譯的頁，不必再按「翻譯此頁」。
+ * 同意與模式在 chrome.storage（onboarding 頁、side panel 都會寫）；登入存在 IndexedDB，由登入的一方廣播 session:changed。
+ */
+const accessChanged = () => void transcriber.translateUntranslated().catch((e: unknown) => console.warn('translate after access change failed', e));
+watchDataConsent(accessChanged);
+watchTranslationMode(accessChanged);
+
+/**
+ * 安裝與更新（#93）：依 background/install.ts 決定翻譯模式與 onboarding，全新安裝時用新分頁打開 onboarding。
+ * listener 要在 SW 一啟動就註冊才收得到事件。e2e build 不自動處理：每個 browser test 都是全新安裝，
+ * 只有要測 onboarding 的測試用 freshInstall 叫它處理（test:configure）。
+ */
+const installed = new Promise<`${chrome.runtime.OnInstalledReason}`>((resolve) => chrome.runtime.onInstalled.addListener(({ reason }) => resolve(reason)));
+
+async function handleInstalled(reason: `${chrome.runtime.OnInstalledReason}`): Promise<void> {
+  const [hasKey, migrated] = await Promise.all([apiKeys.has(), isTranslationModeSet()]);
+  const plan = installPlan({ reason, hasKey, migrated });
+  trace('installed', { reason, hasKey, migrated, plan });
+  if (!plan) return;
+  await Promise.all([saveTranslationMode(plan.translationMode), saveInstallState(plan)]);
+  if (plan.openOnboarding) await chrome.tabs.create({ url: onboardingUrl() });
+}
+
+if (!__E2E__) void installed.then(handleInstalled);
+
 const overlaySync = createOverlaySync({
   show({ tabId, anchorId, pageHash, subRect, text }) {
     const message: Message = { type: 'content:showOverlay', anchorId, pageHash, subRect, text };
@@ -207,6 +274,7 @@ if (__E2E__) {
     globalThis.__notesInputs = [];
     fakeTranslator = config.fakeTranslator ? { unreadableTexts: config.unreadableTexts ?? [], notes: config.fakeNotes ?? [] } : undefined;
     requireApiKey = config.requireApiKey ?? false;
+    if (config.freshInstall) void installed.then(handleInstalled);
   };
 }
 
@@ -332,6 +400,9 @@ chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) =>
   switch (message.type) {
     case 'models:status':
       modelStatus = message.status;
+      return false;
+    case 'session:changed':
+      accessChanged();
       return false;
     case 'panel:getModelStatus':
       sendResponse({ status: modelStatus } satisfies ModelStatusResponse);

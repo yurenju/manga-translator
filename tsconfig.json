@@ -17,5 +17,5 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "include": ["src", "scripts", "browser", "*.config.ts"]
+  "include": ["src", "scripts", "browser", "site/src/**/*.ts", "site/src/**/*.tsx", "*.config.ts"]
 }

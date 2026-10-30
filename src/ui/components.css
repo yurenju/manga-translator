@@ -17,6 +17,13 @@
 .naru-btn--ghost:hover:not(:disabled), .naru-btn--ghost[aria-expanded='true'] { background: var(--naru-surface-2); }
 .naru-btn--icon { width: 32px; padding: 0; background: var(--naru-surface-2); color: var(--naru-ink-2); }
 .naru-btn--icon:hover:not(:disabled) { background: var(--naru-line); }
+.naru-btn--danger { background: var(--naru-danger); border-color: var(--naru-danger); color: var(--naru-on-accent); }
+/* 通往危險動作的按鈕（例如設定頁 ghost 的「刪除帳號」）：只換字的顏色，確定的那一步才用 danger */
+.naru-btn.naru-text-danger { color: var(--naru-danger); }
+.naru-btn--link { min-height: 0; padding: 0; border: 0; font-size: var(--naru-text-caption); font-weight: 400; color: var(--naru-ink-2); text-decoration: underline; }
+
+/* 一排按鈕，窄的時候換行 */
+.naru-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--naru-space-2); }
 
 /* SegmentedControl */
 .naru-seg {
@@ -55,6 +62,16 @@
 .naru-switch__label { font-size: var(--naru-text-label); }
 .naru-switch__desc { font-size: var(--naru-text-caption); line-height: 1.4; color: var(--naru-ink-3); }
 
+/* RadioCard：選中的有主色框，內容在分隔線下展開 */
+.naru-radio-card { padding: var(--naru-space-3); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); }
+.naru-radio-card--on { border-color: var(--naru-accent); box-shadow: 0 0 0 1px var(--naru-accent); }
+.naru-radio-card__head { display: flex; align-items: flex-start; gap: var(--naru-space-2); cursor: pointer; }
+.naru-radio-card__head input { margin: 3px 0 0; accent-color: var(--naru-accent); }
+.naru-radio-card__text { display: flex; flex-direction: column; }
+.naru-radio-card__desc { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+.naru-radio-card__body { margin-top: var(--naru-space-2); padding-top: var(--naru-space-2); border-top: 1px solid var(--naru-line); }
+.naru-radio-card__body > p { margin: 0 0 var(--naru-space-1); }
+
 /* Badge */
 .naru-badge {
   display: inline-flex; align-items: center; gap: 6px; padding: 1px 6px;
@@ -77,6 +94,8 @@
 .naru-callout > p { margin: 0; }
 .naru-callout--warn { background: var(--naru-warn-bg); color: var(--naru-warn); }
 .naru-callout--danger { background: var(--naru-danger-bg); color: var(--naru-danger); }
+/* 標題一行、按鈕一行，由上往下排 */
+.naru-callout--stack { flex-direction: column; align-items: flex-start; }
 
 /* RevealChip（淺色）：虛線框＋「譯」標籤；揭露後換成實線，區塊隨內容長大 */
 .naru-reveal {

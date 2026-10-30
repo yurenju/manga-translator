@@ -1,6 +1,7 @@
 /**
- * #31：side panel 設定區輸入 API key → 「翻譯此頁」→ 逐字稿出現讀音與譯文、狀態列顯示已翻譯。
- * 狀態列的格式（模型・秒數・費用、加總）在 src/sidepanel/view.test.ts。
+ * #31：side panel 的設定頁輸入 API key → 同意資料使用 → 已啟動的分頁直接翻譯（#93，不必再按「翻譯此頁」）→
+ * 逐字稿出現讀音與譯文、狀態列顯示已翻譯。同意寫在 chrome.storage、SW 聽到變更才排翻譯，這段跨 context 的接線只有這裡測得到。
+ * 狀態列的格式（模型・秒數・費用、加總）在 src/ui/view.test.ts。
  * FakeTranslator 取代 Claude，但跟正式 build 一樣要先存 key（requireApiKey）。
  * 也檢查 key 不經過 content script 與 messaging（spec #27 第 5 節）。
  */
@@ -57,7 +58,7 @@ async function contentScriptView(sw: Worker, tabId: number) {
   }, tabId);
 }
 
-test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態列顯示已翻譯；key 不經過 content script', async ({
+test('設定 API key、同意資料使用後，已啟動的分頁直接翻譯：逐字稿出現譯文、狀態列顯示已翻譯；key 不經過 content script', async ({
   context,
   sw,
   extensionId,
@@ -77,9 +78,9 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await expect(consent).toContainText('不會上傳圖片');
   await expect(consent.getByRole('link', { name: '隱私權政策' })).toHaveAttribute('href', /PRIVACY\.md$/);
 
-  // ⚙ 選單的「API key 與模型」：輸入 key，只顯示末四碼
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  const settings = panel.getByRole('region', { name: 'API key 與模型' });
+  // ⚙ 選單的「設定」：整個 side panel 換成設定頁，輸入 key，只顯示末四碼
+  await chooseFromPanelMenu(panel, '設定');
+  const settings = panel.getByRole('region', { name: '設定' });
   await expect(settings).toContainText('Anthropic Console');
   await expect(settings).toContainText('花費上限');
   await settings.getByLabel('Claude API key').fill(FAKE_KEY);
@@ -87,6 +88,7 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await expect(settings).toContainText('末四碼 WXYZ');
   await expect(settings.getByLabel('Claude API key')).toHaveCount(0);
   expect(await panel.locator('body').innerText()).not.toContain(FAKE_KEY);
+  await panel.getByRole('button', { name: '返回' }).click();
   await expect(panel.getByText('尚未設定 API key')).toHaveCount(0);
 
   // 有 key 但還沒同意：按「翻譯此頁」也不送出
@@ -96,10 +98,9 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   await panel.waitForTimeout(1000);
   expect(await sw.evaluate(() => globalThis.__translateCalls)).toBe(0);
 
-  // 同意之後卡片消失，按「翻譯此頁」才翻
+  // 同意之後卡片消失，已啟動的分頁直接開始翻譯
   await consent.getByRole('button', { name: '同意並啟用翻譯' }).click();
   await expect(consent).toHaveCount(0);
-  await panel.getByRole('button', { name: '翻譯此頁' }).click();
   await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
   // 讀音換成 Translator 的整句讀音（おはよう！きょうははやいね），以ルビ對齊回漢字
   await expect(transcript.getByRole('listitem').filter({ hasText: '早安！今天好早喔' }).locator('rt')).toHaveText(['きょう', 'はや']);
@@ -126,27 +127,24 @@ test('設定 API key 後按「翻譯此頁」：逐字稿出現譯文、狀態�
   expect(content.stores).not.toContain('apiKeys');
 
   // 刪除 key
+  await chooseFromPanelMenu(panel, '設定');
   await settings.getByRole('button', { name: '刪除' }).click();
   await expect(settings.getByLabel('Claude API key')).toBeVisible();
   await expect(settings).not.toContainText('末四碼');
-
-  // 撤回同意：卡片回來
-  await settings.getByRole('button', { name: '撤回資料使用同意' }).click();
-  await expect(consent).toBeVisible();
 });
 
 test('從 Chrome 內建 side panel 選單打開（沒有啟動 tab）也能設定 API key', async ({ context, extensionId }) => {
   const panel = await openSidePanel(context, extensionId);
 
   await expect(panel.getByText('請點外掛圖示啟動')).toBeVisible();
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  const settings = panel.getByRole('region', { name: 'API key 與模型' });
+  await chooseFromPanelMenu(panel, '設定');
+  const settings = panel.getByRole('region', { name: '設定' });
   await settings.getByLabel('Claude API key').fill(FAKE_KEY);
   await settings.getByRole('button', { name: '儲存' }).click();
   await expect(settings).toContainText('末四碼 WXYZ');
 
   // 重新打開 side panel 仍然記得（存在 IndexedDB）
   await panel.reload();
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  await expect(panel.getByRole('region', { name: 'API key 與模型' })).toContainText('末四碼 WXYZ');
+  await chooseFromPanelMenu(panel, '設定');
+  await expect(panel.getByRole('region', { name: '設定' })).toContainText('末四碼 WXYZ');
 });

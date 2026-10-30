@@ -4,6 +4,7 @@ import type { PageText, PageTranslation } from '../shared/page-text.ts';
 import { editEntry, type NotesSuggestion, type SeriesNotes } from '../shared/series-notes.ts';
 import type { NotesChanges, NotesEntry, NotesInput, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createClaudeTranslator } from '../offscreen/claude-translator.ts';
+import { QuotaExhaustedError } from './hosted-translator.ts';
 import { createTranscriber, type NotesStore, type PageCache, type TranscriberDeps } from './transcribe.ts';
 
 const rect = { x: 0, y: 0, w: 1, h: 1 };
@@ -283,6 +284,18 @@ describe('翻譯此頁', () => {
     expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false, translateError: 'Claude API 500：boom' });
   });
 
+  it('額度用完（QuotaExhaustedError）不算翻譯失敗：顯示原文與 kuromoji 讀音，不帶錯誤', async () => {
+    const translator: Translator = {
+      ...noNotes,
+      translatePage: async () => Promise.reject(new QuotaExhaustedError('Hosted Translation 402：免費額度已用完', 'freePagesExhausted')),
+    };
+    const { transcriber } = setup({ getTranslator: () => translator });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false });
+  });
+
   it('還沒設定 key 時按「翻譯此頁」不改變逐字稿', async () => {
     const { transcriber, published } = setup();
     await transcriber.update(1, [thumb('a1')], capture);
@@ -292,6 +305,41 @@ describe('翻譯此頁', () => {
 
     expect(published).toHaveLength(before);
     expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false });
+  });
+
+  it('能翻譯了（同意、登入）：自動翻譯開著的 tab 直接翻還沒翻譯的頁，已翻好的不重翻', async () => {
+    let translator: Translator | undefined;
+    const calls: TranslateInput[] = [];
+    const cache = memoryCache();
+    // a1 已經翻好（快取），a2 沒有 Translator 時辨識完、未翻譯
+    await setup({ cache, getTranslator: () => translatorReturning('舊') }).transcriber.update(1, [thumb('a1')], capture);
+    const { transcriber } = setup({ cache, getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+
+    translator = translatorReturning('今天', calls);
+    await transcriber.translateUntranslated();
+
+    expect(calls).toHaveLength(1);
+    const [first, second] = transcriber.get(1).map((p) => p.transcript);
+    expect(first!.state === 'done' && first!.translation?.source).toBe('cache');
+    expect(second!.state === 'done' && second!.translated).toBe(true);
+  });
+
+  it('能翻譯了，但自動翻譯關著的 tab 不動（等讀者按「翻譯此頁」）；還是不能翻時也不動', async () => {
+    let translator: Translator | undefined;
+    const calls: TranslateInput[] = [];
+    const { transcriber, deps } = setup({ getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.setAutoTranslate(2, false);
+    await transcriber.update(2, [thumb('a2')], capture);
+
+    await transcriber.translateUntranslated();
+    translator = translatorReturning('今天', calls);
+    await transcriber.translateUntranslated();
+
+    expect(calls).toHaveLength(1);
+    expect(deps.analyze).toHaveBeenCalledTimes(1);
+    expect(transcriber.get(2)[0]!.transcript).toEqual({ state: 'pending' });
   });
 
   it('分析失敗的 Page 不送翻譯', async () => {
@@ -812,6 +860,18 @@ describe('Series Notes 累積（#37、ADR 0005）', () => {
     await transcriber.notesSettled();
 
     expect(notesInputs).toEqual([{ seriesNotes: [note('明日', '明天')], items: [{ kind: 'balloon', 原文: '今日は', 譯文: '譯-b1' }] }]);
+  });
+
+  it('① 帶回用量紀錄 id（Hosted Translation）時，② 把它帶回去，Notes 的用量歸到這一頁', async () => {
+    const notesInputs: NotesInput[] = [];
+    const translator = translatorWithNotes([], [], notesInputs);
+    const hosted: Translator = { ...translator, translatePage: async (input) => ({ ...(await translator.translatePage(input)), usageRecordId: 42 }) };
+    const { transcriber } = setup({ getTranslator: () => hosted, notes: memoryNotes() });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.notesSettled();
+
+    expect(notesInputs.map((i) => i.pageUsageRecordId)).toEqual([42]);
   });
 
   it('① 回來就顯示、寫快取，不等 ②', async () => {

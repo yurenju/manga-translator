@@ -217,7 +217,7 @@ PADDLE_API_BASE_URL='https://sandbox-api.paddle.com'
 SANDBOX_DASHBOARD='https://sandbox-vendors.paddle.com'
 SITE_ORIGIN_LOCAL='http://localhost:4321'
 WEBHOOK_PATH='/webhooks/paddle'
-WEBHOOK_EVENTS='["subscription.created","subscription.updated","subscription.activated","subscription.canceled","subscription.past_due","subscription.paused","subscription.resumed","transaction.completed"]'
+WEBHOOK_EVENTS='["subscription.created","subscription.updated","subscription.activated","subscription.canceled","subscription.past_due","subscription.paused","subscription.resumed","transaction.completed","adjustment.updated"]'
 
 # paddle_api METHOD PATH [JSON]: calls the sandbox API; sets HTTP_STATUS and RESPONSE.
 # The key goes through a header file so it never shows up in the process list.

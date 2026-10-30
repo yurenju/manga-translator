@@ -30,6 +30,10 @@ export type Message =
   | ({ type: 'offscreen:analyze' } & AnalyzeRequest)
   /** offscreen → 全部：模型下載／載入狀態。 */
   | { type: 'models:status'; status: ModelStatus }
+  /** 登入（side panel、onboarding）、或 Worker 說 token 已失效（SW 清掉）→ 全部：Hosted Translation 的 session 變了，重新讀（shared/hosted-session.ts）；SW 收到就翻已啟動分頁裡還沒翻的頁。 */
+  | { type: 'session:changed' }
+  /** SW → side panel：內建翻譯的剩餘額度可能變了（翻譯扣了一頁、Worker 說用完了），重新向 Worker 讀。 */
+  | { type: 'quota:changed' }
   /** side panel → SW：目前的模型狀態。回應 ModelStatusResponse。 */
   | { type: 'panel:getModelStatus' }
   /**
@@ -124,6 +128,11 @@ export interface TestConfig {
   unreadableTexts?: string[];
   /** FakeTranslator 在 Balloon 原文裡看到這些條目、而 Notes 還沒有時，回傳成新增的條目（#37）。 */
   fakeNotes?: NotesChanges['added'];
+  /**
+   * true：當作全新安裝處理 runtime.onInstalled（預設內建翻譯、打開 onboarding，#93）。
+   * 預設 false：e2e build 不處理安裝事件，翻譯模式與 onboarding 都是 #93 以前的狀態（自備金鑰、設定已完成）。
+   */
+  freshInstall?: boolean;
 }
 
 /** e2e build 才有：offscreen 用 FakeTranslator 取代 Claude。 */

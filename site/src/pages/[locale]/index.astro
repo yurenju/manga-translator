@@ -1,0 +1,89 @@
+---
+/** 首頁就是價格頁（#89 A 版）：大標題 → 展示 → 怎麼用 → 方案 → 常見問題。 */
+import Copy from '../../components/Copy.astro';
+import Base from '../../layouts/Base.astro';
+import '../../styles/demo.css';
+import { copy } from '../../copy.ts';
+import { INSTALL_URL, legalHref } from '../../links.ts';
+import { type Locale, LOCALES, byLocale } from '../../locale.ts';
+
+export function getStaticPaths() {
+  return LOCALES.map((locale) => ({ params: { locale } }));
+}
+
+const locale = Astro.params.locale as Locale;
+const t = copy[locale];
+---
+<Base locale={locale} title={`Naruhodo — ${t.hero.title}`} alternates={byLocale((l) => `/${l}/`)}>
+  <section class="hero">
+    <div class="wrap">
+      <div class="narrow">
+        <h1>{t.hero.title}</h1>
+        <p class="lead">{t.hero.lead}</p>
+        <div class="cta">
+          <a class="btn btn-primary" href={INSTALL_URL}>{t.hero.install}</a>
+          <a class="btn btn-ghost" href="#pricing">{t.hero.pricing}</a>
+        </div>
+      </div>
+      <!-- 互動展示（#109）：假 Chrome 視窗＋外掛真正的 side panel 與覆蓋層，由 demo/mount.tsx render -->
+      <div class="demo">
+        <p class="demo-caption">{t.demo.caption}</p>
+        <div data-demo data-copy={JSON.stringify({ hint: t.demo.hint, replay: t.demo.replay })}></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2>{t.how.title}</h2>
+      <ol class="steps">
+        {t.how.steps.map((step) => (
+          <li class="card">
+            <h3>{step.title}</h3>
+            <p>{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" id="pricing">
+    <div class="wrap narrow">
+      <h2>{t.pricing.title}</h2>
+      <div class="plans">
+        <div class="card plan">
+          <h3>{t.pricing.free.title}</h3>
+          <p class="price">$0</p>
+          <ul>{t.pricing.free.items.map((item) => <li><Copy text={item} /></li>)}</ul>
+          <a class="btn btn-ghost" href={INSTALL_URL}>{t.pricing.free.cta}</a>
+        </div>
+        <div class="card plan featured">
+          <h3>{t.pricing.sub.title}</h3>
+          <p class="price"><Copy text={t.pricing.sub.price} /> <small>{t.pricing.sub.unit}</small></p>
+          <ul>{t.pricing.sub.items.map((item) => <li><Copy text={item} /></li>)}</ul>
+          <!-- 訂閱要先有帳號，從外掛裡購買（#94），所以也是先安裝外掛 -->
+          <a class="btn btn-primary" href={INSTALL_URL}>{t.pricing.sub.cta}</a>
+        </div>
+      </div>
+      <p class="own-key">{t.pricing.ownKey}</p>
+    </div>
+  </section>
+
+  <section class="section" id="faq">
+    <div class="wrap narrow faq">
+      <h2>{t.faq.title}</h2>
+      {t.faq.items.map((item, i) => (
+        <details open={i === 0}>
+          <summary>{item.q}</summary>
+          <p>{item.a.split('{link}').map((part, j) => (
+            <>{j > 0 && item.link && <a href={legalHref(item.link, locale)}>{t.legal[item.link]}</a>}{part}</>
+          ))}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+</Base>
+
+<script>
+  import '../../demo/mount.tsx';
+</script>

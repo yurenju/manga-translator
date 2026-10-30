@@ -42,7 +42,7 @@ async function expectPagesListed(panel: Page, ids: string[]): Promise<void> {
 /** 頁首的小圖示（裝飾用、aria-hidden），只拿來數格子。 */
 const pageIcon = (panel: Page, name: string) => pageList(panel).getByRole('listitem', { name }).locator('svg').first();
 
-// 排序、左右頁、頁首文字的規則在 src/sidepanel/view.test.ts；這裡只確認 side panel 真的把它們畫出來
+// 排序、左右頁、頁首文字的規則在 src/ui/view.test.ts；這裡只確認 side panel 真的把它們畫出來
 
 test('啟動後 side panel 列出完整可見的 Page，只露出一部分的不列；單頁的頁首圖示一格', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });

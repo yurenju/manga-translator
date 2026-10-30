@@ -86,6 +86,14 @@ describe('正式 build', () => {
     expect(content).not.toContain('indexedDB');
   });
 
+  it('Hosted Translation：還沒有 Worker 網址（#90）', async () => {
+    const [sw, panel] = await Promise.all(['background.js', 'sidepanel.js'].map((f) => readText(prodDir, f)));
+
+    for (const bundle of [sw, panel]) {
+      expect(bundle).not.toContain('localhost');
+    }
+  });
+
   it('打包 onnxruntime-web 的 wasm 與 kuromoji 字典，但不打包 ONNX 模型（第一次使用時才下載）', async () => {
     expect(await exists(prodDir, 'ort/ort.webgpu.bundle.min.mjs')).toBe(true);
     expect(await exists(prodDir, 'ort/ort-wasm-simd-threaded.asyncify.wasm')).toBe(true);
@@ -148,9 +156,20 @@ describe('e2e build', () => {
     expect(sw).toContain('test:activate');
   });
 
+  it('Hosted Translation 連測試啟動的本機 Worker（port 8788）', async () => {
+    const sw = await readText(e2eDir, 'background.js');
+
+    expect(sw).toContain('"http://localhost:8788"');
+  });
+
   it('多一個量 #7 指標用的流水線測試頁與覆蓋渲染測試頁', async () => {
     expect(await readText(e2eDir, 'test-pipeline.html')).toContain('test-pipeline.js');
     expect(await readText(e2eDir, 'test-overlay.html')).toContain('test-overlay.js');
+  });
+
+  it('多一個注入一般網頁的 UI 測試 script（#108），是傳統 script；正式 build 沒有', async () => {
+    expect(await readText(e2eDir, 'test-ui.js')).not.toMatch(/^\s*(import|export)\b/m);
+    expect(await exists(prodDir, 'test-ui.js')).toBe(false);
   });
 });
 
@@ -168,5 +187,9 @@ describe('debug build', () => {
     expect(manifest.permissions).toEqual(prodManifest.permissions);
     expect(manifest.host_permissions).toEqual(['<all_urls>']);
     expect(await readText(debugDir, 'background.js')).toContain('test:activate');
+  });
+
+  it('Hosted Translation 連開發者自己跑的 `wrangler dev --env dev`（port 8787）', async () => {
+    expect(await readText(debugDir, 'background.js')).toContain('"http://localhost:8787"');
   });
 });

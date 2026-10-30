@@ -41,8 +41,8 @@ test('窄寬度下 side panel 沒有水平捲軸', async ({ context, sw, extensi
   // ⚙ 選單展開、從選單打開的區塊也一樣
   await openPanelMenu(panel);
   await expectNoHorizontalScroll(panel);
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  await expect(panel.getByRole('region', { name: 'API key 與模型' })).toBeVisible();
+  await chooseFromPanelMenu(panel, '設定');
+  await expect(panel.getByRole('region', { name: '設定' })).toBeVisible();
   await expectNoHorizontalScroll(panel);
 });
 
@@ -69,7 +69,7 @@ test.describe('逐字稿出來之前', () => {
     const menu = await openPanelMenu(panel);
     await expect(menu.getByRole('switch', { name: '自動翻譯' })).toHaveAccessibleDescription('翻頁就翻，關掉只顯示快取');
     await expect(menu.getByRole('button', { name: '重新擷取頁面' })).toHaveAccessibleDescription('翻頁沒被偵測到時用');
-    await expect(menu.getByRole('button')).toHaveText([/^重新擷取頁面/, 'Series Notes', 'API key 與模型']);
+    await expect(menu.getByRole('button')).toHaveText([/^重新擷取頁面/, 'Series Notes', '設定']);
     // 按 Esc 收起
     await panel.keyboard.press('Escape');
     await expect(menu).toHaveCount(0);
