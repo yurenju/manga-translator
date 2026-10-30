@@ -115,3 +115,12 @@ export interface HostedError {
   error: string;
   reason?: HostedErrorReason;
 }
+
+/** 帶 session token 的標頭（翻譯、Notes 與帳號相關的端點都要）。 */
+export const bearerHeader = (token: string) => ({ authorization: `Bearer ${token}` });
+
+/** 讀 Worker 的錯誤回應；body 不是 HostedError（例如 Cloudflare 自己的錯誤頁）就用 HTTP 狀態碼當訊息。 */
+export async function readHostedError(response: Response): Promise<HostedError> {
+  const body = (await response.json().catch(() => ({}))) as Partial<HostedError>;
+  return { error: body.error ?? `HTTP ${response.status}`, ...(body.reason ? { reason: body.reason } : {}) };
+}

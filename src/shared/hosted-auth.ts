@@ -11,10 +11,11 @@ import {
   SEND_CODE_PATH,
   SIGN_OUT_PATH,
   VERIFY_CODE_PATH,
+  bearerHeader,
+  readHostedError,
   type AccountResponse,
   type CheckoutLocale,
   type CheckoutResponse,
-  type HostedError,
   type HostedErrorReason,
   type PortalResponse,
   type VerifyCodeResponse,
@@ -46,14 +47,14 @@ export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (ur
       return { ok: false, reason: undefined, message: e instanceof Error ? e.message : String(e) };
     }
     if (response.ok) return { ok: true, response };
-    const error = (await response.json().catch(() => ({}))) as Partial<HostedError>;
-    return { ok: false, reason: error.reason, message: error.error ?? `HTTP ${response.status}` };
+    const error = await readHostedError(response);
+    return { ok: false, reason: error.reason, message: error.error };
   }
 
   const post = (path: string, body: unknown, token?: string) =>
     send(path, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...(token === undefined ? {} : { authorization: `Bearer ${token}` }) },
+      headers: { 'content-type': 'application/json', ...(token === undefined ? {} : bearerHeader(token)) },
       body: JSON.stringify(body),
     });
 
@@ -75,7 +76,7 @@ export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (ur
       return { ok: true, token };
     },
     async account(token) {
-      const result = await send(ACCOUNT_PATH, { headers: { authorization: `Bearer ${token}` } });
+      const result = await send(ACCOUNT_PATH, { headers: bearerHeader(token) });
       if (!result.ok) return result;
       return { ok: true, account: (await result.response.json()) as AccountResponse };
     },
@@ -86,7 +87,7 @@ export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (ur
       return result.ok ? { ok: true } : result;
     },
     async deleteAccount(token) {
-      const result = await send(ACCOUNT_PATH, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+      const result = await send(ACCOUNT_PATH, { method: 'DELETE', headers: bearerHeader(token) });
       return result.ok ? { ok: true } : result;
     },
   };
