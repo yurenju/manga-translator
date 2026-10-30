@@ -6,7 +6,7 @@
  *   npm run debug:eval -- page -e "location.href"       漫畫分頁的 main world
  *   npm run debug:eval -- content -e "document.querySelectorAll('[data-fit]').length"   content script 的 isolated world
  * context：sw、offscreen、page、content（見 scripts/debug-targets.ts）。
- * SW 裡多了 activeTab()：漫畫分頁（外掛沒有 tabs 權限，chrome.tabs.query 看不到 url）。
+ * SW 裡多了 activeTab()：最後聚焦視窗的作用中分頁。
  *
  * 選項：--timeout <秒>（預設 30；offscreen 裡等 requestAnimationFrame 會永遠卡住）、--url <字串>（page／content 挑 url 含它的分頁）、--port <n>
  *
@@ -65,12 +65,12 @@ async function contentContextId(connection: Connection): Promise<number> {
   });
   await connection.send('Runtime.enable');
   const ours = contexts.find((c) => c.auxData?.type === 'isolated' && isOurExtension(c.name));
-  if (!ours) throw new Error('這個分頁裡沒有外掛的 content script：重新整理分頁後點一次外掛圖示');
+  if (!ours) throw new Error('這個分頁裡沒有外掛的 content script：重新整理分頁後跑 npm run debug:activate');
   return ours.id;
 }
 
 const NOT_FOUND: Record<Context, string> = {
-  sw: '找不到外掛的 service worker：閒置時會被停掉，點一次外掛圖示或打開 side panel 叫醒它',
+  sw: '找不到外掛的 service worker：閒置時會被停掉，跑 npm run debug:panel 叫醒它',
   offscreen: '找不到外掛的 offscreen document：要等外掛第一次偵測或翻譯時才會建立',
   page: '找不到網頁分頁',
   content: '找不到網頁分頁',

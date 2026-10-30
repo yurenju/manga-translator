@@ -39,7 +39,7 @@ export function candidateTargets(targets: readonly TargetInfo[], context: Contex
 }
 
 /**
- * SW 裡先定義的小工具。外掛沒有 tabs 權限，chrome.tabs.query 拿得到分頁但看不到 url；
+ * SW 裡先定義的小工具。正式 build 沒有 tabs 權限，chrome.tabs.query 拿得到分頁但看不到 url（debug build 有 <all_urls>，看得到）；
  * 漫畫分頁（有 activeTab 的那個）就是最後聚焦視窗的作用中分頁。
  */
 const SW_PRELUDE = 'const activeTab = async () => (await chrome.tabs.query({ active: true, lastFocusedWindow: true }))[0];';
@@ -53,4 +53,36 @@ export function buildExpression(code: string, context: Context): string {
   if (body === '') throw new Error('沒有要執行的程式');
   const prelude = context === 'sw' ? `${SW_PRELUDE}\n` : '';
   return `(async () => {\n${prelude}return (\n${body}\n);\n})()`;
+}
+
+/** chrome.tabs.query 的一筆，只留挑分頁要用的欄位（debug build 有 <all_urls>，看得到 url）。 */
+export interface ChromeTab {
+  id: number;
+  url: string;
+  active: boolean;
+  windowId: number;
+}
+
+const isWebPage = (tab: ChromeTab) => /^https?:/.test(tab.url);
+
+/**
+ * debug:panel／debug:activate 要操作的漫畫分頁（scripts/debug-drive.ts）。
+ * 給了 urlFilter：第一個 url 含它的網頁分頁。沒給：最後聚焦視窗的作用中分頁；
+ * 那個視窗沒有網頁（例如剛聚焦的是 side panel 視窗，它也是 normal 視窗）時，只有一個作用中網頁分頁才退回用它；
+ * 好幾個就不猜，回傳 undefined，要呼叫端給 urlFilter。
+ */
+export function pickMangaTab(tabs: readonly ChromeTab[], lastFocusedWindowId: number | undefined, urlFilter?: string): ChromeTab | undefined {
+  const pages = tabs.filter(isWebPage);
+  if (urlFilter !== undefined) return pages.find((tab) => tab.url.includes(urlFilter));
+  const active = pages.filter((tab) => tab.active);
+  return active.find((tab) => tab.windowId === lastFocusedWindowId) ?? (active.length === 1 ? active[0] : undefined);
+}
+
+/** 這個分頁專屬的 side panel（<外掛 origin>/sidepanel.html?tabId=N），已經開著就沿用，不再開一個。 */
+export function panelTarget(targets: readonly TargetInfo[], extensionOrigin: string, tabId: number): TargetInfo | undefined {
+  return targets.find((target) => {
+    if (!target.url.startsWith(`${extensionOrigin}/`)) return false;
+    const url = new URL(target.url);
+    return url.pathname === '/sidepanel.html' && url.searchParams.get('tabId') === String(tabId);
+  });
 }

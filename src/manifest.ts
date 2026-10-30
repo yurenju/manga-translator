@@ -24,7 +24,8 @@ export function buildManifest({ e2e, debug = false }: { e2e: boolean; debug?: bo
     minimum_chrome_version: '116',
     icons,
     permissions: ['activeTab', 'scripting', 'sidePanel', 'offscreen', 'storage', 'unlimitedStorage'],
-    ...(e2e ? { host_permissions: ['<all_urls>'] } : {}),
+    // e2e 與 debug build 不靠點圖示拿 activeTab，改由測試或 agent 送 test:activate 啟動（debug：#112）
+    ...(e2e || debug ? { host_permissions: ['<all_urls>'] } : {}),
     background: { service_worker: 'background.js', type: 'module' },
     action: { default_title: '漫畫翻譯：在這個分頁啟動', default_icon: icons },
     side_panel: { default_path: 'sidepanel.html' },
