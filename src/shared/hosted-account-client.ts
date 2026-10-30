@@ -23,7 +23,7 @@ import {
 
 export type AuthFailure = { ok: false; reason: HostedErrorReason | undefined; message: string };
 
-export interface HostedAuth {
+export interface HostedAccountClient {
   sendCode(email: string): Promise<{ ok: true } | AuthFailure>;
   verifyCode(email: string, code: string): Promise<{ ok: true; token: string } | AuthFailure>;
   /** 帶 session token 讀目前的帳號狀態。 */
@@ -38,7 +38,7 @@ export interface HostedAuth {
   deleteAccount(token: string): Promise<{ ok: true } | AuthFailure>;
 }
 
-export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (url: string, init: RequestInit) => Promise<Response> }): HostedAuth {
+export function createHostedAccountClient({ apiUrl, fetch }: { apiUrl: string; fetch: (url: string, init: RequestInit) => Promise<Response> }): HostedAccountClient {
   async function send(path: string, init: RequestInit): Promise<{ ok: true; response: Response } | AuthFailure> {
     let response: Response;
     try {

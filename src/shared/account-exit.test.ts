@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setupNotices } from '../ui/view.ts';
 import { deleteAccount, signOut, type AccountExitDeps } from './account-exit.ts';
-import type { AuthFailure } from './hosted-auth.ts';
+import type { AuthFailure } from './hosted-account-client.ts';
 import type { HostedSession } from './hosted-session.ts';
 
 const failure = (reason: AuthFailure['reason'], message = '失敗'): AuthFailure => ({ ok: false, reason, message });

@@ -17,7 +17,7 @@ import type {
   TestConnectionResponse,
 } from '../shared/messages.ts';
 import { deleteAccount, signOut, type AccountExitDeps } from '../shared/account-exit.ts';
-import { createHostedAuth } from '../shared/hosted-auth.ts';
+import { createHostedAccountClient } from '../shared/hosted-account-client.ts';
 import type { Quota } from '../shared/hosted-api.ts';
 import { clearHostedSession, HOSTED_API_URL, loadHostedSession, type HostedSession } from '../shared/hosted-session.ts';
 import { dismissHostedHint, onboardingUrl, watchHostedHint, watchOnboarding, type OnboardingProgress } from '../shared/onboarding.ts';
@@ -42,7 +42,7 @@ const send = <R,>(message: Message) => chrome.runtime.sendMessage<Message, R>(me
 
 const apiKeys = indexedDbApiKeyStore();
 
-const hostedAuth = createHostedAuth({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
+const hostedAccount = createHostedAccountClient({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
 
 /**
  * 匯出／匯入 JSON（#38）：全部 Series、網址模式、Series Notes、翻譯快取，給兩台電腦之間搬資料；不含 API key。
@@ -119,7 +119,7 @@ const openOnboarding = (step?: 'signIn') => void chrome.tabs.create({ url: onboa
 
 /** 「訂閱」：向 Worker 建立 checkout，用新分頁打開產品網站的 checkout 頁（#94）。已經訂閱中就重讀額度。 */
 async function subscribe(session: HostedSession): Promise<void> {
-  const result = await hostedAuth.checkout(session.token, 'zh-tw');
+  const result = await hostedAccount.checkout(session.token, 'zh-tw');
   if (result.ok) void chrome.tabs.create({ url: result.url });
   else if (result.reason === 'alreadySubscribed') void chrome.runtime.sendMessage({ type: 'quota:changed' } satisfies Message).catch(() => {});
   else console.error('建立 checkout 失敗', result.message);
@@ -127,7 +127,7 @@ async function subscribe(session: HostedSession): Promise<void> {
 
 /** 「管理訂閱」：向 Worker 建立 Paddle customer portal session，用新分頁打開（取消訂閱、更新付款方式、收據）。 */
 async function managePlan(session: HostedSession): Promise<void> {
-  const result = await hostedAuth.portal(session.token);
+  const result = await hostedAccount.portal(session.token);
   if (result.ok) void chrome.tabs.create({ url: result.url });
   else console.error('打開 customer portal 失敗', result.message);
 }
@@ -137,7 +137,7 @@ const sessionChangedHere = new EventTarget();
 
 /** 登出、刪除帳號之後：清掉本機的 session，廣播給 SW 與其他 side panel，也通知自己。 */
 const accountExit: AccountExitDeps = {
-  auth: hostedAuth,
+  auth: hostedAccount,
   clearSession: () => clearHostedSession().then(() => {}),
   broadcast: () => {
     sessionChangedHere.dispatchEvent(new Event('change'));
@@ -392,7 +392,7 @@ function useHostedQuota(session: HostedSession | null | undefined): Quota | unde
     if (!token) return;
     let current = true;
     const refresh = () =>
-      void hostedAuth.account(token).then((r) => {
+      void hostedAccount.account(token).then((r) => {
         if (current && r.ok) setQuota(r.account.quota);
       });
     const onMessage = (message: Message) => {
