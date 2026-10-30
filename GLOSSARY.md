@@ -74,14 +74,14 @@ _Avoid_: user (ambiguous with reader), member, profile
 The unit every limit counts: one Page whose translation came back from Hosted Translation, including one the reader asked to translate again. Viewing an already translated Page again, or a translation that failed, is not a Translated Page; a Spread is two.
 _Avoid_: credit, token, request
 
-**Free Pages** (免費頁數)
-The 50 Translated Pages every new Account gets once, roughly two Episodes. Never reset.
-_Avoid_: trial, free tier
+**Free Pages** (免費額度)
+The 50 Translated Pages every new Account gets once, roughly two Episodes. Never reset. Not used while a Subscription is active; whatever is left is usable again after it ends.
+_Avoid_: trial, free tier, 免費頁數 (in the UI)
 
 **Subscription** (訂閱)
 A paid yearly plan on an Account that grants a Monthly Page Limit.
 _Avoid_: membership, license
 
 **Monthly Page Limit** (每月頁數上限)
-How many Translated Pages a Subscription allows in each month of its year.
+How many Translated Pages a Subscription allows in each month of its year. What is left of it in the current month is shown in the UI as 本月額度.
 _Avoid_: quota (when meaning this specific limit), allowance
