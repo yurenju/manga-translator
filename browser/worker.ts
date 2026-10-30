@@ -5,7 +5,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,8 +39,11 @@ export async function startWorker({ env, envFile }: { env: 'test' | 'dev'; envFi
     const applied = spawnSync(process.execPath, [WRANGLER, 'd1', 'migrations', 'apply', 'DB', '--local', ...common], { encoding: 'utf8' });
     if (applied.status !== 0) throw new Error(`D1 migrations 失敗：\n${applied.stdout}\n${applied.stderr}`);
   }
+  // 一律給 --env-file：沒給的話 wrangler 會讀開發者自己的 worker/.dev.vars，裡面的真 webhook secret 會蓋掉 env.test 的測試 secret
+  const vars = envFile ?? join(persistTo, '.dev.vars');
+  if (!envFile) await writeFile(vars, '');
   const args = [WRANGLER, 'dev', ...common, '--port', String(E2E_WORKER_PORT), '--ip', '127.0.0.1', '--show-interactive-dev-session=false'];
-  const child = spawn(process.execPath, [...args, ...(envFile ? ['--env-file', envFile] : [])], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [...args, '--env-file', vars], { stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '';
   child.stdout.on('data', (chunk: Buffer) => (output += chunk));
   child.stderr.on('data', (chunk: Buffer) => (output += chunk));
