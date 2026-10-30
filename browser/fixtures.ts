@@ -73,7 +73,7 @@ export async function configuredServiceWorker(
   context: BrowserContext,
   site: MockSite,
   fakeTranslator = false,
-  translatorOptions: Pick<TestConfig, 'requireApiKey' | 'unreadableTexts' | 'fakeNotes'> = {},
+  translatorOptions: Pick<TestConfig, 'requireApiKey' | 'unreadableTexts' | 'fakeNotes' | 'freshInstall'> = {},
   fakeOcr = false,
   fakeOcrDelayMs = 0,
 ): Promise<Worker> {
@@ -106,6 +106,8 @@ export const test = base.extend<{
   unreadableTexts: string[];
   /** FakeTranslator 在 Balloon 裡看到就回傳成新增的 Notes 條目（#37）。 */
   fakeNotes: NonNullable<TestConfig['fakeNotes']>;
+  /** 當作全新安裝：預設內建翻譯、SW 打開 onboarding（#93）。預設 false＝自備金鑰、設定已完成（#93 以前的狀態）。 */
+  freshInstall: boolean;
   context: BrowserContext;
   sw: Worker;
   extensionId: string;
@@ -123,8 +125,11 @@ export const test = base.extend<{
   requireApiKey: [false, { option: true }],
   unreadableTexts: [[], { option: true }],
   fakeNotes: [[], { option: true }],
-  sw: async ({ context, mockSite, fakeOcr, fakeOcrDelayMs, fakeTranslator, requireApiKey, unreadableTexts, fakeNotes }, use) => {
-    await use(await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts, fakeNotes }, fakeOcr, fakeOcrDelayMs));
+  freshInstall: [false, { option: true }],
+  sw: async ({ context, mockSite, fakeOcr, fakeOcrDelayMs, fakeTranslator, requireApiKey, unreadableTexts, fakeNotes, freshInstall }, use) => {
+    await use(
+      await configuredServiceWorker(context, mockSite, fakeTranslator, { requireApiKey, unreadableTexts, fakeNotes, freshInstall }, fakeOcr, fakeOcrDelayMs),
+    );
   },
   extensionId: async ({ sw }, use) => {
     await use(new URL(sw.url()).host);
@@ -179,18 +184,19 @@ export async function testActivate(fromExtensionPage: Page, tabId: number): Prom
 }
 
 /**
- * side panel 頂部的 ⚙ 選單（#77）：自動翻譯、重新擷取頁面、Series Notes、API key 與模型都收在裡面。
+ * side panel 頂部的 ⚙ 選單（#77）：自動翻譯、重新擷取頁面、Series Notes、設定都收在裡面。
  * 已經展開就不再點（再點會收起）。
  */
 export async function openPanelMenu(panel: Page): Promise<Locator> {
-  const toggle = panel.getByRole('button', { name: '設定', exact: true });
+  // 選單展開時，裡面的「設定」也叫這個名字；⚙ 在它前面
+  const toggle = panel.getByRole('button', { name: '設定', exact: true }).first();
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   const menu = panel.getByRole('group', { name: '設定選單' });
   await expect(menu).toBeVisible();
   return menu;
 }
 
-/** 從 ⚙ 選單按一項（重新擷取頁面、Series Notes、API key 與模型）；按了選單就收起。 */
+/** 從 ⚙ 選單按一項（重新擷取頁面、Series Notes、設定）；按了選單就收起，設定與 Series Notes 整個取代 side panel。 */
 export async function chooseFromPanelMenu(panel: Page, item: string): Promise<void> {
   await (await openPanelMenu(panel)).getByRole('button', { name: item }).click();
 }

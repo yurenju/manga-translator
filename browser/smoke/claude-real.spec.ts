@@ -1,6 +1,6 @@
 /**
  * 第 4 層（spec #27 第 12 節）：在外掛裡呼叫真的 Claude API（`npm run smoke`）。
- * - 正式 build（沒有 host_permissions）：設定區「測試連線」成功＝offscreen 直接 fetch 的 CORS 在真的外掛裡也過得去
+ * - 正式 build（沒有 host_permissions）：全新安裝打開的 onboarding 用「使用自備金鑰」存 key，設定頁「測試連線」成功＝offscreen 直接 fetch 的 CORS 在真的外掛裡也過得去
  *   （#15 只用 curl 模擬過 chrome-extension:// origin）。
  * - e2e build：仿 Jump+ 的 p01 經過本機 OCR 後送給 Haiku 5.5，逐字稿出現譯文，狀態列顯示模型・秒數・費用。
  *   自備 API key 直接打 Anthropic 一次；內建翻譯經過本機 Worker（wrangler dev --env dev，用同一把 key）一次（#90），
@@ -14,7 +14,7 @@ import type { Page } from '@playwright/test';
 import { build } from '../../scripts/build.ts';
 import { readTestApiKey, TEST_API_KEY_FILE } from '../../src/testing/test-api-key.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, launchWithExtension, openSidePanel, test } from '../fixtures.ts';
-import { signInWithEmail } from '../sign-in.ts';
+import { onboardingPage, signInFromPanel } from '../sign-in.ts';
 import { startWorker } from '../worker.ts';
 
 const apiKey = readTestApiKey();
@@ -22,11 +22,12 @@ if (!apiKey) console.log(`已跳過：沒有 NARUHODO_ANTHROPIC_KEY，也沒有 
 test.skip(!apiKey, '沒有測試用 API key');
 
 async function saveKey(panel: Page): Promise<void> {
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  const settings = panel.getByRole('region', { name: 'API key 與模型' });
+  await chooseFromPanelMenu(panel, '設定');
+  const settings = panel.getByRole('region', { name: '設定' });
   await settings.getByLabel('Claude API key').fill(apiKey!);
   await settings.getByRole('button', { name: '儲存' }).click();
   await expect(settings).toContainText('末四碼');
+  await panel.getByRole('button', { name: '返回' }).click();
 }
 
 test('正式 build（沒有 host_permissions）：「測試連線」成功', async () => {
@@ -36,8 +37,14 @@ test('正式 build（沒有 host_permissions）：「測試連線」成功', asy
     const context = await launchWithExtension('', undefined, outDir);
     try {
       const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+      // 正式 build 會處理安裝事件：預設內建翻譯並打開 onboarding（#93），從頁尾改用自備金鑰
+      const onboarding = await onboardingPage(context);
+      await onboarding.getByRole('button', { name: '使用自備金鑰' }).click();
+      await onboarding.getByLabel('Claude API key').fill(apiKey!);
+      await onboarding.getByRole('button', { name: '同意並儲存' }).click();
+      await expect(onboarding.getByRole('heading', { name: '開始翻譯' })).toBeVisible();
       const panel = await openSidePanel(context, new URL(sw.url()).host);
-      await saveKey(panel);
+      await chooseFromPanelMenu(panel, '設定');
       await panel.getByRole('button', { name: '測試連線' }).click();
       await expect(panel.getByText('連線成功（claude-haiku-5-5）')).toBeVisible({ timeout: 30_000 });
     } finally {
@@ -71,10 +78,12 @@ test.describe('e2e build', () => {
         extensionId,
         mockSite,
         async beforeActivate(panel) {
-          await chooseFromPanelMenu(panel, 'API key 與模型');
-          await panel.getByRole('group', { name: '翻譯方式' }).getByRole('button', { name: '內建翻譯' }).click();
-          // 登入時就取得資料使用同意，不另外按說明卡
-          await signInWithEmail(panel.getByRole('region', { name: 'API key 與模型' }), `smoke-${Date.now()}@example.com`);
+          await chooseFromPanelMenu(panel, '設定');
+          const settings = panel.getByRole('region', { name: '設定' });
+          await settings.getByRole('radio', { name: '內建翻譯' }).check();
+          // 在 onboarding 登入時就取得資料使用同意，不另外按說明卡
+          await signInFromPanel(context, () => settings.getByRole('button', { name: '登入' }).click(), `smoke-${Date.now()}@example.com`);
+          await panel.getByRole('button', { name: '返回' }).click();
         },
       });
 

@@ -1,8 +1,10 @@
 /**
  * Hosted Translation：外掛連 globalSetup 啟動的本機 Worker（wrangler dev --env test，Anthropic 是 FakeTranslator、寄信是假的實作）。
- * 用 email 驗證碼登入（驗證碼從假的寄信實作的 outbox 取出）後翻完一頁；切回 Own API Key 時改走 offscreen 的 FakeTranslator，不經過 Worker。
- * unit 測不到的：side panel 與 SW 真的用 HTTP 打到 Worker、兩邊對 API 契約（路徑、token、輸入與回應格式）的理解一致，
- * session token 存進 IndexedDB 後 SW 讀得到，以及翻譯模式的設定一路傳到 SW。
+ * 全新安裝（#93）：SW 處理安裝事件 → 打開 onboarding 分頁 → 用 email 驗證碼登入（驗證碼從假的寄信實作的 outbox 取出）→
+ * 先用免費額度 → 在仿 Jump+ 翻完一頁；切到自備金鑰時改走 offscreen 的 FakeTranslator，不經過 Worker。
+ * unit 測不到的：SW 真的打開 onboarding 分頁、onboarding 頁與 side panel 與 SW 透過 chrome.storage／IndexedDB／訊息接起來，
+ * side panel 與 SW 真的用 HTTP 打到 Worker、兩邊對 API 契約（路徑、token、輸入與回應格式）的理解一致。
+ * 安裝時怎麼決定翻譯模式與 onboarding 在 src/background/install.test.ts。
  * 兩條路的譯文都來自同一份 ground truth，所以用 __translateCalls（只有走 offscreen 時才加）分辨走了哪一條。
  * 免費額度用完（#92）：Worker 回 402 → SW 的 Hosted Translator → side panel 重新向 Worker 讀額度，這串訊息與 API 契約只有這裡測得到；
  * 顯示規則（哪一行文字、警告色、按鈕）在 src/ui/view.test.ts。
@@ -10,7 +12,7 @@
 import type { Page } from '@playwright/test';
 import { DEV_FREE_PAGES_PATH } from '../src/shared/hosted-api.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, openPanelMenu, test } from './fixtures.ts';
-import { signInWithEmail } from './sign-in.ts';
+import { onboardingPage, signInFromPanel, signInWithEmail } from './sign-in.ts';
 import { WORKER_URL } from './worker.ts';
 
 test.use({ viewport: null, fakeTranslator: true, requireApiKey: true });
@@ -20,48 +22,58 @@ const firstTranscript = (panel: Page) =>
 
 const freshEmail = (workerIndex: number) => `reader-${workerIndex}-${Date.now()}@example.com`;
 
-test('用 email 驗證碼登入後，內建翻譯經過本機 Worker 翻完一頁；切到自備 API key 時不經過 Worker', async ({ context, sw, extensionId, mockSite }, testInfo) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  const transcript = firstTranscript(panel);
-  await expect(transcript.getByText('未翻譯').first()).toBeVisible();
+test.describe('全新安裝', () => {
+  test.use({ freshInstall: true });
 
-  // 內建翻譯、還沒登入：逐字稿上方提示「尚未登入」，不用 API key
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  const settings = panel.getByRole('region', { name: 'API key 與模型' });
-  const mode = settings.getByRole('group', { name: '翻譯方式' });
-  await mode.getByRole('button', { name: '內建翻譯' }).click();
-  await expect(settings.getByLabel('Claude API key')).toHaveCount(0);
-  const signedOut = panel.getByRole('group', { name: '尚未登入' });
-  await expect(signedOut).toBeVisible();
+  test('onboarding 自動打開 → 同意並登入 → 先用免費額度 → 內建翻譯經過本機 Worker 翻完一頁；切到自備金鑰時不經過 Worker', async ({
+    context,
+    sw,
+    extensionId,
+    mockSite,
+  }, testInfo) => {
+    const onboarding = await onboardingPage(context);
+    await onboarding.getByRole('button', { name: '開始設定' }).click();
+    const email = freshEmail(testInfo.workerIndex);
+    await signInWithEmail(onboarding, email);
+    await onboarding.getByRole('button', { name: '先用免費的 50 頁' }).click();
+    await expect(onboarding.getByRole('heading', { name: '開始翻譯' })).toBeVisible();
+    await Promise.all([onboarding.waitForEvent('close'), onboarding.getByRole('button', { name: '完成' }).click()]);
 
-  // 同意並登入：寄送 → 從假的寄信取出驗證碼 → 登入（同意在這一步取得，不另外顯示資料使用說明卡）
-  await signedOut.getByRole('button', { name: '登入' }).click();
-  await signInWithEmail(settings, freshEmail(testInfo.workerIndex));
-  await expect(signedOut).toHaveCount(0);
-  await expect(panel.getByRole('region', { name: '資料使用說明' })).toHaveCount(0);
+    // 設定完成：side panel 不再只顯示「完成設定」，自動翻譯直接經過 Worker 翻（同意在登入時取得，沒有資料使用說明卡）
+    const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+    const transcript = firstTranscript(panel);
+    await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
+    await expect(panel.getByRole('region', { name: '資料使用說明' })).toHaveCount(0);
+    expect(await sw.evaluate(() => globalThis.__translateCalls)).toBe(0);
 
-  await panel.getByRole('button', { name: '翻譯此頁' }).click();
-  await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
-  expect(await sw.evaluate(() => globalThis.__translateCalls)).toBe(0);
-
-  // 自備 API key：同一頁重新翻譯，改走 offscreen
-  await mode.getByRole('button', { name: '自備 API key' }).click();
-  await settings.getByLabel('Claude API key').fill('sk-ant-e2e-not-a-real-key-WXYZ');
-  await settings.getByRole('button', { name: '儲存' }).click();
-  await panel.getByRole('button', { name: '重新翻譯' }).click();
-  await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls)).toBeGreaterThan(0);
-  await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
+    // 自備金鑰：設定頁切換（不會登出），同一頁重新翻譯改走 offscreen
+    await chooseFromPanelMenu(panel, '設定');
+    const settings = panel.getByRole('region', { name: '設定' });
+    await settings.getByRole('radio', { name: '自備金鑰' }).check();
+    await expect(settings).toContainText(`帳號 ${email} 仍然登入著`);
+    await settings.getByLabel('Claude API key').fill('sk-ant-e2e-not-a-real-key-WXYZ');
+    await settings.getByRole('button', { name: '儲存' }).click();
+    await panel.getByRole('button', { name: '返回' }).click();
+    // 自備金鑰的同意另外問（資料流向不同）
+    await panel.getByRole('region', { name: '資料使用說明' }).getByRole('button', { name: '同意並啟用翻譯' }).click();
+    await panel.getByRole('button', { name: '重新翻譯' }).click();
+    await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls)).toBeGreaterThan(0);
+    await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
+  });
 });
 
 test('免費額度用完：Worker 回額度不足後，side panel 顯示用完的狀態，逐字稿仍有原文與讀音', async ({ context, sw, extensionId, mockSite }, testInfo) => {
   const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
   // 關掉自動翻譯：登入後只有按「翻譯此頁」才會送到 Worker，額度與按鈕不會被背景的翻譯搶先改掉
   await (await openPanelMenu(panel)).getByRole('switch', { name: '自動翻譯' }).uncheck();
-  await chooseFromPanelMenu(panel, 'API key 與模型');
-  const settings = panel.getByRole('region', { name: 'API key 與模型' });
-  await settings.getByRole('group', { name: '翻譯方式' }).getByRole('button', { name: '內建翻譯' }).click();
+  await chooseFromPanelMenu(panel, '設定');
+  const settings = panel.getByRole('region', { name: '設定' });
+  await settings.getByRole('radio', { name: '內建翻譯' }).check();
   const email = freshEmail(testInfo.workerIndex);
-  await signInWithEmail(settings, email);
+  // 設定頁的「登入」打開 onboarding 的第 2 步
+  await signInFromPanel(context, () => settings.getByRole('button', { name: '登入' }).click(), email);
+  await expect(settings.getByText(email)).toBeVisible();
+  await panel.getByRole('button', { name: '返回' }).click();
   const remaining = panel.getByRole('status', { name: '剩餘額度' });
   await expect(remaining).toHaveText(/免費額度剩 50 頁/);
 

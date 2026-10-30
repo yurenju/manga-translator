@@ -307,6 +307,41 @@ describe('翻譯此頁', () => {
     expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false });
   });
 
+  it('能翻譯了（同意、登入）：自動翻譯開著的 tab 直接翻還沒翻譯的頁，已翻好的不重翻', async () => {
+    let translator: Translator | undefined;
+    const calls: TranslateInput[] = [];
+    const cache = memoryCache();
+    // a1 已經翻好（快取），a2 沒有 Translator 時辨識完、未翻譯
+    await setup({ cache, getTranslator: () => translatorReturning('舊') }).transcriber.update(1, [thumb('a1')], capture);
+    const { transcriber } = setup({ cache, getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+
+    translator = translatorReturning('今天', calls);
+    await transcriber.translateUntranslated();
+
+    expect(calls).toHaveLength(1);
+    const [first, second] = transcriber.get(1).map((p) => p.transcript);
+    expect(first!.state === 'done' && first!.translation?.source).toBe('cache');
+    expect(second!.state === 'done' && second!.translated).toBe(true);
+  });
+
+  it('能翻譯了，但自動翻譯關著的 tab 不動（等讀者按「翻譯此頁」）；還是不能翻時也不動', async () => {
+    let translator: Translator | undefined;
+    const calls: TranslateInput[] = [];
+    const { transcriber, deps } = setup({ getTranslator: () => translator });
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.setAutoTranslate(2, false);
+    await transcriber.update(2, [thumb('a2')], capture);
+
+    await transcriber.translateUntranslated();
+    translator = translatorReturning('今天', calls);
+    await transcriber.translateUntranslated();
+
+    expect(calls).toHaveLength(1);
+    expect(deps.analyze).toHaveBeenCalledTimes(1);
+    expect(transcriber.get(2)[0]!.transcript).toEqual({ state: 'pending' });
+  });
+
   it('分析失敗的 Page 不送翻譯', async () => {
     const calls: TranslateInput[] = [];
     const { transcriber } = setup({ analyze: async () => Promise.reject(new Error('壞掉')), getTranslator: () => translatorReturning('x', calls) });

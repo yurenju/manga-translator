@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PageView } from '../shared/messages.ts';
 import type { RatioRect } from '../shared/page-text.ts';
 import type { TranslationMode } from '../shared/translation-mode.ts';
-import { quotaView, setupNotices, sidePanelView } from './view.ts';
+import { quotaView, setupNotices, sidePanelScreen, sidePanelView } from './view.ts';
 
 type Transcript = PageView['transcript'];
 type Done = Extract<Transcript, { state: 'done' }>;
@@ -173,12 +173,36 @@ describe('翻譯前的設定提示', () => {
     expect(setupNotices({ access: { mode: 'ownKey', hasKey: true }, consented: true, untranslated: true }).notice).toBeUndefined();
   });
 
+  it('從舊版更新、仍用自備金鑰：還沒關掉內建翻譯提示時顯示一次；關掉後不再出現', () => {
+    const ownKey = { access: { mode: 'ownKey', hasKey: true }, consented: true, untranslated: false } as const;
+    expect(setupNotices({ ...ownKey, hostedHint: true }).notice).toBe('hostedHint');
+    expect(setupNotices({ ...ownKey, hostedHint: false }).notice).toBeUndefined();
+  });
+
+  it('內建翻譯提示只在自備金鑰時出現；「尚未設定 API key」優先', () => {
+    expect(setupNotices({ access: { mode: 'hosted', signedIn: true }, consented: true, untranslated: false, hostedHint: true }).notice).toBeUndefined();
+    expect(setupNotices({ access: { mode: 'ownKey', hasKey: false }, consented: true, untranslated: true, hostedHint: true }).notice).toBe('noKey');
+  });
+
   it('同意狀態還在讀：什麼都不顯示，不會閃一下', () => {
     expect(setupNotices({ access: { mode: 'hosted', signedIn: false }, consented: undefined, untranslated: true })).toEqual({
       consentCard: false,
       notice: undefined,
     });
     expect(setupNotices({ access: { mode: 'ownKey', hasKey: false }, consented: undefined, untranslated: false }).consentCard).toBe(false);
+  });
+});
+
+describe('side panel 顯示哪一個畫面', () => {
+  it('沒做完 onboarding：只顯示「完成設定」，即使分頁已啟動、或打開過設定頁', () => {
+    expect(sidePanelScreen({ setupComplete: false, page: undefined })).toBe('finishSetup');
+    expect(sidePanelScreen({ setupComplete: false, page: 'settings' })).toBe('finishSetup');
+  });
+
+  it('設定完成：平常是逐字稿；從 ⚙ 選單打開設定或 Series Notes 時整個換成那一頁', () => {
+    expect(sidePanelScreen({ setupComplete: true, page: undefined })).toBe('transcript');
+    expect(sidePanelScreen({ setupComplete: true, page: 'settings' })).toBe('settings');
+    expect(sidePanelScreen({ setupComplete: true, page: 'notes' })).toBe('notes');
   });
 });
 

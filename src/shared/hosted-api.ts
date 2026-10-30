@@ -39,6 +39,9 @@ export interface VerifyCodeResponse {
  * 剩餘額度（spec #86「額度規則」）：沒有訂閱時只有 Free Pages，remaining 是剩下的免費頁數。
  * #94 加上訂閱者的本月額度（plan 'subscribed'、重置日期）。外掛只顯示這裡的數字，不自己算。
  */
+/** 新 Account 一次性的免費頁數（Worker 發額度、設定頁顯示「剩 N / 50 頁」）。 */
+export const FREE_PAGES = 50;
+
 export interface Quota {
   plan: 'free';
   remaining: number;

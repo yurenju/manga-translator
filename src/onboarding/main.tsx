@@ -1,0 +1,259 @@
+/**
+ * 全頁 onboarding（#93 畫面定案的版本 A：單欄步驟精靈）。全新安裝時 SW 用新分頁打開；side panel 的「完成設定」
+ * 回到停下來的那一步，「登入」「改用內建翻譯」從第 2 步開始（?step=signIn）。
+ *
+ * 1 說明 → 2 同意並登入（SignIn；按「同意並寄送驗證碼」就記下內建翻譯的同意）→ 3 選擇方案 → 4 教學，按「完成」關掉分頁。
+ * 頁尾「使用自備金鑰」換成一個不在步驟裡的畫面：存 key 並同意自備金鑰的說明，完成後跳到第 4 步。
+ * 選了方案或存了 key 就算設定完成（side panel 不再顯示「完成設定」）；之後的同意、登入、模式切換由 SW 接著翻已啟動的分頁。
+ */
+import { render } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
+import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
+import { grantDataConsent } from '../shared/data-consent.ts';
+import { FREE_PAGES } from '../shared/hosted-api.ts';
+import { createHostedAuth } from '../shared/hosted-auth.ts';
+import { HOSTED_API_URL, loadHostedSession, saveHostedSession, type HostedSession } from '../shared/hosted-session.ts';
+import type { Message } from '../shared/messages.ts';
+import { loadOnboarding, saveOnboarding, startStep, type OnboardingProgress, type OnboardingStep } from '../shared/onboarding.ts';
+import { saveTranslationMode } from '../shared/translation-mode.ts';
+import { Button } from '../ui/components.tsx';
+import { OwnKeyDataFlow, PolicyLinks } from '../ui/data-flow.tsx';
+import { SignIn } from '../ui/sign-in.tsx';
+
+const hostedAuth = createHostedAuth({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
+
+const apiKeys = indexedDbApiKeyStore();
+
+const LOGO = 'icons/naruhodo.svg';
+
+/** 進度點上的四步。 */
+const STEPS: { step: OnboardingStep; title: string }[] = [
+  { step: 'intro', title: '說明' },
+  { step: 'signIn', title: '同意並登入' },
+  { step: 'plan', title: '選擇方案' },
+  { step: 'tutorial', title: '開始翻譯' },
+];
+
+function Dots({ current }: { current: OnboardingStep }) {
+  const index = STEPS.findIndex((s) => s.step === current);
+  return (
+    <ol class="ob-dots" aria-label="步驟">
+      {STEPS.map((s, i) => (
+        <li key={s.step} class={i < index ? 'done' : i === index ? 'cur' : undefined} aria-current={i === index ? 'step' : undefined}>
+          <span aria-hidden="true">{i + 1}</span>
+          {s.title}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function Intro({ onNext }: { onNext: () => void }) {
+  return (
+    <>
+      <h1 class="ob-h1">歡迎使用 Naruhodo</h1>
+      <p class="ob-lead">在日文漫畫網站上，把對話框直接換成中文；也可以保留日文、滑過看讀音，拿來學日文。</p>
+      <div class="ob-price">
+        <ul>
+          <li>
+            用 email 註冊之後，有 <strong>{FREE_PAGES} 頁的免費額度</strong>（大約兩話），不用輸入付款資料。
+          </li>
+          {/* 價格與上限依最終定價（#94） */}
+          <li>試用滿意的話，可以訂閱：年繳 US$20，每月可翻 800 頁。</li>
+          <li>回頭看已經翻過的頁面不會扣頁數；翻譯失敗也不扣。</li>
+        </ul>
+      </div>
+      <Button variant="primary" class="ob-big" onClick={onNext}>
+        開始設定
+      </Button>
+    </>
+  );
+}
+
+/** 第 3 步：選擇方案。「訂閱」在 #94 接上 Paddle checkout 之前停用。 */
+function Plan({ email, onFree }: { email: string; onFree: () => void }) {
+  return (
+    <>
+      <h2 class="ob-h2">選擇方案</h2>
+      <p>
+        已登入 <strong>{email}</strong>。你可以現在訂閱，或先用免費額度試試看。
+      </p>
+      <div class="ob-plans">
+        <section class="ob-plan" aria-label="先用免費額度">
+          <p class="ob-plan__name">先用免費額度</p>
+          <p class="ob-plan__price">{FREE_PAGES} 頁</p>
+          <p class="hint">大約兩話，不會過期。用完再決定要不要訂閱。</p>
+          <Button onClick={onFree}>先用免費的 {FREE_PAGES} 頁</Button>
+        </section>
+        <section class="ob-plan ob-plan--hl" aria-label="訂閱（年繳）">
+          <p class="ob-plan__name">訂閱（年繳）</p>
+          <p class="ob-plan__price">US$20 / 年</p>
+          <p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。</p>
+          <Button variant="primary" disabled>
+            訂閱
+          </Button>
+        </section>
+      </div>
+    </>
+  );
+}
+
+function Tutorial() {
+  return (
+    <>
+      <h2 class="ob-h2">開始翻譯</h2>
+      <p>打開日文漫畫網站（例如少年ジャンプ＋、Kindle 雲端閱讀器），然後：</p>
+      {/* 假的工具列：網址列＋拼圖圖示＋框起來的外掛圖示 */}
+      <div class="ob-toolbar" aria-hidden="true">
+        <span class="ob-toolbar__url">shonenjumpplus.com/episode/…</span>
+        <span class="ob-toolbar__icon">🧩</span>
+        <span class="ob-toolbar__icon ob-toolbar__icon--hl">
+          <img src={LOGO} alt="" width={24} height={24} />
+        </span>
+      </div>
+      <ol>
+        <li>
+          點工具列上的 Naruhodo 圖示，或按 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>。
+        </li>
+        <li>右邊會打開 side panel，翻到的頁面會自動翻譯。</li>
+      </ol>
+      <p class="hint">沒看到圖示？點拼圖圖示 🧩，把 Naruhodo 釘選到工具列。</p>
+      <Button variant="primary" class="ob-big" onClick={() => window.close()}>
+        完成
+      </Button>
+    </>
+  );
+}
+
+/** 頁尾「使用自備金鑰」：按「同意並儲存」同時代表同意自備金鑰版的資料使用說明。 */
+function OwnKey({ onSaved, onBack }: { onSaved: (key: string) => void; onBack: () => void }) {
+  const [draft, setDraft] = useState('');
+  return (
+    <section aria-label="使用自備金鑰">
+      <h2 class="ob-h2">使用自備金鑰</h2>
+      <p>用你自己的 Anthropic API key 翻譯：不需要帳號，也沒有頁數限制，費用由 Anthropic 直接向你收取。</p>
+      <OwnKeyDataFlow />
+      <p class="hint">
+        <PolicyLinks />
+      </p>
+      <form
+        class="ob-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (draft.trim()) onSaved(draft.trim());
+        }}
+      >
+        <label class="ob-field">
+          Claude API key
+          <input type="password" autocomplete="off" spellcheck={false} required value={draft} onInput={(e) => setDraft(e.currentTarget.value)} />
+        </label>
+        <Button variant="primary" type="submit">
+          同意並儲存
+        </Button>
+      </form>
+      <p>
+        <Button variant="link" onClick={onBack}>
+          回到內建翻譯
+        </Button>
+      </p>
+    </section>
+  );
+}
+
+function Onboarding({ requested }: { requested: 'signIn' | undefined }) {
+  const [progress, setProgress] = useState<OnboardingProgress | undefined>(undefined);
+  const [session, setSession] = useState<HostedSession | null>(null);
+  const [step, setStep] = useState<OnboardingStep | undefined>(undefined);
+
+  useEffect(() => {
+    void Promise.all([loadOnboarding(), loadHostedSession()]).then(([stored, saved]) => {
+      setProgress(stored);
+      setSession(saved ?? null);
+      setStep(startStep(stored, Boolean(saved), requested));
+    });
+  }, []);
+
+  /** 換到下一步，並記下停在哪裡（side panel 的「完成設定」回到這裡）；設定早就完成的（例如從設定頁來登入）不改回未完成。 */
+  function go(next: OnboardingStep) {
+    setStep(next);
+    if (progress !== 'done' && (next === 'intro' || next === 'signIn' || next === 'plan')) {
+      setProgress(next);
+      void saveOnboarding(next);
+    }
+  }
+
+  async function finish() {
+    setProgress('done');
+    await saveOnboarding('done');
+    setStep('tutorial');
+  }
+
+  if (step === undefined) return null;
+  const back = (to: OnboardingStep) => (
+    <p class="ob-back">
+      <Button variant="link" onClick={() => go(to)}>
+        ← 上一步
+      </Button>
+    </p>
+  );
+  return (
+    <div class="ob">
+      <header class="ob-brand">
+        <img src={LOGO} alt="" width={24} height={24} />
+        Naruhodo
+      </header>
+      {step !== 'ownKey' && <Dots current={step} />}
+      <main class="ob-card">
+        {step === 'intro' && <Intro onNext={() => go(session ? 'plan' : 'signIn')} />}
+        {step === 'signIn' && (
+          <SignIn
+            auth={hostedAuth}
+            onConsent={() => grantDataConsent('hosted')}
+            onSignedIn={async (signedIn) => {
+              await saveHostedSession(signedIn);
+              // side panel 重新讀 session；SW 接著翻已啟動分頁裡還沒翻的頁
+              void chrome.runtime.sendMessage({ type: 'session:changed' } satisfies Message).catch(() => {});
+              setSession(signedIn);
+              go('plan');
+            }}
+            emailFooter={back('intro')}
+          />
+        )}
+        {step === 'plan' && session && (
+          <>
+            <Plan
+              email={session.email}
+              onFree={() => void saveTranslationMode('hosted').then(finish)}
+            />
+            {back('signIn')}
+          </>
+        )}
+        {step === 'tutorial' && <Tutorial />}
+        {step === 'ownKey' && (
+          <OwnKey
+            onSaved={(key) =>
+              // key 先存好，同意與模式寫進 chrome.storage 時 SW 才翻得了已啟動的分頁
+              void apiKeys
+                .set(key)
+                .then(() => grantDataConsent('ownKey'))
+                .then(() => saveTranslationMode('ownKey'))
+                .then(finish)
+            }
+            onBack={() => go('intro')}
+          />
+        )}
+      </main>
+      {step !== 'ownKey' && (
+        <p class="ob-foot">
+          已經有 Anthropic API key？
+          <Button variant="link" onClick={() => setStep('ownKey')}>
+            使用自備金鑰
+          </Button>
+        </p>
+      )}
+    </div>
+  );
+}
+
+const requested = new URLSearchParams(location.search).get('step') === 'signIn' ? 'signIn' : undefined;
+render(<Onboarding requested={requested} />, document.getElementById('app')!);
