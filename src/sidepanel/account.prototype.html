@@ -89,7 +89,7 @@ const PANEL_STATES = {
   free: '免費，剩 37 頁',
   freeLow: '免費，剩 3 頁',
   sub: '訂閱中，本月剩 612 頁',
-  exFree: '免費頁數用完',
+  exFree: '免費額度用完',
   exMonthly: '本月額度用完',
   ownKeyHint: '自備金鑰＋內建翻譯提示（一次）',
   ownKey: '自備金鑰（提示關掉後）',
@@ -203,13 +203,13 @@ function quota(state) {
 
 /** 一行文字的剩餘頁數（A、B 版共用的文案）。 */
 function remainingText(q) {
-  if (q.plan === 'free') return `免費頁數剩 ${q.free} 頁`;
+  if (q.plan === 'free') return `免費額度剩 ${q.free} 頁`;
   return `本月剩 ${q.monthLeft} 頁・${q.reset}重置`;
 }
 
 /** 額度用完的原因（三個版本共用的文案）。 */
 function exhaustedTitle(q) {
-  return q.reason === 'free' ? '免費頁數已用完' : `本月額度已用完，${q.reset}重置`;
+  return q.reason === 'free' ? '免費額度已用完' : `本月額度已用完，${q.reset}重置`;
 }
 function exhaustedBody(q) {
   return q.reason === 'free'
@@ -230,7 +230,7 @@ function setupScreen(v) {
     ${btn('完成設定', { variant: 'primary', act: 'goOnboarding' })}<p class="hint">會回到剛才停下來的那一步</p></div>`;
 }
 
-const ownKeyHintText = '現在也可以改用內建翻譯：用 email 登入就能翻，不用自備 API key。新帳號有 50 頁免費頁數。';
+const ownKeyHintText = '現在也可以改用內建翻譯：用 email 登入就能翻，不用自備 API key。新帳號有 50 頁免費額度。';
 
 function panelA(q) {
   // 額度一行放在底部狀態列；用完、未登入、提示都是逐字稿上方的 Callout
@@ -263,7 +263,7 @@ function panelB(q) {
   const pop = S.quotaOpen && q.signedIn ? `<div class="panel-menu__popover proto-quota-pop">
       <p class="proto-k">方案</p><p>${q.plan === 'free' ? '免費' : '訂閱（年繳）'}</p>
       ${q.plan === 'sub' ? `<p class="proto-k">本月</p><p>剩 ${q.monthLeft} / ${q.monthLimit} 頁・${q.reset}重置</p>` : ''}
-      <p class="proto-k">免費頁數</p><p>剩 ${q.free} / 50 頁</p>
+      <p class="proto-k">免費額度</p><p>剩 ${q.free} / 50 頁</p>
       ${q.plan === 'free' ? btn('訂閱：每月 800 頁', { variant: 'primary', act: 'subscribe' }) : ''}
       <button type="button" class="proto-small-link" data-act="goSettings">帳號設定</button>
     </div>` : '';
@@ -288,7 +288,7 @@ function panelC(q) {
   else if (q.mode === 'hosted' && q.reason)
     card = `<section class="proto-card proto-card--warn" aria-label="內建翻譯"><p class="proto-card__title">${exhaustedTitle(q)}</p><p>${exhaustedBody(q)}</p><div class="proto-row">${q.reason === 'free' ? btn('訂閱：每月 800 頁', { variant: 'primary', act: 'subscribe' }) : ''}${ownKeyLink()}</div></section>`;
   else if (q.mode === 'hosted') {
-    const [left, total, label] = q.plan === 'free' ? [q.free, 50, '免費頁數'] : [q.monthLeft, q.monthLimit, '本月'];
+    const [left, total, label] = q.plan === 'free' ? [q.free, 50, '免費額度'] : [q.monthLeft, q.monthLimit, '本月'];
     card = `<section class="proto-card" aria-label="內建翻譯">
       <div class="proto-card__head"><span class="proto-card__title">內建翻譯</span>${q.plan === 'free' ? badge('免費') : badge('訂閱中', 'ok')}</div>
       <div class="proto-meter"><span class="proto-meter__num">${left}</span><span class="proto-meter__of">/ ${total} 頁・${label}剩餘</span></div>
@@ -331,10 +331,10 @@ function planBadge(a) {
   return badge('訂閱中', 'ok');
 }
 function planDetail(a) {
-  if (a.plan === 'free') return `免費頁數剩 ${a.free} / 50 頁`;
+  if (a.plan === 'free') return `免費額度剩 ${a.free} / 50 頁`;
   const lines = [`本月剩 ${a.monthLeft} / 800 頁，${a.reset}重置`];
   if (a.ends) lines.push(`訂閱在 ${a.ends}結束`);
-  else if (a.pastDue) lines.push('Paddle 會再嘗試扣款，這段期間照常可以使用');
+  else if (a.pastDue) lines.push('Paddle 會再嘗試扣款，這段期間照常可以使用；請到「管理訂閱」更新付款方式');
   else lines.push(`下次續訂：${a.renew}`);
   return lines.join('<br>');
 }
@@ -342,10 +342,10 @@ function planDetail(a) {
 const ownKeyBlock = (a) => `<p>已設定 Claude API key（末四碼 ${a.key}）</p><div class="actions">${btn('測試連線')}${btn('刪除')}</div>
   <p class="hint">建議在 Anthropic Console 為這個外掛建立專用的 API key，並設定花費上限。key 只存在這台電腦。</p>`;
 
-const deleteConsequences = `<ul class="proto-list"><li>剩下的頁數與用量紀錄都會刪除。</li><li>有訂閱的話會一起取消，不會再扣款；已付的費用不會自動退還。</li><li>之後用同一個 email 重新註冊，不會再有免費頁數。</li><li>這台電腦上的翻譯快取、Series Notes 不受影響。</li></ul>`;
+const deleteConsequences = `<ul class="proto-list"><li>剩下的頁數與用量紀錄都會刪除。</li><li>有訂閱的話會一起取消，不會再扣款；已付的費用不會自動退還。</li><li>之後用同一個 email 重新註冊，不會再有免費額度。</li><li>這台電腦上的翻譯快取、Series Notes 不受影響。</li></ul>`;
 
 function accountActions(a) {
-  return `<div class="actions">${a.plan === 'free' ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : ''}${btn('登出', { act: 'signOut' })}${btn('刪除帳號', { variant: 'ghost', act: 'deleteStart', extra: 'proto-text-danger' })}</div>`;
+  return `<div class="actions">${a.plan === 'free' ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : btn('管理訂閱', { act: 'manage' })}${btn('登出', { act: 'signOut' })}${btn('刪除帳號', { variant: 'ghost', act: 'deleteStart', extra: 'proto-text-danger' })}</div>`;
 }
 
 /** 設定頁與刪除確認頁共用的頂部：← 返回＋標題，取代整個 side panel 的內容。 */
@@ -393,7 +393,7 @@ function stepIntro() {
     <p class="ob-lead">在日文漫畫網站上，把對話框直接換成中文；也可以保留日文、滑過看讀音，拿來學日文。</p>
     <div class="ob-price">
       <ul class="proto-list">
-        <li>用 email 註冊之後，有 <strong>50 頁的免費翻譯額度</strong>（大約兩話），不用輸入付款資料。</li>
+        <li>用 email 註冊之後，有 <strong>50 頁的免費額度</strong>（大約兩話），不用輸入付款資料。</li>
         <li>試用滿意的話，可以訂閱：${PRICE}。${TBD}</li>
         <li>回頭看已經翻過的頁面不會扣頁數；翻譯失敗也不扣。</li>
       </ul>
@@ -436,13 +436,13 @@ function stepPlan() {
   if (S.sub === 'waitingPayment')
     return `<h2 class="ob-h2">在新分頁完成付款</h2>
       <p>付款頁已經在新分頁打開（由 Paddle 處理付款）。付款完成後，這裡會自動更新。</p>
-      <div class="proto-row">${btn('重新打開付款頁')}${btn('改成先用免費頁數', { variant: 'ghost', act: 'useFree' })}<button type="button" class="proto-sim" data-act="paid">（prototype：模擬付款完成）</button></div>`;
+      <div class="proto-row">${btn('重新打開付款頁')}${btn('改成先用免費額度', { variant: 'ghost', act: 'useFree' })}<button type="button" class="proto-sim" data-act="paid">（prototype：模擬付款完成）</button></div>`;
   if (S.sub === 'paid')
     return `<h2 class="ob-h2">訂閱完成</h2>${callout('<p>✓ 已訂閱：每月可翻 800 頁，每個月的今天重置。</p>')}
       ${btn('下一步', { variant: 'primary', act: 'obNext', extra: 'ob-big' })}`;
-  return `<h2 class="ob-h2">選擇方案</h2><p>已登入 <strong>${S.email}</strong>。你可以現在訂閱，或先用免費頁數試試看。</p>
+  return `<h2 class="ob-h2">選擇方案</h2><p>已登入 <strong>${S.email}</strong>。你可以現在訂閱，或先用免費額度試試看。</p>
     <div class="ob-plans">
-      <div class="ob-plan"><p class="ob-plan__name">先用免費頁數</p><p class="ob-plan__price">50 頁</p><p class="hint">大約兩話，不會過期。用完再決定要不要訂閱。</p>${btn('先用免費的 50 頁', { act: 'useFree' })}</div>
+      <div class="ob-plan"><p class="ob-plan__name">先用免費額度</p><p class="ob-plan__price">50 頁</p><p class="hint">大約兩話，不會過期。用完再決定要不要訂閱。</p>${btn('先用免費的 50 頁', { act: 'useFree' })}</div>
       <div class="ob-plan ob-plan--hl"><p class="ob-plan__name">訂閱（年繳）${TBD}</p><p class="ob-plan__price">US$20 / 年</p><p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。</p>${btn('訂閱', { variant: 'primary', act: 'subscribeOb' })}</div>
     </div>`;
 }
@@ -490,7 +490,7 @@ function onboardingB() {
   const items = STEP_TITLES.map((t, i) => {
     const n = i + 1;
     const state = S.sub === 'ownkey' ? '' : n < S.step ? 'done' : n === S.step ? 'cur' : '';
-    const result = n === 2 && S.step > 2 ? `<span class="ob-b__res">${S.email}</span>` : n === 3 && S.step > 3 ? `<span class="ob-b__res">${S.sub === 'paid' || S.paid ? '已訂閱' : '先用免費頁數'}</span>` : '';
+    const result = n === 2 && S.step > 2 ? `<span class="ob-b__res">${S.email}</span>` : n === 3 && S.step > 3 ? `<span class="ob-b__res">${S.sub === 'paid' || S.paid ? '已訂閱' : '先用免費額度'}</span>` : '';
     return `<li class="${state}"><span class="ob-b__n">${n < S.step && S.sub !== 'ownkey' ? '✓' : n}</span><span>${t}${result}</span></li>`;
   }).join('');
   return `<div class="ob-b"><aside class="ob-b__side"><header class="ob-brand">${LOGO}Naruhodo</header><ol class="ob-b__steps">${items}</ol>
@@ -736,6 +736,7 @@ const ACTIONS = {
   goOnboardingLogin: () => { S.screen = 'onboarding'; S.step = 2; S.sub = 'email'; },
   useOwnKey: () => { S.screen = 'settings'; S.settingsState = 'ownKeyLoggedIn'; },
   subscribe: () => alert('（prototype）用新分頁打開 #89 的 checkout 頁'),
+  manage: () => alert('（prototype）用新分頁打開 Paddle customer portal：取消訂閱、更換付款方式、收據'),
   dismissHint: () => { S.hintDismissed = true; },
   toggleQuota: () => { S.quotaOpen = !S.quotaOpen; },
   setMode: (b) => {
