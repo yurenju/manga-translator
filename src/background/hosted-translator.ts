@@ -8,12 +8,12 @@
  * 402 是額度用完：丟出 QuotaExhaustedError，pipeline 把這頁當成沒翻譯（顯示原文與讀音），不當成失敗。
  * 翻譯成功（扣了一頁）與額度用完都呼叫 onQuotaChanged，side panel 重新讀剩餘頁數。
  */
-import { NOTES_PATH, TRANSLATE_PATH, type HostedError, type HostedErrorReason } from '../shared/hosted-api.ts';
+import { bearerHeader, NOTES_PATH, readHostedError, TRANSLATE_PATH, type HostedErrorReason } from '../shared/hosted-api.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 
 const MAX_RETRIES = 3;
 
-/** Worker 說額度用完（402）；reason 是原因（目前只有免費額度用完，#94 加本月額度）。 */
+/** Worker 說額度用完（402）；reason 是 freePagesExhausted（免費額度用完）或 monthlyLimitReached（本月額度用完）。 */
 export class QuotaExhaustedError extends Error {
   readonly reason: HostedErrorReason;
 
@@ -45,7 +45,7 @@ export function createHostedTranslator(deps: HostedDeps): Translator {
     for (let attempt = 0; ; attempt++) {
       const response = await deps.fetch(deps.apiUrl + path, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${deps.token}` },
+        headers: { 'content-type': 'application/json', ...bearerHeader(deps.token) },
         body: JSON.stringify(input),
         signal,
       });
@@ -57,7 +57,7 @@ export function createHostedTranslator(deps: HostedDeps): Translator {
         await deps.sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2 ** attempt * 2000, signal);
         continue;
       }
-      const error = await hostedError(response);
+      const error = await readHostedError(response);
       const message = `Hosted Translation ${response.status}：${error.error}`;
       if (response.status === 402 && error.reason) {
         deps.onQuotaChanged();
@@ -77,13 +77,4 @@ export function createHostedTranslator(deps: HostedDeps): Translator {
     translatePage,
     proposeNotes: (input: NotesInput, signal?: AbortSignal) => call<NotesOutput>(NOTES_PATH, input, signal),
   };
-}
-
-async function hostedError(response: Response): Promise<HostedError> {
-  try {
-    const body = (await response.json()) as Partial<HostedError>;
-    return { error: body.error ?? response.statusText, ...(body.reason ? { reason: body.reason } : {}) };
-  } catch {
-    return { error: response.statusText };
-  }
 }

@@ -1,12 +1,12 @@
 /**
  * 「同意並登入」：email 驗證碼登入（#91 畫面定案）。先列資料流向，按「同意並寄送驗證碼」就代表同意；寄出後換成輸入驗證碼。
- * 純畫面：寄送與驗證交給注入的 HostedAuth，同意與存 session 交給 callback。用在 onboarding（#93）的第 2 步；
+ * 純畫面：寄送與驗證交給注入的 HostedAccountClient，同意與存 session 交給 callback。用在 onboarding（#93）的第 2 步；
  * 資料流向的文字在 data-flow.tsx。
  */
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { HostedErrorReason } from '../shared/hosted-api.ts';
-import type { HostedAuth } from '../shared/hosted-auth.ts';
+import type { HostedAccountClient } from '../shared/hosted-account-client.ts';
 import { Button, Callout } from './components.tsx';
 import { HostedDataFlow, PolicyLinks } from './data-flow.tsx';
 
@@ -14,7 +14,7 @@ import { HostedDataFlow, PolicyLinks } from './data-flow.tsx';
 const RESEND_COOLDOWN_S = 30;
 
 const ERRORS: Partial<Record<HostedErrorReason, string>> = {
-  rateLimited: '寄送太頻繁了，請過幾分鐘再試。',
+  rateLimited: '嘗試太頻繁了，請稍後再試。',
   wrongCode: '驗證碼不正確，請再確認一次。',
   codeExpired: '驗證碼已經過期，請重新寄送。',
   tooManyAttempts: '錯誤次數太多，這組驗證碼已失效，請重新寄送。',
@@ -56,7 +56,7 @@ function useCountdown(): [number, () => void] {
 }
 
 export interface SignInProps {
-  auth: HostedAuth;
+  auth: HostedAccountClient;
   /** 按「同意並寄送驗證碼」：記下資料使用同意（在寄送之前）。 */
   onConsent: () => void | Promise<void>;
   /** 驗證成功：存 session。 */

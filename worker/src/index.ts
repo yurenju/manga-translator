@@ -29,11 +29,11 @@ import {
 } from '../../src/shared/hosted-api.ts';
 import type { CallInfo, Translator } from '../../src/shared/translator.ts';
 import { accountEmail, authenticate, deleteAccount, revokeSession, sendCode, verifyCode } from './auth.ts';
-import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaClock, type UsageKind } from './quota.ts';
+import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaContext, type UsageKind } from './quota.ts';
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
 import { paddle, PaddleError, verifyWebhook } from './paddle.ts';
-import { activeSubscription, applyPaddleEvent, paddleIds } from './subscription.ts';
+import { activeSubscription, applyPaddleEvent, cancellationOnDelete, paddleIds } from './subscription.ts';
 
 type Env = Cloudflare.Env;
 
@@ -57,6 +57,9 @@ function parseEmail(value: unknown): string | undefined {
   const email = value.trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
 }
+
+/** request 的 JSON body；不是 JSON 就是 undefined（各端點再當成格式不符）。 */
+const jsonBody = (request: Request): Promise<unknown> => request.json().catch(() => undefined);
 
 const field = (body: unknown, key: string): unknown => (typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[key] : undefined);
 
@@ -85,22 +88,28 @@ const authed =
 const exhausted = (plan: Quota['plan']) =>
   plan === 'free' ? error(402, '免費額度已用完', 'freePagesExhausted') : error(402, '本月額度已用完', 'monthlyLimitReached');
 
-const clock = (env: Env, now: number): QuotaClock => ({ now, limit: monthlyLimit(env) });
+const quotaContext = (env: Env, now: number): QuotaContext => ({ now, limit: monthlyLimit(env) });
 
 /**
  * 翻譯與 Notes：先把 body 整理成只含已知欄位的輸入（client 送的 model、max_tokens、system 之類一律不看），
  * 再交給 Translator；request body 由 Translator 裡的 claude-request.ts 組。
  * 翻譯（spec #86「額度規則」）：送出前先看還有沒有額度，成功後才用條件式 UPDATE 扣一頁；同時送來的兩頁搶最後一頁時，
- * 扣不到的那個回 402（譯文丟掉）。Notes 不扣。成功的呼叫都寫一筆用量紀錄，扣不到的那次也算（Anthropic 的錢已經花了）。
+ * 扣不到的那個回 402（譯文丟掉）。Notes 不扣。成功的呼叫都寫一筆用量紀錄，扣不到的那次也算（Anthropic 的錢已經花了）；
+ * Notes 那筆記下同一頁翻譯那筆的 id。
  */
 const llm =
-  <I,>(kind: UsageKind, parse: (body: unknown) => I | undefined, run: (t: Translator, input: I) => Promise<CallInfo>): AuthedHandler =>
+  <I,>(
+    kind: UsageKind,
+    parse: (body: unknown) => I | undefined,
+    run: (t: Translator, input: I) => Promise<CallInfo>,
+    pageRecord: (input: I) => number | undefined = () => undefined,
+  ): AuthedHandler =>
   async ({ request, env, now }, accountId) => {
-    const input = parse(await request.json().catch(() => undefined));
+    const input = parse(await jsonBody(request));
     if (input === undefined) return invalid();
     const charged = kind === 'translate';
     if (charged) {
-      const before = await quota(env.DB, accountId, clock(env, now));
+      const before = await quota(env.DB, accountId, quotaContext(env, now));
       if (before.remaining === 0) return exhausted(before.plan);
     }
     let output: CallInfo;
@@ -110,9 +119,10 @@ const llm =
       // Anthropic 重試後仍失敗，或回答不符合 schema
       return error(502, e instanceof Error ? e.message : String(e));
     }
-    await recordUsage(env.DB, accountId, kind, output.usage, now);
-    if (charged && !(await deductPage(env.DB, accountId, clock(env, now)))) return exhausted((await quota(env.DB, accountId, clock(env, now))).plan);
-    return Response.json(output);
+    const usageRecordId = await recordUsage(env.DB, accountId, kind, output.usage, now, pageRecord(input));
+    if (charged && !(await deductPage(env.DB, accountId, quotaContext(env, now)))) return exhausted((await quota(env.DB, accountId, quotaContext(env, now))).plan);
+    // 翻譯回應帶回用量紀錄 id：同一頁的 Notes 請求帶回來，Notes 的成本才歸得到這一頁
+    return Response.json(charged ? { ...output, usageRecordId } : output);
   };
 
 const CHECKOUT_LOCALES: readonly CheckoutLocale[] = ['zh-tw', 'en'];
@@ -128,6 +138,13 @@ async function viaPaddle(run: () => Promise<Response>): Promise<Response> {
   }
 }
 
+/** 依 IP 與依 email 的頻率限制兩個都要過：換 IP 不能對同一個信箱一直試，同一個 IP 也不能換信箱一直試。 */
+async function withinLimits(request: Request, email: string, byIp: RateLimit, byEmail: RateLimit): Promise<boolean> {
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  const results = await Promise.all([byIp.limit({ key: ip }), byEmail.limit({ key: email })]);
+  return results.every((r) => r.success);
+}
+
 const VERIFY_ERRORS = {
   wrongCode: '驗證碼不正確',
   codeExpired: '驗證碼已經過期',
@@ -136,24 +153,22 @@ const VERIFY_ERRORS = {
 
 const ROUTES: Record<string, Handler> = {
   [`POST ${TRANSLATE_PATH}`]: authed(llm('translate', parseTranslateInput, (t, input) => t.translatePage(input))),
-  [`POST ${NOTES_PATH}`]: authed(llm('notes', parseNotesInput, (t, input) => t.proposeNotes(input))),
+  [`POST ${NOTES_PATH}`]: authed(llm('notes', parseNotesInput, (t, input) => t.proposeNotes(input), (input) => input.pageUsageRecordId)),
   [`POST ${SEND_CODE_PATH}`]: async ({ request, env, now }) => {
-    const email = parseEmail(field(await request.json().catch(() => undefined), 'email'));
+    const email = parseEmail(field(await jsonBody(request), 'email'));
     if (!email) return invalid();
-    // 兩個都要過：換 IP 不能對同一個信箱一直寄，同一個 IP 也不能換信箱一直寄
-    const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
-    const [byIp, byEmail] = await Promise.all([env.SEND_CODE_BY_IP.limit({ key: ip }), env.SEND_CODE_BY_EMAIL.limit({ key: email })]);
-    if (!byIp.success || !byEmail.success) return error(429, '寄送太頻繁', 'rateLimited');
+    if (!(await withinLimits(request, email, env.SEND_CODE_BY_IP, env.SEND_CODE_BY_EMAIL))) return error(429, '寄送太頻繁', 'rateLimited');
     await sendCode(env.DB, mailer(env), email, now);
     return new Response(null, { status: 204 });
   },
   [`POST ${VERIFY_CODE_PATH}`]: async ({ request, env, now }) => {
-    const body = await request.json().catch(() => undefined);
+    const body = await jsonBody(request);
     const email = parseEmail(field(body, 'email'));
     const code = field(body, 'code');
     if (!email || typeof code !== 'string') return invalid();
+    if (!(await withinLimits(request, email, env.VERIFY_CODE_BY_IP, env.VERIFY_CODE_BY_EMAIL))) return error(429, '嘗試太頻繁', 'rateLimited');
     const result = await verifyCode(env.DB, email, code.trim(), now);
-    if (!result.ok) return error(400, VERIFY_ERRORS[result.reason], result.reason);
+    if (!result.ok) return result.reason === 'rateLimited' ? error(429, '嘗試太頻繁', 'rateLimited') : error(400, VERIFY_ERRORS[result.reason], result.reason);
     return Response.json({ token: result.token } satisfies VerifyCodeResponse);
   },
   [`POST ${SIGN_OUT_PATH}`]: authed(async ({ request, env, now }) => {
@@ -162,20 +177,20 @@ const ROUTES: Record<string, Handler> = {
   }),
   [`GET ${ACCOUNT_PATH}`]: authed(async ({ env, now }, accountId) => {
     const email = await accountEmail(env.DB, accountId);
-    return email ? Response.json({ email, quota: await quota(env.DB, accountId, clock(env, now)) } satisfies AccountResponse) : signedOut();
+    return email ? Response.json({ email, quota: await quota(env.DB, accountId, quotaContext(env, now)) } satisfies AccountResponse) : signedOut();
   }),
   // 刪除帳號：先取消 Paddle 訂閱，失敗就 502、什麼都不刪（帳號刪了訂閱卻還在扣款就沒有人能取消了）。
-  // 已經排定取消的不再送（Paddle 會回錯誤）；刪除後 Paddle 送來的事件找不到 Account，applyPaddleEvent 會忽略
+  // 要不要送、何時生效見 cancellationOnDelete；刪除後 Paddle 送來的事件找不到 Account，applyPaddleEvent 會忽略
   [`DELETE ${ACCOUNT_PATH}`]: authed(async ({ env }, accountId) =>
     viaPaddle(async () => {
-      const subscription = await activeSubscription(env.DB, accountId);
-      if (subscription && !subscription.cancelScheduled) await paddle(env).cancelSubscription(subscription.paddleSubscriptionId);
+      const cancellation = await cancellationOnDelete(env.DB, accountId);
+      if (cancellation) await paddle(env).cancelSubscription(cancellation.subscriptionId, cancellation.timing);
       await deleteAccount(env.DB, accountId);
       return new Response(null, { status: 204 });
     }),
   ),
   [`POST ${CHECKOUT_PATH}`]: authed(async ({ request, env }, accountId) => {
-    const requested = field(await request.json().catch(() => undefined), 'locale');
+    const requested = field(await jsonBody(request), 'locale');
     const locale = CHECKOUT_LOCALES.find((l) => l === requested) ?? 'zh-tw';
     if (!env.SITE_ORIGIN) return error(500, '沒有設定產品網站的網址');
     const site = env.SITE_ORIGIN;
@@ -213,7 +228,7 @@ const ROUTES: Record<string, Handler> = {
   },
   [`POST ${DEV_FREE_PAGES_PATH}`]: async ({ request, env }) => {
     if (env.DEV_ENDPOINTS !== 'true') return error(404, '沒有這個端點');
-    const body = await request.json().catch(() => undefined);
+    const body = await jsonBody(request);
     const email = parseEmail(field(body, 'email'));
     const remaining = field(body, 'remaining');
     if (!email || !Number.isInteger(remaining) || (remaining as number) < 0) return invalid();

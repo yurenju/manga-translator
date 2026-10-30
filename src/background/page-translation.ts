@@ -69,13 +69,25 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
   /**
    * ②：這頁的原文＋① 的譯文送去整理 Notes。送出的這一刻拿號碼牌，notes_changes 依 ② 送出順序套用；
    * Spread 的兩頁（同一組）共用一份快照。失敗就跳過，只讓出順序。
+   * pageUsageRecordId 是 ① 的 usageRecordId（Hosted Translation 才有），Worker 用它把 Notes 的用量歸到這一頁。
    */
-  async function proposeNotes(translator: Translator, seriesId: string, pageHash: string, group: SnapshotGroup, text: PageText): Promise<void> {
+  async function proposeNotes(
+    translator: Translator,
+    seriesId: string,
+    pageHash: string,
+    group: SnapshotGroup,
+    text: PageText,
+    pageUsageRecordId: number | undefined,
+  ): Promise<void> {
     const turn = ledger.checkout(seriesId, group);
     const startedAt = Date.now();
     let changes: NotesChanges;
     try {
-      const output = await translator.proposeNotes({ seriesNotes: await turn.notes, items: pageLines(text) });
+      const output = await translator.proposeNotes({
+        seriesNotes: await turn.notes,
+        items: pageLines(text),
+        ...(pageUsageRecordId === undefined ? {} : { pageUsageRecordId }),
+      });
       trace('notes:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage });
       changes = output.notes_changes;
     } catch (e) {
@@ -129,7 +141,7 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
       };
       // 寫不進去只是下次要重翻，這次的結果照樣顯示。
       await cache.save(entry).catch((e: unknown) => console.warn('cache save failed', e));
-      inBackground(proposeNotes(translator, seriesId, pageHash, group, translated));
+      inBackground(proposeNotes(translator, seriesId, pageHash, group, translated, output.usageRecordId));
     }
     return { state: 'done', text: translated, translated: true, translation: { source: 'translated', model, latencyMs, usage } };
   }

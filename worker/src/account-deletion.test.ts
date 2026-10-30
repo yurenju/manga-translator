@@ -5,7 +5,7 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ACCOUNT_PATH, SEND_CODE_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
+import { ACCOUNT_PATH, SEND_CODE_PATH, TRANSLATE_PATH, VERIFY_CODE_PATH } from '../../src/shared/hosted-api.ts';
 import type { TranslateInput } from '../../src/shared/translator.ts';
 import { sha256 } from './hash.ts';
 import { fakeAnthropic, reply } from './test/anthropic.ts';
@@ -59,6 +59,36 @@ describe('刪除帳號', () => {
       expect.objectContaining({ url: `https://paddle.test/subscriptions/sub_test_${accountId}/cancel`, body: { effective_from: 'next_billing_period' } }),
     ]);
     expect((await get(ACCOUNT_PATH, token)).status).toBe(401);
+  });
+
+  // Paddle 的規則：paused 只能立即取消；past_due 排到期末取消的話，到期前 Paddle 會繼續嘗試扣款，所以刪除帳號時也立即取消
+  for (const [status, cancelScheduled] of [
+    ['paused', false],
+    ['past_due', false],
+    ['past_due', true],
+  ] as const) {
+    it(`${status}${cancelScheduled ? '（已排定取消）' : ''}的訂閱：立即取消，不再嘗試扣款`, async () => {
+      const token = await signIn();
+      const accountId = await checkoutAccountId(token);
+      await webhook(subscriptionEvent({ accountId, status, cancelScheduled }));
+      const paddle = fakePaddle([canceled]);
+
+      expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
+
+      expect(paddle.calls).toEqual([
+        expect.objectContaining({ url: `https://paddle.test/subscriptions/sub_test_${accountId}/cancel`, body: { effective_from: 'immediately' } }),
+      ]);
+    });
+  }
+
+  it('已經取消的訂閱不呼叫 Paddle', async () => {
+    const token = await signIn();
+    await webhook(subscriptionEvent({ accountId: await checkoutAccountId(token), status: 'canceled', eventType: 'subscription.canceled' }));
+    const paddle = fakePaddle([]);
+
+    expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
+
+    expect(paddle.calls).toEqual([]);
   });
 
   it('Paddle 取消失敗回 502、什麼都不刪（避免帳號刪了訂閱還在扣款），讀者可以再試一次', async () => {
@@ -131,6 +161,17 @@ describe('刪除帳號', () => {
     expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
 
     expect((await env.DB.prepare('SELECT * FROM otps WHERE email = ?').bind(email).all()).results).toEqual([]);
+  });
+
+  it('登入後有人猜錯驗證碼：刪除時這個 email 的驗證次數也一起刪掉', async () => {
+    const email = freshEmail();
+    const token = await signIn(email);
+    await post(SEND_CODE_PATH, { email });
+    await post(VERIFY_CODE_PATH, { email, code: 'abcdef' });
+
+    expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
+
+    expect((await env.DB.prepare('SELECT * FROM verify_attempts WHERE email_hash = ?').bind(await sha256(email)).all()).results).toEqual([]);
   });
 });
 

@@ -63,7 +63,7 @@ export const copy: Record<Locale, SiteCopy> = {
     },
     pricing: {
       title: '價格',
-      free: { title: '免費試用', items: ['註冊就有 50 頁免費額度（大約兩話）', '不需要信用卡'], cta: '免費開始' },
+      free: { title: '免費額度', items: ['註冊就有 50 頁免費額度（大約兩話）', '不需要信用卡'], cta: '免費開始' },
       sub: {
         title: '年繳訂閱',
         price: PRICE,
@@ -132,7 +132,7 @@ export const copy: Record<Locale, SiteCopy> = {
     },
     pricing: {
       title: 'Pricing',
-      free: { title: 'Free trial', items: ['50 free pages when you sign up (about two chapters)', 'No credit card needed'], cta: 'Start free' },
+      free: { title: 'Free pages', items: ['50 free pages when you sign up (about two episodes)', 'No credit card needed'], cta: 'Start free' },
       sub: {
         title: 'Yearly subscription',
         price: PRICE,

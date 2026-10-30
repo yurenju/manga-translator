@@ -194,6 +194,40 @@ describe('Paddle webhook：重複與亂序', () => {
   });
 });
 
+describe('Paddle webhook：重新訂閱（舊訂閱與新訂閱的事件交錯）', () => {
+  it('paused 之後重新訂閱：新訂閱生效；之後才送來的舊訂閱事件（取消）不會把新訂閱蓋掉', async () => {
+    at('2026-10-30T12:00:00Z');
+    const { token, accountId } = await subscriber();
+    await send({ accountId, subscriptionId: 'sub_old', eventType: 'subscription.paused', status: 'paused', occurredAt: '2026-10-30T10:00:00Z' });
+    await send({ accountId, subscriptionId: 'sub_new', eventType: 'subscription.created', occurredAt: '2026-10-30T11:00:00Z' });
+
+    await send({ accountId, subscriptionId: 'sub_old', eventType: 'subscription.canceled', status: 'canceled', occurredAt: '2026-10-30T11:30:00Z' });
+
+    expect(await quota(token)).toEqual(subscribed());
+  });
+
+  it('新訂閱的事件比舊訂閱最後一個事件還早發生（送達順序顛倒）也照樣生效', async () => {
+    at('2026-10-30T12:00:00Z');
+    const { token, accountId } = await subscriber();
+    await send({ accountId, subscriptionId: 'sub_old', eventType: 'subscription.paused', status: 'paused', occurredAt: '2026-10-30T10:00:00Z' });
+    await send({ accountId, subscriptionId: 'sub_old', eventType: 'subscription.canceled', status: 'canceled', occurredAt: '2026-10-30T11:30:00Z' });
+
+    await send({ accountId, subscriptionId: 'sub_new', eventType: 'subscription.created', occurredAt: '2026-10-30T11:00:00Z' });
+
+    expect(await quota(token)).toEqual(subscribed());
+  });
+
+  it('目前的訂閱有權限時，其他訂閱的事件一律不套用（即使也是 active）', async () => {
+    at('2026-10-30T12:00:00Z');
+    const { token, accountId } = await subscriber();
+    await send({ accountId, subscriptionId: 'sub_new', eventType: 'subscription.created', occurredAt: '2026-10-30T10:00:00Z' });
+
+    await send({ accountId, subscriptionId: 'sub_other', cancelScheduled: true, occurredAt: '2026-10-30T11:00:00Z' });
+
+    expect(await quota(token)).toEqual(subscribed());
+  });
+});
+
 describe('訂閱狀態與權限', () => {
   it('排定取消：這一年結束前照常訂閱中（不會續訂）；subscription.canceled 之後才回到只剩 Free Pages', async () => {
     at('2026-10-30T12:00:00Z');

@@ -8,7 +8,7 @@ import { sha256 } from './hash.ts';
 import { activeSubscription, monthlyCycle } from './subscription.ts';
 
 /** 算額度要的：現在時間與 Monthly Page Limit（Worker 的設定值）。 */
-export interface QuotaClock {
+export interface QuotaContext {
   now: number;
   limit: number;
 }
@@ -22,7 +22,7 @@ export async function grantFreePages(db: D1Database, accountId: string, email: s
   await db.prepare('INSERT INTO quotas (account_id, free_pages) VALUES (?, ?)').bind(accountId, grant.meta.changes === 1 ? FREE_PAGES : 0).run();
 }
 
-export async function quota(db: D1Database, accountId: string, { now, limit }: QuotaClock): Promise<Quota> {
+export async function quota(db: D1Database, accountId: string, { now, limit }: QuotaContext): Promise<Quota> {
   const [row, subscription] = await Promise.all([
     db.prepare('SELECT free_pages, cycle_start, cycle_used FROM quotas WHERE account_id = ?').bind(accountId).first<{ free_pages: number; cycle_start: number | null; cycle_used: number }>(),
     activeSubscription(db, accountId),
@@ -46,7 +46,7 @@ export async function quota(db: D1Database, accountId: string, { now, limit }: Q
  * 扣一個 Translated Page：訂閱中扣本月額度，否則扣 Free Pages。條件式 UPDATE 一次做完「還有沒有、扣掉」，不先讀再寫；
  * false＝已經沒有了。本月額度那一句同時處理重置：存的週期起點不是現在的週期，就從 1 重新算。
  */
-export async function deductPage(db: D1Database, accountId: string, { now, limit }: QuotaClock): Promise<boolean> {
+export async function deductPage(db: D1Database, accountId: string, { now, limit }: QuotaContext): Promise<boolean> {
   const subscription = await activeSubscription(db, accountId);
   const result = subscription
     ? await db
@@ -62,12 +62,20 @@ export async function deductPage(db: D1Database, accountId: string, { now, limit
 
 export type UsageKind = 'translate' | 'notes';
 
-/** 一次 Anthropic 呼叫的用量：只有時間、種類、tokens 與成本，不存任何內容。 */
-export async function recordUsage(db: D1Database, accountId: string, kind: UsageKind, usage: Usage, now: number): Promise<void> {
-  await db
-    .prepare('INSERT INTO usage_records (account_id, created_at, kind, input_tokens, output_tokens, cache_read_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(accountId, now, kind, usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.costUsd)
-    .run();
+/**
+ * 一次 Anthropic 呼叫的用量：只有時間、種類、tokens 與成本，不存任何內容；回傳這筆紀錄的 id。
+ * pageRecordId 是 Notes 那一頁的翻譯紀錄 id（client 帶來的）：是這個 Account 的翻譯紀錄才記，不是就當作沒帶。
+ */
+export async function recordUsage(db: D1Database, accountId: string, kind: UsageKind, usage: Usage, now: number, pageRecordId?: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `INSERT INTO usage_records (account_id, created_at, kind, input_tokens, output_tokens, cache_read_tokens, cost_usd, page_record_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT id FROM usage_records WHERE id = ?8 AND account_id = ?1 AND kind = 'translate'))
+       RETURNING id`,
+    )
+    .bind(accountId, now, kind, usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.costUsd, pageRecordId ?? null)
+    .first<{ id: number }>();
+  return row!.id;
 }
 
 /** 開發用：直接設定這個 email 的 Account 的免費額度；沒有這個 Account 就是 false。 */

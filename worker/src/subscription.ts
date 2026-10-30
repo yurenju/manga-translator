@@ -25,6 +25,9 @@ interface Row {
   paddle_customer_id: string;
 }
 
+/** SQL 裡的 ENTITLED（常數，不是使用者輸入）。 */
+const ENTITLED_SQL = ENTITLED.map((status) => `'${status}'`).join(', ');
+
 const isEntitled = (status: string): status is Subscription['status'] => (ENTITLED as readonly string[]).includes(status);
 
 /** 這個 Account 有權限的訂閱；沒訂閱過、或已經結束就是 undefined。 */
@@ -40,6 +43,25 @@ export async function activeSubscription(db: D1Database, accountId: string): Pro
     paddleSubscriptionId: row.paddle_subscription_id,
     paddleCustomerId: row.paddle_customer_id,
   };
+}
+
+/** Paddle 取消訂閱的生效時間（`effective_from`）。 */
+export type CancelTiming = 'next_billing_period' | 'immediately';
+
+/**
+ * 刪除帳號時要怎麼取消這個 Account 的訂閱；undefined＝不用送（沒訂閱過、已經 canceled、或 active 而且已經排定取消）。
+ * - active：到期才失效（已付的這一年照常到期，不退款）
+ * - paused：Paddle 只接受立即取消
+ * - past_due：排到期末的話，到期前 Paddle 會繼續嘗試扣款，帳號刪了還可能被扣到；這一年本來就還沒付成功，所以立即取消（已排定取消的也一樣）
+ */
+export async function cancellationOnDelete(db: D1Database, accountId: string): Promise<{ subscriptionId: string; timing: CancelTiming } | undefined> {
+  const row = await db
+    .prepare('SELECT status, cancel_scheduled, paddle_subscription_id FROM subscriptions WHERE account_id = ?')
+    .bind(accountId)
+    .first<Pick<Row, 'status' | 'cancel_scheduled' | 'paddle_subscription_id'>>();
+  if (!row || row.status === 'canceled') return undefined;
+  if (row.status === 'paused' || row.status === 'past_due') return { subscriptionId: row.paddle_subscription_id, timing: 'immediately' };
+  return row.cancel_scheduled === 1 ? undefined : { subscriptionId: row.paddle_subscription_id, timing: 'next_billing_period' };
 }
 
 /** 這個 Account 的 Paddle customer 與 subscription id（管理訂閱用）；訂閱結束後也還在，才能看收據。 */
@@ -81,7 +103,12 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 /**
  * 套用一個已經驗過簽章的 Paddle 事件。只看 subscription.*，其他事件（transaction.completed 等）不做事。
  * - Account 來自 custom_data.account_id（Worker 建立 transaction 時放的，Paddle 帶到 subscription 上）；沒有的話用 subscription id 找已經存在的那一列
- * - 用 event_id 去重；用 occurred_at 判斷新舊，比已經套用的事件舊就不覆蓋
+ * - 用 event_id 去重
+ * - 每個 Account 只記一筆訂閱（重新訂閱是 Paddle 的另一個 subscription id），哪個事件可以覆蓋目前這一列：
+ *   - 同一個 subscription id：用 occurred_at 判斷新舊，比已經套用的事件舊就不覆蓋
+ *   - 不同的 subscription id：只有目前這筆沒有權限（paused、canceled）、而且事件的那筆有權限時，才換成那一筆。
+ *     所以舊訂閱之後才送來的事件（例如 paused 之後重新訂閱、舊的那筆才被取消）蓋不掉有權限的新訂閱；
+ *     新訂閱的事件不看 occurred_at，比舊訂閱最後的事件還早發生也照樣換過去
  */
 export async function applyPaddleEvent(db: D1Database, event: unknown, now: number): Promise<void> {
   const e = object(event);
@@ -108,7 +135,9 @@ export async function applyPaddleEvent(db: D1Database, event: unknown, now: numb
            paddle_subscription_id = excluded.paddle_subscription_id, paddle_customer_id = excluded.paddle_customer_id, status = excluded.status,
            started_at = excluded.started_at, period_ends_at = excluded.period_ends_at, cancel_scheduled = excluded.cancel_scheduled,
            event_occurred_at = excluded.event_occurred_at
-         WHERE excluded.event_occurred_at > subscriptions.event_occurred_at`,
+         WHERE (excluded.paddle_subscription_id = subscriptions.paddle_subscription_id AND excluded.event_occurred_at > subscriptions.event_occurred_at)
+            OR (excluded.paddle_subscription_id <> subscriptions.paddle_subscription_id
+                AND subscriptions.status NOT IN (${ENTITLED_SQL}) AND excluded.status IN (${ENTITLED_SQL}))`,
       )
       .bind(
         accountId,

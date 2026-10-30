@@ -11,7 +11,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import { grantDataConsent } from '../shared/data-consent.ts';
 import { FREE_PAGES } from '../shared/hosted-api.ts';
-import { createHostedAuth } from '../shared/hosted-auth.ts';
+import { createHostedAccountClient } from '../shared/hosted-account-client.ts';
 import { HOSTED_API_URL, loadHostedSession, saveHostedSession, type HostedSession } from '../shared/hosted-session.ts';
 import type { Message } from '../shared/messages.ts';
 import { loadOnboarding, saveOnboarding, startStep, type OnboardingProgress, type OnboardingStep } from '../shared/onboarding.ts';
@@ -20,7 +20,7 @@ import { Button, Callout } from '../ui/components.tsx';
 import { OwnKeyDataFlow, PolicyLinks } from '../ui/data-flow.tsx';
 import { SignIn } from '../ui/sign-in.tsx';
 
-const hostedAuth = createHostedAuth({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
+const hostedAccount = createHostedAccountClient({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
 
 const apiKeys = indexedDbApiKeyStore();
 
@@ -91,7 +91,7 @@ function Plan({ session, onFree, onSubscribed, onNext }: { session: HostedSessio
 
   async function subscribe() {
     setFailure(undefined);
-    const result = await hostedAuth.checkout(session.token, 'zh-tw');
+    const result = await hostedAccount.checkout(session.token, 'zh-tw');
     if (!result.ok) {
       if (result.reason === 'alreadySubscribed') subscribed();
       else setFailure(`付款頁沒有打開：${result.message}`);
@@ -105,7 +105,7 @@ function Plan({ session, onFree, onSubscribed, onNext }: { session: HostedSessio
     if (state.kind !== 'waitingPayment') return;
     let current = true;
     const timer = setInterval(() => {
-      void hostedAuth.account(session.token).then((r) => {
+      void hostedAccount.account(session.token).then((r) => {
         if (current && r.ok && r.account.quota.plan === 'subscribed') subscribed();
       });
     }, PAYMENT_POLL_MS);
@@ -286,7 +286,7 @@ function Onboarding({ requested }: { requested: 'signIn' | undefined }) {
         {step === 'intro' && <Intro onNext={() => go(session ? 'plan' : 'signIn')} />}
         {step === 'signIn' && (
           <SignIn
-            auth={hostedAuth}
+            auth={hostedAccount}
             onConsent={() => grantDataConsent('hosted')}
             onSignedIn={async (signedIn) => {
               await saveHostedSession(signedIn);

@@ -63,5 +63,8 @@ export function parseNotesInput(body: unknown): NotesInput | undefined {
   if (!isObject(body)) return undefined;
   const seriesNotes = all(body.seriesNotes, note);
   const items = all(body.items, line);
-  return seriesNotes && items && { seriesNotes, items };
+  if (!seriesNotes || !items) return undefined;
+  // 歸屬哪一頁只影響用量紀錄，不對就當作沒帶，Notes 照常整理
+  const page = body.pageUsageRecordId;
+  return { seriesNotes, items, ...(Number.isSafeInteger(page) ? { pageUsageRecordId: page as number } : {}) };
 }

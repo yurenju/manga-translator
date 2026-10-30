@@ -2,10 +2,10 @@
  * 登出與刪除帳號（#95）：呼叫 Worker → 清掉本機的 session → 廣播 `session:changed`，side panel 回到「尚未登入」。
  * 本機的翻譯快取、Series Notes、資料使用同意都不動。
  */
-import type { AuthFailure, HostedAuth } from './hosted-auth.ts';
+import type { AuthFailure, HostedAccountClient } from './hosted-account-client.ts';
 
 export interface AccountExitDeps {
-  auth: Pick<HostedAuth, 'signOut' | 'deleteAccount'>;
+  auth: Pick<HostedAccountClient, 'signOut' | 'deleteAccount'>;
   clearSession: () => Promise<void>;
   broadcast: () => void;
 }
