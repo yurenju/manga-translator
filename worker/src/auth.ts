@@ -28,16 +28,21 @@ function randomToken(): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
-/** 寄出新的驗證碼；同一個 email 之前的那組作廢（嘗試次數歸零）。 */
+/**
+ * 寄出新的驗證碼；同一個 email 之前的那組作廢（嘗試次數歸零）。
+ * 順手刪掉所有已經過期的驗證碼（寄了沒用的 email 不會一直留在 D1；過期的本來就只會回 codeExpired，刪掉結果一樣）。
+ */
 export async function sendCode(db: D1Database, mail: Mailer, email: string, now: number): Promise<void> {
   const code = randomCode();
-  await db
-    .prepare(
-      `INSERT INTO otps (email, code_hash, expires_at, attempts) VALUES (?1, ?2, ?3, 0)
-       ON CONFLICT (email) DO UPDATE SET code_hash = ?2, expires_at = ?3, attempts = 0`,
-    )
-    .bind(email, await codeHash(email, code), now + CODE_TTL_MS)
-    .run();
+  await db.batch([
+    db.prepare('DELETE FROM otps WHERE expires_at < ?').bind(now),
+    db
+      .prepare(
+        `INSERT INTO otps (email, code_hash, expires_at, attempts) VALUES (?1, ?2, ?3, 0)
+         ON CONFLICT (email) DO UPDATE SET code_hash = ?2, expires_at = ?3, attempts = 0`,
+      )
+      .bind(email, await codeHash(email, code), now + CODE_TTL_MS),
+  ]);
   await mail.sendCode(email, code);
 }
 
@@ -97,16 +102,18 @@ export async function revokeSession(db: D1Database, token: string, now: number):
 }
 
 /**
- * 刪除 Account（spec #86「Worker API」、#95）：Account、所有 session（所以每個 token 都失效）、額度、用量紀錄、訂閱一次刪掉。
+ * 刪除 Account（spec #86「Worker API」、#95）：Account、所有 session（所以每個 token 都失效）、額度、用量紀錄、訂閱，
+ * 以及這個 email 還沒用掉的驗證碼，一次刪掉。之後 D1 裡沒有這個 email 的原文。
  * Free Pages 領取紀錄（email hash）不刪，同一個 email 重新註冊不會再領；paddle_events 只有事件 id，不屬於任何 Account。
- * 子資料表先刪，最後才刪 accounts（D1 會檢查 foreign key）。
+ * 子資料表先刪，最後才刪 accounts（D1 會檢查 foreign key；otps 要靠 accounts 查出 email）。
  */
 export async function deleteAccount(db: D1Database, accountId: string): Promise<void> {
-  await db.batch(
-    ['sessions', 'quotas', 'usage_records', 'subscriptions', 'accounts'].map((table) =>
+  await db.batch([
+    db.prepare('DELETE FROM otps WHERE email = (SELECT email FROM accounts WHERE id = ?)').bind(accountId),
+    ...['sessions', 'quotas', 'usage_records', 'subscriptions', 'accounts'].map((table) =>
       db.prepare(`DELETE FROM ${table} WHERE ${table === 'accounts' ? 'id' : 'account_id'} = ?`).bind(accountId),
     ),
-  );
+  ]);
 }
 
 export async function accountEmail(db: D1Database, accountId: string): Promise<string | undefined> {
