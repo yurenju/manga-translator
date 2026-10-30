@@ -30,22 +30,57 @@ export const DEV_OUTBOX_PATH = '/v1/dev/outbox';
  */
 export const DEV_FREE_PAGES_PATH = '/v1/dev/free-pages';
 
+/**
+ * POST { locale }（帶 token）：用 Paddle API 建立年繳 Subscription 的 transaction（custom_data 放這個 Account 的 id，
+ * client 指定不了），回傳 CheckoutResponse：產品網站 checkout 頁的網址，外掛用新分頁打開。已經訂閱中回 409 alreadySubscribed。
+ */
+export const CHECKOUT_PATH = '/v1/checkout';
+/** POST（帶 token）：用 Paddle API 替這個 Account 的 customer 建立 customer portal session，回傳 PortalResponse；沒訂閱過回 404。 */
+export const PORTAL_PATH = '/v1/subscription/portal';
+/** Paddle 送 webhook 的路徑（不帶 token，驗 Paddle-Signature）。 */
+export const PADDLE_WEBHOOK_PATH = '/webhooks/paddle';
+
+/** checkout 頁的語言（產品網站的 /zh-tw/、/en/）。 */
+export type CheckoutLocale = 'zh-tw' | 'en';
+
+export interface CheckoutResponse {
+  url: string;
+}
+
+export interface PortalResponse {
+  url: string;
+}
+
 export interface VerifyCodeResponse {
   /** 長期有效的 session token；每次使用都會延長期限。 */
   token: string;
 }
 
-/**
- * 剩餘額度（spec #86「額度規則」）：沒有訂閱時只有 Free Pages，remaining 是剩下的免費頁數。
- * #94 加上訂閱者的本月額度（plan 'subscribed'、重置日期）。外掛只顯示這裡的數字，不自己算。
- */
 /** 新 Account 一次性的免費頁數（Worker 發額度、設定頁顯示「剩 N / 50 頁」）。 */
 export const FREE_PAGES = 50;
 
-export interface Quota {
-  plan: 'free';
-  remaining: number;
-}
+/**
+ * 剩餘額度（spec #86「額度規則」）。外掛只顯示這裡的數字，不自己算。
+ * - free：沒有訂閱（包含訂閱結束後），remaining 是剩下的 Free Pages
+ * - subscribed：訂閱中（`active`，包含排定取消，以及扣款失敗重試中的 `past_due`）。remaining 是本月剩餘頁數，
+ *   Free Pages 不動也不顯示。時間都是 Unix 毫秒
+ */
+export type Quota =
+  | { plan: 'free'; remaining: number }
+  | {
+      plan: 'subscribed';
+      remaining: number;
+      /** Monthly Page Limit（Worker 的設定值）。 */
+      limit: number;
+      /** 下次重置本月額度的時間：從訂閱開始日起每個月同一天，沒有那一天的月份是月底。 */
+      resetsAt: number;
+      /** pastDue＝扣款失敗、Paddle 重試中（照常可以用）。 */
+      status: 'active' | 'pastDue';
+      /** 排定取消：這一年結束時不續訂。 */
+      cancelScheduled: boolean;
+      /** 這一年的結束：下次續訂日，排定取消時是訂閱結束日。 */
+      periodEndsAt: number;
+    };
 
 export interface AccountResponse {
   email: string;
@@ -58,8 +93,18 @@ export interface AccountResponse {
  * - rateLimited：寄送驗證碼太頻繁（依 IP 與 email）
  * - wrongCode／codeExpired／tooManyAttempts：驗證碼錯、過期（或沒寄過）、錯太多次這組已失效
  * - freePagesExhausted：沒有訂閱、免費額度用完（402）；訂閱結束後免費額度也是 0 的也是這個
+ * - monthlyLimitReached：訂閱中、本月額度用完（402）；重置日期在 GET /v1/account 的 quota.resetsAt
+ * - alreadySubscribed：已經訂閱中，不再建立 checkout（409）
  */
-export type HostedErrorReason = 'signedOut' | 'rateLimited' | 'wrongCode' | 'codeExpired' | 'tooManyAttempts' | 'freePagesExhausted';
+export type HostedErrorReason =
+  | 'signedOut'
+  | 'rateLimited'
+  | 'wrongCode'
+  | 'codeExpired'
+  | 'tooManyAttempts'
+  | 'freePagesExhausted'
+  | 'monthlyLimitReached'
+  | 'alreadySubscribed';
 
 export interface HostedError {
   error: string;

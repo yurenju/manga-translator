@@ -212,20 +212,30 @@ function SetupNoticeCallout({
 }
 
 /**
- * 免費額度用完（#92 畫面定案）：逐字稿上方的 warn Callout。已翻過的頁照常顯示快取的譯文，新的頁只有原文與讀音。
- * 「訂閱」在 #94 接上 Paddle 之前是停用的。
+ * 額度用完（#92、#94 畫面定案）：逐字稿上方的 warn Callout。已翻過的頁照常顯示快取的譯文，新的頁只有原文與讀音。
+ * 免費額度用完有「訂閱」；本月額度用完只有「使用自備金鑰」（等重置）。
  */
-function QuotaExhaustedCallout({ onSubscribe, onUseOwnKey }: { onSubscribe: (() => void) | undefined; onUseOwnKey: () => void }) {
+function QuotaExhaustedCallout({
+  exhausted,
+  onSubscribe,
+  onUseOwnKey,
+}: {
+  exhausted: NonNullable<QuotaView['exhausted']>;
+  onSubscribe: (() => void) | undefined;
+  onUseOwnKey: () => void;
+}) {
   return (
-    <Callout tone="warn" class="naru-callout--stack" role="group" aria-label="免費額度已用完">
+    <Callout tone="warn" class="naru-callout--stack" role="group" aria-label="額度已用完">
       <p>
-        <strong>免費額度已用完</strong>
+        <strong>{exhausted.title}</strong>
       </p>
-      <p>已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音。訂閱後每月可翻 800 頁。</p>
+      <p>{exhausted.body}</p>
       <div class="naru-row">
-        <Button variant="primary" disabled={!onSubscribe} onClick={onSubscribe}>
-          訂閱
-        </Button>
+        {exhausted.subscribe && (
+          <Button variant="primary" disabled={!onSubscribe} onClick={onSubscribe}>
+            訂閱
+          </Button>
+        )}
         <Button variant="link" onClick={onUseOwnKey}>
           使用自備金鑰
         </Button>
@@ -383,7 +393,7 @@ export interface SidePanelProps {
   /** 滑過逐字稿的某行；null＝離開。 */
   onLineHover: (line: LineRef | null) => void;
   onAcceptConsent: () => void;
-  /** 「尚未登入」與「免費額度已用完」的「使用自備金鑰」：切到自備金鑰（設定頁同時打開）。 */
+  /** 「尚未登入」與額度用完的「使用自備金鑰」：切到自備金鑰（設定頁同時打開）。 */
   onUseOwnKey: () => void;
   /** 「登入」「改用內建翻譯」：外掛打開 onboarding 的第 2 步（同意並登入）。 */
   onSignIn: () => void;
@@ -397,7 +407,7 @@ export interface SidePanelProps {
   onDismissHostedHint?: () => void;
   /** 內建翻譯的剩餘額度（Worker 的 GET /v1/account）；undefined＝還在讀、沒登入或自備金鑰。 */
   quota?: Quota;
-  /** 「訂閱」：#94 接上 Paddle checkout；沒給時訂閱按鈕停用。 */
+  /** 「訂閱」：外掛建立 Paddle checkout、用新分頁打開（#94）；沒給時（網站上的展示）訂閱按鈕停用。 */
   onSubscribe?: () => void;
   /** 以下是只有外掛 container 才有的區塊（會讀寫 store、送 chrome 訊息）；沒給就不顯示，⚙ 選單也沒有那一項。 */
   /** ⚙ 選單裡的自動翻譯開關。 */
@@ -517,7 +527,7 @@ export function SidePanel(props: SidePanelProps) {
           onUseOwnKey={useOwnKey}
           onDismissHostedHint={() => props.onDismissHostedHint?.()}
         />
-        {quota.exhausted && <QuotaExhaustedCallout onSubscribe={props.onSubscribe} onUseOwnKey={useOwnKey} />}
+        {quota.exhausted && <QuotaExhaustedCallout exhausted={quota.exhausted} onSubscribe={props.onSubscribe} onUseOwnKey={useOwnKey} />}
         {done.length > 0 && <DisplaySwitch display={display} onLevel={setLevel} onFurigana={setFurigana} />}
         <ul aria-label="Page">
           {view.pages.map((entry) => (
@@ -538,11 +548,12 @@ export function SidePanel(props: SidePanelProps) {
         {quota.line && <QuotaLine line={quota.line} onSubscribe={props.onSubscribe} />}
         <div class="status-row">
           <StatusText status={view.status} />
-          {quota.subscribeButton ? (
+          {quota.footerButton === 'subscribe' ? (
             <Button variant="primary" disabled={!props.onSubscribe} onClick={props.onSubscribe}>
               訂閱
             </Button>
           ) : (
+            quota.footerButton === 'translate' &&
             (done.length > 0 || pending) && (
               <Button variant={untranslated ? 'primary' : 'secondary'} onClick={translate}>
                 {untranslated ? '翻譯此頁' : '重新翻譯'}

@@ -1,15 +1,20 @@
 /**
- * email 驗證碼登入與帳號狀態的 client（#91、#92）：side panel 的登入畫面（之後是 onboarding 的登入步驟，#93）呼叫 Worker
- * 寄送與驗證驗證碼；side panel 讀目前的帳號狀態（剩餘額度）。
+ * email 驗證碼登入與帳號狀態的 client（#91、#92、#94）：onboarding 的登入步驟呼叫 Worker 寄送與驗證驗證碼；side panel 讀目前的
+ * 帳號狀態（剩餘額度）；「訂閱」建立 checkout、「管理訂閱」建立 customer portal session，拿到網址由呼叫的一方用新分頁打開。
  * 回傳 Worker 給的錯誤原因，畫面依原因換文案；連不上 Worker 時 reason 是 undefined。
  */
 import {
   ACCOUNT_PATH,
+  CHECKOUT_PATH,
+  PORTAL_PATH,
   SEND_CODE_PATH,
   VERIFY_CODE_PATH,
   type AccountResponse,
+  type CheckoutLocale,
+  type CheckoutResponse,
   type HostedError,
   type HostedErrorReason,
+  type PortalResponse,
   type VerifyCodeResponse,
 } from './hosted-api.ts';
 
@@ -20,6 +25,10 @@ export interface HostedAuth {
   verifyCode(email: string, code: string): Promise<{ ok: true; token: string } | AuthFailure>;
   /** 帶 session token 讀目前的帳號狀態。 */
   account(token: string): Promise<{ ok: true; account: AccountResponse } | AuthFailure>;
+  /** 建立年繳 Subscription 的 checkout，回傳產品網站 checkout 頁的網址（locale 是頁面語言）。 */
+  checkout(token: string, locale: CheckoutLocale): Promise<{ ok: true; url: string } | AuthFailure>;
+  /** 建立 Paddle customer portal session，回傳網址。 */
+  portal(token: string): Promise<{ ok: true; url: string } | AuthFailure>;
 }
 
 export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (url: string, init: RequestInit) => Promise<Response> }): HostedAuth {
@@ -35,8 +44,18 @@ export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (ur
     return { ok: false, reason: error.reason, message: error.error ?? `HTTP ${response.status}` };
   }
 
-  const post = (path: string, body: unknown) =>
-    send(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const post = (path: string, body: unknown, token?: string) =>
+    send(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token === undefined ? {} : { authorization: `Bearer ${token}` }) },
+      body: JSON.stringify(body),
+    });
+
+  async function url(path: string, body: unknown, token: string): Promise<{ ok: true; url: string } | AuthFailure> {
+    const result = await post(path, body, token);
+    if (!result.ok) return result;
+    return { ok: true, url: ((await result.response.json()) as CheckoutResponse | PortalResponse).url };
+  }
 
   return {
     async sendCode(email) {
@@ -54,5 +73,7 @@ export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (ur
       if (!result.ok) return result;
       return { ok: true, account: (await result.response.json()) as AccountResponse };
     },
+    checkout: (token, locale) => url(CHECKOUT_PATH, { locale }, token),
+    portal: (token) => url(PORTAL_PATH, {}, token),
   };
 }

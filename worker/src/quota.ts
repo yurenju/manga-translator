@@ -1,10 +1,20 @@
 /**
- * 額度（spec #86「額度規則」、#92）：新 Account 有一次性的 Free Pages。D1 schema 在 worker/migrations/0002_free_pages.sql。
- * 訂閱與 Monthly Page Limit 由 #94 接上。
+ * 額度（spec #86「額度規則」、#92、#94）：新 Account 有一次性的 Free Pages；訂閱中（subscription.ts）只扣本月的 Monthly Page Limit，
+ * Free Pages 不動，訂閱結束後剩下的照常可用。D1 schema 在 worker/migrations/0002_free_pages.sql、0003_subscriptions.sql。
  */
 import { FREE_PAGES, type Quota } from '../../src/shared/hosted-api.ts';
 import type { Usage } from '../../src/shared/translator.ts';
 import { sha256 } from './hash.ts';
+import { activeSubscription, monthlyCycle } from './subscription.ts';
+
+/** 算額度要的：現在時間與 Monthly Page Limit（Worker 的設定值）。 */
+export interface QuotaClock {
+  now: number;
+  limit: number;
+}
+
+/** wrangler.jsonc 的 MONTHLY_PAGE_LIMIT。 */
+export const monthlyLimit = (env: Cloudflare.Env): number => Number(env.MONTHLY_PAGE_LIMIT);
 
 /** 新 Account 的 Free Pages：這個 email 沒領過才給 FREE_PAGES 頁，領過（刪除帳號後重新註冊）就是 0。 */
 export async function grantFreePages(db: D1Database, accountId: string, email: string, now: number): Promise<void> {
@@ -12,14 +22,41 @@ export async function grantFreePages(db: D1Database, accountId: string, email: s
   await db.prepare('INSERT INTO quotas (account_id, free_pages) VALUES (?, ?)').bind(accountId, grant.meta.changes === 1 ? FREE_PAGES : 0).run();
 }
 
-export async function quota(db: D1Database, accountId: string): Promise<Quota> {
-  const row = await db.prepare('SELECT free_pages FROM quotas WHERE account_id = ?').bind(accountId).first<{ free_pages: number }>();
-  return { plan: 'free', remaining: row?.free_pages ?? 0 };
+export async function quota(db: D1Database, accountId: string, { now, limit }: QuotaClock): Promise<Quota> {
+  const [row, subscription] = await Promise.all([
+    db.prepare('SELECT free_pages, cycle_start, cycle_used FROM quotas WHERE account_id = ?').bind(accountId).first<{ free_pages: number; cycle_start: number | null; cycle_used: number }>(),
+    activeSubscription(db, accountId),
+  ]);
+  if (!subscription) return { plan: 'free', remaining: row?.free_pages ?? 0 };
+  const cycle = monthlyCycle(subscription.startedAt, now);
+  // 存的週期起點不是現在這個週期＝已經重置，本月還沒用
+  const used = row?.cycle_start === cycle.start ? row.cycle_used : 0;
+  return {
+    plan: 'subscribed',
+    remaining: Math.max(0, limit - used),
+    limit,
+    resetsAt: cycle.resetsAt,
+    status: subscription.status === 'past_due' ? 'pastDue' : 'active',
+    cancelScheduled: subscription.cancelScheduled,
+    periodEndsAt: subscription.periodEndsAt,
+  };
 }
 
-/** 扣一個 Translated Page。條件式 UPDATE 一次做完「還有沒有、扣掉」，不先讀再寫；false＝已經沒有了。 */
-export async function deductPage(db: D1Database, accountId: string): Promise<boolean> {
-  const result = await db.prepare('UPDATE quotas SET free_pages = free_pages - 1 WHERE account_id = ? AND free_pages > 0').bind(accountId).run();
+/**
+ * 扣一個 Translated Page：訂閱中扣本月額度，否則扣 Free Pages。條件式 UPDATE 一次做完「還有沒有、扣掉」，不先讀再寫；
+ * false＝已經沒有了。本月額度那一句同時處理重置：存的週期起點不是現在的週期，就從 1 重新算。
+ */
+export async function deductPage(db: D1Database, accountId: string, { now, limit }: QuotaClock): Promise<boolean> {
+  const subscription = await activeSubscription(db, accountId);
+  const result = subscription
+    ? await db
+        .prepare(
+          `UPDATE quotas SET cycle_used = CASE WHEN cycle_start = ?1 THEN cycle_used + 1 ELSE 1 END, cycle_start = ?1
+           WHERE account_id = ?2 AND (cycle_start IS NOT ?1 OR cycle_used < ?3) AND ?3 > 0`,
+        )
+        .bind(monthlyCycle(subscription.startedAt, now).start, accountId, limit)
+        .run()
+    : await db.prepare('UPDATE quotas SET free_pages = free_pages - 1 WHERE account_id = ? AND free_pages > 0').bind(accountId).run();
   return result.meta.changes === 1;
 }
 

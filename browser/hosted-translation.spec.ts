@@ -8,9 +8,13 @@
  * 兩條路的譯文都來自同一份 ground truth，所以用 __translateCalls（只有走 offscreen 時才加）分辨走了哪一條。
  * 免費額度用完（#92）：Worker 回 402 → SW 的 Hosted Translator → side panel 重新向 Worker 讀額度，這串訊息與 API 契約只有這裡測得到；
  * 顯示規則（哪一行文字、警告色、按鈕）在 src/ui/view.test.ts。
+ * 訂閱（#94）：side panel 的「訂閱」向 Worker 建立 checkout、用新分頁打開 checkout 頁 → Paddle 的 webhook 送到 Worker →
+ * side panel 重新取得焦點時重讀額度、顯示本月額度。Worker 的 Paddle 是假的（env.test），webhook 由測試用 env.test 的 secret 簽好送出；
+ * 真的 Paddle sandbox 只在 `npm run smoke:paddle`。webhook 與額度的規則在 worker/src/subscription.test.ts。
  */
-import type { Page } from '@playwright/test';
-import { DEV_FREE_PAGES_PATH } from '../src/shared/hosted-api.ts';
+import { createHmac } from 'node:crypto';
+import type { BrowserContext, Page } from '@playwright/test';
+import { DEV_FREE_PAGES_PATH, PADDLE_WEBHOOK_PATH } from '../src/shared/hosted-api.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, openPanelMenu, test } from './fixtures.ts';
 import { onboardingPage, signInFromPanel, signInWithEmail } from './sign-in.ts';
 import { WORKER_URL } from './worker.ts';
@@ -62,18 +66,84 @@ test.describe('全新安裝', () => {
   });
 });
 
-test('免費額度用完：Worker 回額度不足後，side panel 顯示用完的狀態，逐字稿仍有原文與讀音', async ({ context, sw, extensionId, mockSite }, testInfo) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
-  // 關掉自動翻譯：登入後只有按「翻譯此頁」才會送到 Worker，額度與按鈕不會被背景的翻譯搶先改掉
+/** wrangler.jsonc 的 env.test 的 PADDLE_WEBHOOK_SECRET（假值）。 */
+const TEST_WEBHOOK_SECRET = 'pdl_ntfset_browser_test';
+
+/** 像 Paddle 一樣簽好、送一個 subscription.created 給本機 Worker；custom_data 的 Account id 是 Worker 建立 transaction 時放的。 */
+async function sendSubscriptionCreated(accountId: string): Promise<void> {
+  const now = new Date().toISOString();
+  const body = JSON.stringify({
+    event_id: `evt_browser_${Date.now()}`,
+    event_type: 'subscription.created',
+    occurred_at: now,
+    data: {
+      id: `sub_browser_${accountId}`,
+      status: 'active',
+      customer_id: `ctm_browser_${accountId}`,
+      started_at: now,
+      current_billing_period: { starts_at: now, ends_at: new Date(Date.now() + 365 * 86_400_000).toISOString() },
+      scheduled_change: null,
+      custom_data: { account_id: accountId },
+    },
+  });
+  const ts = Math.floor(Date.now() / 1000);
+  const h1 = createHmac('sha256', TEST_WEBHOOK_SECRET).update(`${ts}:${body}`).digest('hex');
+  const response = await fetch(`${WORKER_URL}${PADDLE_WEBHOOK_PATH}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'paddle-signature': `ts=${ts};h1=${h1}` },
+    body,
+  });
+  expect(response.status).toBe(200);
+}
+
+/** 登入一個免費帳號、關掉自動翻譯（剩餘頁數不會被背景的翻譯改掉），回到逐字稿。 */
+async function signInOnPanel(panel: Page, context: BrowserContext, email: string): Promise<void> {
   await (await openPanelMenu(panel)).getByRole('switch', { name: '自動翻譯' }).uncheck();
   await chooseFromPanelMenu(panel, '設定');
   const settings = panel.getByRole('region', { name: '設定' });
   await settings.getByRole('radio', { name: '內建翻譯' }).check();
-  const email = freshEmail(testInfo.workerIndex);
   // 設定頁的「登入」打開 onboarding 的第 2 步
   await signInFromPanel(context, () => settings.getByRole('button', { name: '登入' }).click(), email);
   await expect(settings.getByText(email)).toBeVisible();
   await panel.getByRole('button', { name: '返回' }).click();
+}
+
+test('訂閱：side panel 的「訂閱」用新分頁打開 checkout 頁；webhook 送到 Worker 後，side panel 重新取得焦點就顯示本月額度', async ({
+  context,
+  sw,
+  extensionId,
+  mockSite,
+}, testInfo) => {
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  await signInOnPanel(panel, context, freshEmail(testInfo.workerIndex));
+  const remaining = panel.getByRole('status', { name: '剩餘額度' });
+  await expect(remaining).toHaveText(/免費額度剩 50 頁/);
+
+  const opened = context.waitForEvent('page');
+  await remaining.getByRole('button', { name: '訂閱' }).click();
+  const checkout = await opened;
+  // 本機的產品網站沒有啟動，只看網址：Worker 自己組的 checkout 頁，transaction id（假 Paddle 帶 Account id）
+  await expect.poll(() => checkout.url()).toMatch(/^http:\/\/localhost:4321\/zh-tw\/checkout\?_ptxn=txn_fake_/);
+  const accountId = new URL(checkout.url()).searchParams.get('_ptxn')!.replace('txn_fake_', '');
+
+  await sendSubscriptionCreated(accountId);
+  await checkout.close();
+  // 讀者付完款切回來，side panel 重新取得焦點。Playwright 模擬每個頁面一直都有焦點、一直可見，不會送出 focus／visibilitychange，
+  // 所以由測試代替瀏覽器送 focus 事件；之後向 Worker 重讀額度是外掛自己做的
+  await panel.evaluate(() => window.dispatchEvent(new Event('focus')));
+
+  await expect(remaining).toHaveText(/^本月剩 800 頁・\d+ 月 \d+ 日重置$/);
+  await chooseFromPanelMenu(panel, '設定');
+  const settings = panel.getByRole('region', { name: '設定' });
+  await expect(settings.getByText('訂閱中', { exact: true })).toBeVisible();
+  await expect(settings.getByRole('button', { name: '管理訂閱' })).toBeVisible();
+});
+
+test('免費額度用完：Worker 回額度不足後，side panel 顯示用完的狀態，逐字稿仍有原文與讀音', async ({ context, sw, extensionId, mockSite }, testInfo) => {
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  // 關掉自動翻譯：登入後只有按「翻譯此頁」才會送到 Worker，額度與按鈕不會被背景的翻譯搶先改掉
+  const email = freshEmail(testInfo.workerIndex);
+  await signInOnPanel(panel, context, email);
   const remaining = panel.getByRole('status', { name: '剩餘額度' });
   await expect(remaining).toHaveText(/免費額度剩 50 頁/);
 
@@ -86,7 +156,7 @@ test('免費額度用完：Worker 回額度不足後，side panel 顯示用完�
   expect(response.status).toBe(204);
   await panel.getByRole('button', { name: '翻譯此頁' }).click();
 
-  const exhausted = panel.getByRole('group', { name: '免費額度已用完' });
+  const exhausted = panel.getByRole('group', { name: '額度已用完' });
   await expect(exhausted).toBeVisible();
   await expect(exhausted.getByRole('button', { name: '使用自備金鑰' })).toBeVisible();
   await expect(remaining).toHaveText('免費額度已用完');

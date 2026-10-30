@@ -1,30 +1,39 @@
 /**
  * Hosted Translation 的後端（ADR 0006）：讀者用 email 驗證碼登入（auth.ts），外掛帶 session token 送這一頁的結構化輸入，
  * Worker 用共用模組 claude-request.ts 組 prompt、用公司的 key 呼叫 Anthropic。只收文字、不保存任何漫畫內容。
- * 路徑與錯誤格式在 src/shared/hosted-api.ts；額度在 quota.ts，Paddle 由 #94 接上。
+ * 路徑與錯誤格式在 src/shared/hosted-api.ts；額度在 quota.ts，Paddle API 與 webhook 簽章在 paddle.ts，訂閱狀態在 subscription.ts。
  */
 import { SYNTHETIC_GROUND_TRUTH } from '../../src/background/synthetic-ground-truth.ts';
 import { createClaudeTranslator } from '../../src/offscreen/claude-translator.ts';
 import { createFakeTranslator } from '../../src/shared/fake-translator.ts';
 import {
   ACCOUNT_PATH,
+  CHECKOUT_PATH,
   DEV_FREE_PAGES_PATH,
   DEV_OUTBOX_PATH,
   NOTES_PATH,
+  PADDLE_WEBHOOK_PATH,
+  PORTAL_PATH,
   SEND_CODE_PATH,
   SIGN_OUT_PATH,
   TRANSLATE_PATH,
   VERIFY_CODE_PATH,
   type AccountResponse,
+  type CheckoutLocale,
+  type CheckoutResponse,
   type HostedError,
   type HostedErrorReason,
+  type PortalResponse,
+  type Quota,
   type VerifyCodeResponse,
 } from '../../src/shared/hosted-api.ts';
 import type { CallInfo, Translator } from '../../src/shared/translator.ts';
 import { accountEmail, authenticate, revokeSession, sendCode, verifyCode } from './auth.ts';
-import { deductPage, quota, recordUsage, setFreePages, type UsageKind } from './quota.ts';
+import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaClock, type UsageKind } from './quota.ts';
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
+import { paddle, PaddleError, verifyWebhook } from './paddle.ts';
+import { activeSubscription, applyPaddleEvent, paddleIds } from './subscription.ts';
 
 type Env = Cloudflare.Env;
 
@@ -72,7 +81,11 @@ const authed =
     return accountId ? handler(ctx, accountId) : signedOut();
   };
 
-const freePagesExhausted = () => error(402, '免費額度已用完', 'freePagesExhausted');
+/** 額度用完：沒訂閱是免費額度用完，訂閱中是本月額度用完（重置日期由外掛重讀 GET /v1/account）。 */
+const exhausted = (plan: Quota['plan']) =>
+  plan === 'free' ? error(402, '免費額度已用完', 'freePagesExhausted') : error(402, '本月額度已用完', 'monthlyLimitReached');
+
+const clock = (env: Env, now: number): QuotaClock => ({ now, limit: monthlyLimit(env) });
 
 /**
  * 翻譯與 Notes：先把 body 整理成只含已知欄位的輸入（client 送的 model、max_tokens、system 之類一律不看），
@@ -86,7 +99,10 @@ const llm =
     const input = parse(await request.json().catch(() => undefined));
     if (input === undefined) return invalid();
     const charged = kind === 'translate';
-    if (charged && (await quota(env.DB, accountId)).remaining === 0) return freePagesExhausted();
+    if (charged) {
+      const before = await quota(env.DB, accountId, clock(env, now));
+      if (before.remaining === 0) return exhausted(before.plan);
+    }
     let output: CallInfo;
     try {
       output = await run(translator(env), input);
@@ -95,9 +111,22 @@ const llm =
       return error(502, e instanceof Error ? e.message : String(e));
     }
     await recordUsage(env.DB, accountId, kind, output.usage, now);
-    if (charged && !(await deductPage(env.DB, accountId))) return freePagesExhausted();
+    if (charged && !(await deductPage(env.DB, accountId, clock(env, now)))) return exhausted((await quota(env.DB, accountId, clock(env, now))).plan);
     return Response.json(output);
   };
+
+const CHECKOUT_LOCALES: readonly CheckoutLocale[] = ['zh-tw', 'en'];
+
+/** Paddle API 失敗回 502（細節只在 Worker 的 log）；其他錯誤照常往上丟。 */
+async function viaPaddle(run: () => Promise<Response>): Promise<Response> {
+  try {
+    return await run();
+  } catch (e) {
+    if (!(e instanceof PaddleError)) throw e;
+    console.error(e.message);
+    return error(502, '付款服務暫時無法使用');
+  }
+}
 
 const VERIFY_ERRORS = {
   wrongCode: '驗證碼不正確',
@@ -131,10 +160,41 @@ const ROUTES: Record<string, Handler> = {
     await revokeSession(env.DB, bearer(request)!, now);
     return new Response(null, { status: 204 });
   }),
-  [`GET ${ACCOUNT_PATH}`]: authed(async ({ env }, accountId) => {
+  [`GET ${ACCOUNT_PATH}`]: authed(async ({ env, now }, accountId) => {
     const email = await accountEmail(env.DB, accountId);
-    return email ? Response.json({ email, quota: await quota(env.DB, accountId) } satisfies AccountResponse) : signedOut();
+    return email ? Response.json({ email, quota: await quota(env.DB, accountId, clock(env, now)) } satisfies AccountResponse) : signedOut();
   }),
+  [`POST ${CHECKOUT_PATH}`]: authed(async ({ request, env }, accountId) => {
+    const requested = field(await request.json().catch(() => undefined), 'locale');
+    const locale = CHECKOUT_LOCALES.find((l) => l === requested) ?? 'zh-tw';
+    if (!env.SITE_ORIGIN) return error(500, '沒有設定產品網站的網址');
+    const site = env.SITE_ORIGIN;
+    if (await activeSubscription(env.DB, accountId)) return error(409, '已經訂閱中', 'alreadySubscribed');
+    return viaPaddle(async () => {
+      // Account id 只來自 session token；Paddle 回的 checkout.url 只能是核准過的網域，所以 checkout 網址由 Worker 自己組
+      const transactionId = await paddle(env).createTransaction(accountId);
+      return Response.json({ url: `${site}/${locale}/checkout?_ptxn=${encodeURIComponent(transactionId)}` } satisfies CheckoutResponse);
+    });
+  }),
+  [`POST ${PORTAL_PATH}`]: authed(async ({ env }, accountId) => {
+    const ids = await paddleIds(env.DB, accountId);
+    if (!ids) return error(404, '沒有訂閱');
+    return viaPaddle(async () => Response.json({ url: await paddle(env).portalUrl(ids.customerId, ids.subscriptionId) } satisfies PortalResponse));
+  }),
+  // Paddle 的 webhook：先驗簽章（偽造的請求不能把任何人變成訂閱者），再套用；只做幾個 D1 查詢，遠低於 Paddle 要的 5 秒
+  [`POST ${PADDLE_WEBHOOK_PATH}`]: async ({ request, env, now }) => {
+    const body = await request.text();
+    const signature = request.headers.get('paddle-signature') ?? '';
+    if (!env.PADDLE_WEBHOOK_SECRET || !(await verifyWebhook(env.PADDLE_WEBHOOK_SECRET, signature, body, now))) return error(401, '簽章不符');
+    let event: unknown;
+    try {
+      event = JSON.parse(body);
+    } catch {
+      return invalid();
+    }
+    await applyPaddleEvent(env.DB, event, now);
+    return new Response(null, { status: 200 });
+  },
   [`GET ${DEV_OUTBOX_PATH}`]: async ({ request, env }) => {
     if (env.FAKE_MAIL !== 'true') return error(404, '沒有這個端點');
     const email = parseEmail(new URL(request.url).searchParams.get('email'));
