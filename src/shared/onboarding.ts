@@ -3,6 +3,7 @@
  * SW 在安裝／更新時寫（background/install.ts），onboarding 頁每走一步寫，side panel 讀：
  * 沒做完就只顯示「完成設定」，按了打開 onboarding、回到停下來的那一步。
  */
+import { watchLocal } from './watch-local.ts';
 
 /** onboarding 的步驟（第 1–4 步）；ownKey＝頁尾「使用自備金鑰」換成的畫面（不在步驟裡）。 */
 export type OnboardingStep = 'intro' | 'signIn' | 'plan' | 'tutorial' | 'ownKey';
@@ -43,27 +44,6 @@ export function saveOnboarding(progress: OnboardingProgress): Promise<void> {
 
 export function dismissHostedHint(): Promise<void> {
   return chrome.storage.local.remove(HINT_KEY);
-}
-
-/** 先讀一次目前的值，之後每次變更都呼叫 onChange；回傳取消監聽。 */
-function watchLocal<T>(key: string, parse: (value: unknown) => T, onChange: (value: T) => void): () => void {
-  let stopped = false;
-  const loaded = chrome.storage.local.get(key).then((stored) => {
-    if (!stopped) onChange(parse(stored[key]));
-  });
-  const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-    if (area !== 'local' || !(key in changes)) return;
-    const value = parse(changes[key]!.newValue);
-    // 排在初始讀取後面，讀取比變更晚回來也不會被舊值蓋掉
-    void loaded.then(() => {
-      if (!stopped) onChange(value);
-    });
-  };
-  chrome.storage.onChanged.addListener(listener);
-  return () => {
-    stopped = true;
-    chrome.storage.onChanged.removeListener(listener);
-  };
 }
 
 export const watchOnboarding = (onChange: (progress: OnboardingProgress) => void) => watchLocal(PROGRESS_KEY, parseProgress, onChange);
