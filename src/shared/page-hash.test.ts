@@ -30,8 +30,9 @@ describe('Page 的 perceptual hash', () => {
     expect(hashes[0]).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  // 全尺寸 10 頁的 JPEG 編碼是純 JS 的 CPU 計算：單獨跑約 3.5 秒，npm test 跟 Worker 測試並行時會超過預設的 5 秒
   for (const [name, degrade] of Object.entries(variants)) {
-    it(`同一張合成頁${name}後，距離在門檻內`, () => {
+    it(`同一張合成頁${name}後，距離在門檻內`, { timeout: 15_000 }, () => {
       for (const [i, page] of pages.entries()) {
         const distance = hammingDistance(hashes[i]!, pageHash(degrade(page.image)));
         expect(distance, page.id).toBeLessThanOrEqual(SAME_PAGE_MAX_DISTANCE);
