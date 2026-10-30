@@ -1,8 +1,8 @@
 ---
 /** 首頁就是價格頁（#89 A 版）：大標題 → 展示 → 怎麼用 → 方案 → 常見問題。 */
-import overview from '../../../../docs/images/overview.webp';
 import Copy from '../../components/Copy.astro';
 import Base from '../../layouts/Base.astro';
+import '../../styles/demo.css';
 import { copy } from '../../copy.ts';
 import { INSTALL_URL, legalHref } from '../../links.ts';
 import { type Locale, LOCALES, byLocale } from '../../locale.ts';
@@ -25,8 +25,11 @@ const t = copy[locale];
           <a class="btn btn-ghost" href="#pricing">{t.hero.pricing}</a>
         </div>
       </div>
-      <!-- 互動展示（假 Chrome 視窗＋真正的 side panel）由 #109 換掉這張截圖 -->
-      <img class="screenshot" src={overview.src} width={overview.width} height={overview.height} alt={t.hero.screenshotAlt} />
+      <!-- 互動展示（#109）：假 Chrome 視窗＋外掛真正的 side panel 與覆蓋層，由 demo/mount.tsx render -->
+      <div class="demo">
+        <p class="demo-caption">{t.demo.caption}</p>
+        <div data-demo data-copy={JSON.stringify({ hint: t.demo.hint, replay: t.demo.replay })}></div>
+      </div>
     </div>
   </section>
 
@@ -80,3 +83,7 @@ const t = copy[locale];
     </div>
   </section>
 </Base>
+
+<script>
+  import '../../demo/mount.tsx';
+</script>

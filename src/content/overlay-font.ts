@@ -10,12 +10,17 @@ import type { LoadFont } from './overlay.ts';
 /** 用自己的名字，不跟頁面上可能已經有的 Noto Sans TC 混在一起。 */
 export const OVERLAY_FONT_FAMILY = 'Naruhodo Noto Sans TC';
 
-export function createOverlayFontLoader(): LoadFont {
+/** 字型檔（700.css 裡的檔名）的網址；外掛是打包進 fonts/ 的檔案，產品網站（#109）給自己的網址。 */
+export type FontUrl = (file: string) => string;
+
+const extensionFontUrl: FontUrl = (file) => chrome.runtime.getURL(`fonts/${file}`);
+
+export function createOverlayFontLoader(fontUrl: FontUrl = extensionFontUrl): LoadFont {
   const faces = parseFontFaces(css);
   const loaded = new Map<string, Promise<void>>();
 
   async function addFace(file: string, unicodeRange: string): Promise<void> {
-    const response = await fetch(chrome.runtime.getURL(`fonts/${file}`));
+    const response = await fetch(fontUrl(file));
     if (!response.ok) throw new Error(`font ${file}: HTTP ${response.status}`);
     const face = new FontFace(OVERLAY_FONT_FAMILY, await response.arrayBuffer(), { weight: '700', unicodeRange });
     await face.load();

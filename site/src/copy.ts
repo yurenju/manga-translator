@@ -7,7 +7,9 @@ import type { LegalDoc } from './links.ts';
  */
 export interface SiteCopy {
   nav: { pricing: string; faq: string; install: string; languageLabel: string };
-  hero: { title: string; lead: string; install: string; pricing: string; screenshotAlt: string };
+  hero: { title: string; lead: string; install: string; pricing: string };
+  /** 首頁互動展示（#109）外框上的文字；展示裡面的外掛介面只有繁體中文 */
+  demo: { caption: string; hint: string; replay: string };
   how: { title: string; steps: readonly { title: string; body: string }[] };
   pricing: {
     title: string;
@@ -45,7 +47,11 @@ export const copy: Record<Locale, SiteCopy> = {
       lead: 'Naruhodo 是一個 Chrome 外掛。點一下圖示，對話框旁就出現繁體中文翻譯，還附上振り仮名，邊看邊學日文。',
       install: '加到 Chrome',
       pricing: '看價格',
-      screenshotAlt: 'Naruhodo 在漫畫網站上的畫面：對話框換成中文譯文，右邊的 side panel 列出原文、讀音與譯文',
+    },
+    demo: {
+      caption: '實際操作看看：點右上角的 Naruhodo 圖示，切到「學習」後把滑鼠移到對話框上。',
+      hint: '點這裡開始翻譯',
+      replay: '重新播放',
     },
     how: {
       title: '怎麼用',
@@ -110,7 +116,11 @@ export const copy: Record<Locale, SiteCopy> = {
       lead: 'Naruhodo is a Chrome extension. Click its icon and Traditional Chinese translations appear on each speech balloon, with furigana so you learn Japanese as you read.',
       install: 'Add to Chrome',
       pricing: 'See pricing',
-      screenshotAlt: 'Naruhodo on a manga site: balloons show the Chinese translation, and the side panel lists the original text, readings and translations',
+    },
+    demo: {
+      caption: 'Try it: click the Naruhodo icon at the top right, then switch to 學習 (Study) and hover a balloon.',
+      hint: 'Click to translate',
+      replay: 'Replay',
     },
     how: {
       title: 'How it works',
