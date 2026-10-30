@@ -39,13 +39,14 @@ function randomToken(): string {
 /**
  * 寄出新的驗證碼；同一個 email 之前的那組作廢（這一組的嘗試次數歸零，一小時內的驗證次數不歸零）。
  * 順手刪掉所有已經過期的驗證碼（寄了沒用的 email 不會一直留在 D1；過期的本來就只會回 codeExpired，刪掉結果一樣），
- * 以及時間窗已經過了的驗證次數。
+ * 時間窗已經過了的驗證次數，以及已登出或閒置失效的 session（再也不會通過 authenticate，留著只是多存一份紀錄）。
  */
 export async function sendCode(db: D1Database, mail: Mailer, email: string, now: number): Promise<void> {
   const code = randomCode();
   await db.batch([
     db.prepare('DELETE FROM otps WHERE expires_at < ?').bind(now),
     db.prepare('DELETE FROM verify_attempts WHERE window_start <= ?').bind(now - ATTEMPT_WINDOW_MS),
+    db.prepare('DELETE FROM sessions WHERE revoked_at IS NOT NULL OR last_used_at < ?').bind(now - SESSION_IDLE_MS),
     db
       .prepare(
         `INSERT INTO otps (email, code_hash, expires_at, attempts) VALUES (?1, ?2, ?3, 0)

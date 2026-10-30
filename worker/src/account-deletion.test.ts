@@ -5,7 +5,7 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ACCOUNT_PATH, SEND_CODE_PATH, TRANSLATE_PATH, VERIFY_CODE_PATH } from '../../src/shared/hosted-api.ts';
+import { ACCOUNT_PATH, SEND_CODE_PATH, SIGN_OUT_PATH, TRANSLATE_PATH, VERIFY_CODE_PATH } from '../../src/shared/hosted-api.ts';
 import type { TranslateInput } from '../../src/shared/translator.ts';
 import { sha256 } from './hash.ts';
 import { fakeAnthropic, reply } from './test/anthropic.ts';
@@ -175,13 +175,35 @@ describe('刪除帳號', () => {
   });
 });
 
-describe('驗證碼不留 email', () => {
+describe('用不到的登入資料不留著', () => {
   it('驗證成功後，這個 email 的驗證碼那一列就刪掉', async () => {
     const email = freshEmail();
 
     await signIn(email);
 
     expect((await env.DB.prepare('SELECT * FROM otps WHERE email = ?').bind(email).all()).results).toEqual([]);
+  });
+
+  it('登出的 token 不會一直留著：任何人寄新的驗證碼時就刪掉', async () => {
+    const token = await signIn(freshEmail());
+    expect((await post(SIGN_OUT_PATH, {}, { token })).status).toBe(204);
+
+    await post(SEND_CODE_PATH, { email: freshEmail() });
+
+    expect((await env.DB.prepare('SELECT * FROM sessions WHERE token_hash = ?').bind(await sha256(token)).all()).results).toEqual([]);
+  });
+
+  it('閒置超過 180 天失效的 token 也一樣刪掉；還在用的 token 不受影響', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const idle = await signIn(freshEmail());
+    vi.setSystemTime(Date.now() + 100 * 24 * 60 * 60_000);
+    const active = await signIn(freshEmail());
+
+    vi.setSystemTime(Date.now() + 81 * 24 * 60 * 60_000);
+    await post(SEND_CODE_PATH, { email: freshEmail() });
+
+    expect((await env.DB.prepare('SELECT * FROM sessions WHERE token_hash = ?').bind(await sha256(idle)).all()).results).toEqual([]);
+    expect((await get(ACCOUNT_PATH, active)).status).toBe(200);
   });
 
   it('寄了但沒用的驗證碼不會一直留著：過期之後，任何人寄新的驗證碼時就刪掉', async () => {
