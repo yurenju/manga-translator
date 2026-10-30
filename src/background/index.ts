@@ -2,6 +2,7 @@ import { CLAUDE_MODEL, PROMPT_VERSION } from '../shared/claude-request.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import { hasDataConsent } from '../shared/data-consent.ts';
 import { FAKE_VERSION } from '../shared/fake-translator.ts';
+import { HOSTED_API_URL, hostedSessionToken } from '../shared/hosted-session.ts';
 import type {
   AnalyzeResponse,
   AutoTranslateResponse,
@@ -25,10 +26,12 @@ import type {
 } from '../shared/messages.ts';
 import { acceptSuggestion, editEntry, ignoreSuggestion, pendingSuggestions, type SeriesNotes, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
+import { loadTranslationMode } from '../shared/translation-mode.ts';
 import type { NotesInput, TranslateInput, Translator } from '../shared/translator.ts';
 import { createActivation } from './activation.ts';
 import { BACKUP_KEYS, createBackup } from './backup.ts';
 import { indexedDbPageCache } from './cache-store.ts';
+import { createHostedTranslator } from './hosted-translator.ts';
 import { ensureOffscreenDocument } from './offscreen.ts';
 import { createOverlaySync } from './overlay-sync.ts';
 import { createScanner } from './scan.ts';
@@ -141,13 +144,33 @@ const offscreenTranslator: Translator = {
   },
 };
 
+/** Hosted Translation：SW 直接 fetch Worker；沒有 session token（還沒登入）就不能翻。 */
+async function hostedTranslator(): Promise<Translator | undefined> {
+  const token = await hostedSessionToken();
+  if (!token) return undefined;
+  return createHostedTranslator({ apiUrl: HOSTED_API_URL, token, fetch: (url, init) => fetch(url, init), sleep, now: () => performance.now() });
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    });
+  });
+}
+
 /**
- * 沒有 key（spec 第 5 節）或還沒同意資料使用（shared/data-consent.ts）時不排 LLM 工作。
- * 翻譯與 Series Notes 都從這裡拿 Translator，所以送到 Anthropic 的呼叫都會先過這道檢查。
+ * 依翻譯模式（shared/translation-mode.ts）決定能不能翻：Hosted Translation 要已登入，Own API Key 要有 key（spec 第 5 節）；
+ * 兩者都要同意資料使用（shared/data-consent.ts）。不符合就不排 LLM 工作，只顯示原文與讀音。
+ * 翻譯與 Series Notes 都從這裡拿 Translator，所以送出文字的呼叫都會先過這道檢查。
  */
 async function getTranslator(): Promise<Translator | undefined> {
   if (__E2E__ && fakeTranslator && !requireApiKey) return offscreenTranslator;
-  return (await apiKeys.has()) && (await hasDataConsent()) ? offscreenTranslator : undefined;
+  if (!(await hasDataConsent())) return undefined;
+  if ((await loadTranslationMode()) === 'hosted') return hostedTranslator();
+  return (await apiKeys.has()) ? offscreenTranslator : undefined;
 }
 
 /** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 key 時不比。 */

@@ -1,7 +1,8 @@
 /**
  * 外掛與 Worker 之間的 API 契約（spec #86「Worker API」）：路徑與開發用 token。外掛的 Hosted Translation Translator
  * 與 Worker 都 import 這一份。請求 body 是 TranslateInput／NotesInput 原樣（結構化輸入，不是 prompt）；
- * 回應是 TranslateOutput／NotesOutput 去掉 latencyMs（延遲由外掛自己量）。錯誤回應是 HostedError。
+ * 回應是 TranslateOutput／NotesOutput（latencyMs 只算 Worker 到 Anthropic，外掛換成自己量的）。錯誤回應是 HostedError：
+ * 401 沒登入、400 輸入格式不符、502 Anthropic 重試後仍失敗。
  */
 export const TRANSLATE_PATH = '/v1/translate';
 export const NOTES_PATH = '/v1/notes';

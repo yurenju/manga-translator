@@ -16,8 +16,10 @@ import type {
   StatusResponse,
   TestConnectionResponse,
 } from '../shared/messages.ts';
+import { hostedSessionToken } from '../shared/hosted-session.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
-import { Button, Switch } from '../ui/components.tsx';
+import { saveTranslationMode, watchTranslationMode, type TranslationMode } from '../shared/translation-mode.ts';
+import { Button, SegmentedControl, Switch, type SegmentOption } from '../ui/components.tsx';
 import { SidePanel } from '../ui/side-panel.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 
@@ -96,10 +98,12 @@ function useDataConsent(): boolean | undefined {
  */
 function Settings({
   consented,
+  mode,
   onKeyChanged,
   onClose,
 }: {
   consented: boolean | undefined;
+  mode: TranslationMode;
   onKeyChanged: (hasKey: boolean) => void;
   onClose: () => void;
 }) {
@@ -143,7 +147,8 @@ function Settings({
           關閉
         </Button>
       </div>
-      {suffix === undefined ? null : suffix ? (
+      <SegmentedControl label="翻譯方式" options={TRANSLATION_MODES} value={mode} onChange={(value) => void saveTranslationMode(value)} />
+      {mode === 'hosted' ? null : suffix === undefined ? null : suffix ? (
         <>
           <p>已設定 Claude API key（末四碼 {suffix}）</p>
           <div class="actions">
@@ -185,6 +190,28 @@ function Settings({
       </p>
     </section>
   );
+}
+
+/** 翻譯方式（spec #86）：讀者明確選，不會自動切換。設定頁改版（#95）前先放在「API key 與模型」最上面。 */
+const TRANSLATION_MODES = [
+  { value: 'hosted', label: '內建翻譯' },
+  { value: 'ownKey', label: '自備 API key' },
+] as const satisfies readonly SegmentOption<TranslationMode>[];
+
+/** undefined＝還在讀。 */
+function useTranslationMode(): TranslationMode | undefined {
+  const [mode, setMode] = useState<TranslationMode | undefined>(undefined);
+  useEffect(() => watchTranslationMode(setMode), []);
+  return mode;
+}
+
+/** Hosted Translation 有沒有 session token（#90 只有 e2e 與 debug build 有開發用 token）。 */
+function useHostedSession(): boolean {
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    void hostedSessionToken().then((token) => setSignedIn(Boolean(token)));
+  }, []);
+  return signedIn;
 }
 
 /** 目前的 Page Mode 與切換函式；別的 side panel 切了也跟著變。只在 App 訂閱一次，往下傳。 */
@@ -365,6 +392,8 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [pageMode, choosePageMode] = usePageMode();
   const [hovered, setHovered] = useState<LineRef | undefined>(undefined);
   const consented = useDataConsent();
+  const translationMode = useTranslationMode();
+  const signedIn = useHostedSession();
 
   useEffect(() => {
     void apiKeys.get().then((key) => setHasKey(Boolean(key)));
@@ -386,7 +415,7 @@ function App({ tabId }: { tabId: number | undefined }) {
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, [tabId]);
 
-  if (active === undefined) return null;
+  if (active === undefined || translationMode === undefined) return null;
   const running = active && tabId !== undefined;
   // 停止、擷取、翻譯、逐字稿 hover 只在 running（有 tabId）時出現，所以 tabId! 是安全的
   return (
@@ -394,7 +423,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       running={running}
       pages={pages}
       modelStatus={modelStatus}
-      hasKey={hasKey}
+      hasKey={translationMode === 'hosted' ? signedIn : hasKey}
       consented={consented}
       pageMode={pageMode}
       hovered={hovered}
@@ -409,7 +438,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       onAcceptConsent={() => void grantDataConsent()}
       autoTranslate={running && <AutoTranslateToggle tabId={tabId} />}
       series={running && <SeriesPicker tabId={tabId} />}
-      renderSettings={(close) => <Settings consented={consented} onKeyChanged={setHasKey} onClose={close} />}
+      renderSettings={(close) => <Settings consented={consented} mode={translationMode} onKeyChanged={setHasKey} onClose={close} />}
       renderNotes={(close) => tabId !== undefined && <SeriesNotesSection tabId={tabId} onClose={close} />}
     />
   );
