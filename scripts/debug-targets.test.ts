@@ -79,9 +79,14 @@ describe('pickMangaTab', () => {
     expect(pickMangaTab(tabs, 20)?.id).toBe(3);
   });
 
-  it('最後聚焦的是 side panel 視窗之類沒有網頁的視窗：退回任一視窗的作用中網頁分頁', () => {
-    expect(pickMangaTab(tabs, 30)?.id).toBe(1);
-    expect(pickMangaTab(tabs, undefined)?.id).toBe(1);
+  it('最後聚焦的是 side panel 視窗之類沒有網頁的視窗：只有一個作用中網頁分頁時才退回用它', () => {
+    const single = tabs.filter((tab) => tab.id !== 3);
+    expect(pickMangaTab(single, 30)?.id).toBe(1);
+    expect(pickMangaTab(single, undefined)?.id).toBe(1);
+  });
+
+  it('退回時有好幾個視窗的作用中網頁分頁：不猜，回傳 undefined（要給 url）', () => {
+    expect(pickMangaTab(tabs, 30)).toBeUndefined();
   });
 
   it('給了 url：第一個 url 含這段字的網頁分頁，不管是不是作用中', () => {
@@ -97,8 +102,12 @@ describe('pickMangaTab', () => {
 describe('panelTarget', () => {
   it('挑出這個分頁專屬的 side panel（sidepanel.html?tabId=N）', () => {
     const panels = [target('page', `${ours}/sidepanel.html?tabId=12`), target('page', `${ours}/sidepanel.html?tabId=3`), target('page', `${ours}/sidepanel.html`)];
-    expect(panelTarget(panels, 3)?.url).toBe(`${ours}/sidepanel.html?tabId=3`);
-    expect(panelTarget(panels, 1)).toBeUndefined();
-    expect(panelTarget([target('page', 'https://example.com/sidepanel.html?tabId=3')], 3)).toBeUndefined();
+    expect(panelTarget(panels, ours, 3)?.url).toBe(`${ours}/sidepanel.html?tabId=3`);
+    expect(panelTarget(panels, ours, 1)).toBeUndefined();
+  });
+
+  it('只認這個外掛的：別的外掛或網站的同名頁面不算', () => {
+    expect(panelTarget([target('page', `${other}/sidepanel.html?tabId=3`)], ours, 3)).toBeUndefined();
+    expect(panelTarget([target('page', 'https://example.com/sidepanel.html?tabId=3')], ours, 3)).toBeUndefined();
   });
 });

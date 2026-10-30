@@ -12,11 +12,12 @@ import { connectCdp, extensionId, isListening, type Cdp } from './debug-chrome.t
 import { panelTarget, pickMangaTab, type ChromeTab } from './debug-targets.ts';
 
 const DEFAULT_PORT = 9222;
-const COMMANDS = ['panel', 'activate'] as const;
-type Command = (typeof COMMANDS)[number];
+const COMMANDS = ['panel', 'activate'];
 /** 真的 side panel 大約這麼寬，版面才接近。 */
 const PANEL_WINDOW = { width: 400, height: 900 };
 const ACTIVATE_TIMEOUT_MS = 30_000;
+/** 頁面載入、視窗出現、side panel 顯示「已啟動」各自最多等多久。 */
+const WAIT_MS = 10_000;
 
 /** attach 到一個 target，在它的 main world 執行可 await 的運算式。 */
 async function attachPage(cdp: Cdp, targetId: string) {
@@ -28,9 +29,9 @@ async function attachPage(cdp: Cdp, targetId: string) {
   };
 }
 
-/** 等條件成立；逾時回傳 false。 */
-async function poll(check: () => Promise<boolean>, tries = 50, intervalMs = 200): Promise<boolean> {
-  for (let i = 0; i < tries; i++) {
+/** 等條件成立；WAIT_MS 內沒成立就回傳 false。 */
+async function poll(check: () => Promise<boolean>, intervalMs = 200): Promise<boolean> {
+  for (let i = 0; i < WAIT_MS / intervalMs; i++) {
     if (await check().catch(() => false)) return true;
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
@@ -44,7 +45,7 @@ function option(name: string): string | undefined {
 
 async function main(): Promise<void> {
   const command = process.argv[2];
-  if (!(COMMANDS as readonly string[]).includes(command ?? '')) throw new Error(`用法：node scripts/debug-drive.ts <${COMMANDS.join('|')}> [--url <字串>]`);
+  if (!COMMANDS.includes(command ?? '')) throw new Error(`用法：node scripts/debug-drive.ts <${COMMANDS.join('|')}> [--url <字串>]`);
   const port = Number(option('--port') ?? DEFAULT_PORT);
   const urlFilter = option('--url');
   if (!(await isListening(port))) throw new Error(`port ${port} 沒有開著的 Chrome；先跑 npm run debug:chrome`);
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
     const origin = `chrome-extension://${id}`;
 
     // 用一個背景分頁當外掛 context（沒有 tabId 的 side panel 只會顯示提示），拿 chrome.tabs 與 chrome.windows。
-    // 它送出的訊息也會叫醒閒置的 SW。
+    // 它送出的訊息也會叫醒閒置的 SW；trace 裡因此會多一個沒有 tabId 的 sidepanel.html，指令結束就關掉。
     const { targetId: helperId } = await cdp.send('Target.createTarget', { url: `${origin}/sidepanel.html`, background: true });
     try {
       const helper = await attachPage(cdp, helperId);
@@ -70,7 +71,12 @@ async function main(): Promise<void> {
         return { tabs: tabs.map((t) => ({ id: t.id, url: t.url || t.pendingUrl || '', active: t.active, windowId: t.windowId })), lastFocusedWindowId: focused?.id };
       })()`)) as { tabs: ChromeTab[]; lastFocusedWindowId?: number };
       const tab = pickMangaTab(tabs, lastFocusedWindowId, urlFilter);
-      if (!tab) throw new Error(urlFilter === undefined ? '找不到網頁分頁：先在 debug Chrome 打開漫畫頁' : `找不到 url 含「${urlFilter}」的分頁`);
+      if (!tab)
+        throw new Error(
+          urlFilter === undefined
+            ? '挑不出漫畫分頁：沒有開著的網頁，或好幾個視窗都有網頁（用 --url 指定）'
+            : `找不到 url 含「${urlFilter}」的分頁`,
+        );
       console.error(`分頁 ${tab.id} → ${tab.url}`);
 
       const panelUrl = `${origin}/sidepanel.html?tabId=${tab.id}`;
@@ -78,6 +84,7 @@ async function main(): Promise<void> {
         const { targetInfos } = await cdp.send('Target.getTargets');
         return panelTarget(
           (targetInfos as { targetId: string; type: string; url: string }[]).map((t) => ({ id: t.targetId, type: t.type, url: t.url })),
+          origin,
           tab.id,
         );
       };
@@ -87,7 +94,7 @@ async function main(): Promise<void> {
         console.log(`已開 side panel 視窗：${panelUrl}`);
       } else console.log(`沿用已開的 side panel 視窗：${panelUrl}`);
 
-      if ((command as Command) === 'activate') {
+      if (command === 'activate') {
         // SW 卡住時 sendMessage 永遠不會回來，不能讓指令跟著卡住
         const responded = await helper(`Promise.race([
           chrome.runtime.sendMessage({ type: 'test:activate', tabId: ${tab.id} }).then(() => true),
@@ -96,7 +103,7 @@ async function main(): Promise<void> {
         if (responded !== true) throw new Error(`SW ${ACTIVATE_TIMEOUT_MS / 1000} 秒內沒有完成啟動：看 debug:summary`);
         const panel = await attachPage(cdp, (await findPanel())!.id);
         const active = await poll(async () => (await panel("document.body.innerText.includes('已啟動')")) === true);
-        console.log(active ? '已啟動（side panel 顯示「已啟動」）' : '已送出啟動，但 side panel 10 秒內沒有顯示「已啟動」：看 debug:summary');
+        console.log(active ? '已啟動（side panel 顯示「已啟動」）' : `已送出啟動，但 side panel ${WAIT_MS / 1000} 秒內沒有顯示「已啟動」：看 debug:summary`);
         if (!active) process.exitCode = 1;
       }
     } finally {

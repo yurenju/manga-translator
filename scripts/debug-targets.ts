@@ -68,20 +68,21 @@ const isWebPage = (tab: ChromeTab) => /^https?:/.test(tab.url);
 /**
  * debug:panel／debug:activate 要操作的漫畫分頁（scripts/debug-drive.ts）。
  * 給了 urlFilter：第一個 url 含它的網頁分頁。沒給：最後聚焦視窗的作用中分頁；
- * 那個視窗沒有網頁（例如剛聚焦的是 side panel 視窗）就退回任一視窗的作用中網頁分頁。
+ * 那個視窗沒有網頁（例如剛聚焦的是 side panel 視窗，它也是 normal 視窗）時，只有一個作用中網頁分頁才退回用它；
+ * 好幾個就不猜，回傳 undefined，要呼叫端給 urlFilter。
  */
 export function pickMangaTab(tabs: readonly ChromeTab[], lastFocusedWindowId: number | undefined, urlFilter?: string): ChromeTab | undefined {
   const pages = tabs.filter(isWebPage);
   if (urlFilter !== undefined) return pages.find((tab) => tab.url.includes(urlFilter));
   const active = pages.filter((tab) => tab.active);
-  return active.find((tab) => tab.windowId === lastFocusedWindowId) ?? active[0];
+  return active.find((tab) => tab.windowId === lastFocusedWindowId) ?? (active.length === 1 ? active[0] : undefined);
 }
 
-/** 這個分頁專屬的 side panel（sidepanel.html?tabId=N），已經開著就沿用，不再開一個。 */
-export function panelTarget(targets: readonly TargetInfo[], tabId: number): TargetInfo | undefined {
+/** 這個分頁專屬的 side panel（<外掛 origin>/sidepanel.html?tabId=N），已經開著就沿用，不再開一個。 */
+export function panelTarget(targets: readonly TargetInfo[], extensionOrigin: string, tabId: number): TargetInfo | undefined {
   return targets.find((target) => {
-    if (!target.url.startsWith('chrome-extension://')) return false;
+    if (!target.url.startsWith(`${extensionOrigin}/`)) return false;
     const url = new URL(target.url);
-    return url.pathname.endsWith('/sidepanel.html') && url.searchParams.get('tabId') === String(tabId);
+    return url.pathname === '/sidepanel.html' && url.searchParams.get('tabId') === String(tabId);
   });
 }

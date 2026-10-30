@@ -225,7 +225,7 @@ const RELOADED_MESSAGE = '已重新載入外掛：重新整理漫畫分頁，再
  * 在背景開一個 chrome://extensions 分頁，找到這個外掛後執行 body（裡面可以用 extension，回傳值要能 JSON 化）。
  * 不靠外掛自己的 SW：SW 閒置時會被停掉、不在 target 清單裡。外掛還沒載入（第一次使用）時回傳 null。
  */
-async function withExtensionInfo(cdp: Cdp, body: string, failure: string): Promise<unknown> {
+async function evalInExtensionsPage(cdp: Cdp, body: string, errorPrefix: string): Promise<unknown> {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'chrome://extensions', background: true });
   try {
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
@@ -236,7 +236,7 @@ async function withExtensionInfo(cdp: Cdp, body: string, failure: string): Promi
       ${body}
     })()`;
     const { result, exceptionDetails } = await cdp.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId);
-    if (exceptionDetails) throw new Error(`${failure}：${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    if (exceptionDetails) throw new Error(`${errorPrefix}：${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
     return result.value;
   } finally {
     await cdp.send('Target.closeTarget', { targetId }).catch(() => {});
@@ -245,13 +245,13 @@ async function withExtensionInfo(cdp: Cdp, body: string, failure: string): Promi
 
 /** 用 chrome.developerPrivate 重新載入外掛；外掛還沒載入時回傳 false。 */
 async function reloadExtension(cdp: Cdp): Promise<boolean> {
-  const reloaded = await withExtensionInfo(cdp, 'await chrome.developerPrivate.reload(extension.id, { failQuietly: true }); return true;', '重新載入外掛失敗');
+  const reloaded = await evalInExtensionsPage(cdp, 'await chrome.developerPrivate.reload(extension.id, { failQuietly: true }); return true;', '重新載入外掛失敗');
   return reloaded === true;
 }
 
 /** debug 版外掛的 id（chrome-extension://<id>）；還沒載入時回傳 undefined。 */
 export async function extensionId(cdp: Cdp): Promise<string | undefined> {
-  const id = await withExtensionInfo(cdp, 'return extension.id;', '查外掛 id 失敗');
+  const id = await evalInExtensionsPage(cdp, 'return extension.id;', '查外掛 id 失敗');
   return typeof id === 'string' ? id : undefined;
 }
 
