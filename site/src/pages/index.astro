@@ -1,0 +1,26 @@
+---
+/** `/`：依讀者記住的選擇或瀏覽器語系導到 /zh-tw/ 或 /en/（規則在 locale.ts）。 */
+import { copy } from '../copy.ts';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Naruhodo</title>
+    <script>
+      import { pickLocale } from '../locale.ts';
+      import { readSavedLocale } from '../saved-locale.ts';
+
+      const locale = pickLocale({ saved: readSavedLocale(), browserLanguages: navigator.languages });
+      location.replace(`/${locale}/`);
+    </script>
+  </head>
+  <body>
+    <!-- script 沒跑時（關掉 JavaScript）讓讀者自己選 -->
+    <noscript>
+      <p><a href="/zh-tw/">{copy['zh-tw'].hero.title}</a></p>
+      <p><a href="/en/">{copy.en.hero.title}</a></p>
+    </noscript>
+  </body>
+</html>

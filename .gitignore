@@ -2,3 +2,6 @@ node_modules/
 dist/
 test-results/
 playwright-report/
+# 產品網站（site/）：Astro 產生的型別與本機的 Paddle sandbox 設定
+.astro/
+.env.local

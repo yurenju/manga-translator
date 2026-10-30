@@ -1,0 +1,77 @@
+---
+/**
+ * 每一頁的外框：頁首（語言切換）與頁尾（三份法律文件連結與公司名稱，Paddle 網域審核的要求）。
+ * `locale` 是 'auto' 的是法律文件：只有一個網址，頁首頁尾的語言由那一頁的 script 在瀏覽器決定（設定 `<html data-locale>`）。
+ */
+import '../../../src/shared/tokens.css';
+import '../styles/site.css';
+import logo from '../../../src/icons/naruhodo.svg';
+import L from '../components/L.astro';
+import { copy } from '../copy.ts';
+import { LEGAL_DOCS, INSTALL_URL, REPO_URL, legalHref } from '../links.ts';
+import { type Locale, LOCALES, byLocale, languageTag } from '../locale.ts';
+
+interface Props {
+  locale: Locale | 'auto';
+  title: string;
+  /** 語言切換到各語言時的網址 */
+  alternates: Record<Locale, string>;
+}
+const { locale, title, alternates } = Astro.props;
+// 'auto' 先當英文輸出：script 沒跑時（例如關掉 JavaScript）頁首頁尾仍然是完整的英文
+const initial: Locale = locale === 'auto' ? 'en' : locale;
+const text = <K extends keyof (typeof copy)['en']['nav']>(key: K) => byLocale((l) => copy[l].nav[key]);
+// 法律文件不知道讀者的語言：回到 /，由它依記住的選擇或瀏覽器語系導過去
+const home = locale === 'auto' ? '/' : `/${locale}/`;
+---
+<!doctype html>
+<html lang={languageTag(initial)} data-locale={initial}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <link rel="icon" href={logo.src} type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href={home}><img src={logo.src} alt="" width="30" height="30" />Naruhodo</a>
+        <nav class="nav">
+          <L locale={locale} class="hide-sm" text={text('pricing')} href={byLocale((l) => `/${l}/#pricing`)} />
+          <L locale={locale} class="hide-sm" text={text('faq')} href={byLocale((l) => `/${l}/#faq`)} />
+          <span class="lang-toggle" role="group" aria-label={copy[initial].nav.languageLabel}>
+            {LOCALES.map((l) => (
+              <a href={alternates[l]} data-set-locale={l} lang={languageTag(l)}>{l === 'zh-tw' ? '中文' : 'EN'}</a>
+            ))}
+          </span>
+          <L locale={locale} class="btn btn-primary btn-small" text={text('install')} href={byLocale(() => INSTALL_URL)} />
+        </nav>
+      </div>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="legal">
+          {LEGAL_DOCS.map((doc) => (
+            <L locale={locale} text={byLocale((l) => copy[l].legal[doc])} href={byLocale((l) => legalHref(doc, l))} />
+          ))}
+          <L locale={locale} text={byLocale((l) => copy[l].legal.source)} href={byLocale(() => REPO_URL)} />
+        </div>
+        <div class="copyright">© Sad Coder, Inc.</div>
+      </div>
+    </footer>
+    <script>
+      import { isLocale } from '../locale.ts';
+      import { saveLocale } from '../saved-locale.ts';
+
+      // 讀者在頁首手動切換語言：記住，下次從 / 進來就用這個語言
+      document.addEventListener('click', (event) => {
+        const link = (event.target as Element).closest<HTMLElement>('[data-set-locale]');
+        const locale = link?.dataset.setLocale;
+        if (isLocale(locale)) saveLocale(locale);
+      });
+    </script>
+  </body>
+</html>
