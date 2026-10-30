@@ -1,4 +1,4 @@
-import { CLAUDE_MODEL, PROMPT_VERSION } from '../offscreen/claude-translator.ts';
+import { CLAUDE_MODEL, PROMPT_VERSION } from '../shared/claude-request.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import { hasDataConsent } from '../shared/data-consent.ts';
 import { FAKE_VERSION } from '../shared/fake-translator.ts';
