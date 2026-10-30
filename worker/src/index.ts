@@ -33,7 +33,7 @@ import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaC
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
 import { paddle, PaddleError, verifyWebhook } from './paddle.ts';
-import { activeSubscription, applyPaddleEvent, cancellationOnDelete, paddleIds } from './subscription.ts';
+import { activeSubscription, applyPaddleEvent, cancellationOnDelete, paddleIds, recordPaddleEvent, refundedSubscription } from './subscription.ts';
 
 type Env = Cloudflare.Env;
 
@@ -216,6 +216,15 @@ const ROUTES: Record<string, Handler> = {
       event = JSON.parse(body);
     } catch {
       return invalid();
+    }
+    // 全額退款：立即取消訂閱；Paddle 失敗就回 502、不記下事件，讓 Paddle 重送
+    const refund = await refundedSubscription(env.DB, event);
+    if (refund) {
+      return viaPaddle(async () => {
+        await paddle(env).cancelSubscription(refund.subscriptionId, 'immediately');
+        await recordPaddleEvent(env.DB, refund.eventId, now);
+        return new Response(null, { status: 200 });
+      });
     }
     await applyPaddleEvent(env.DB, event, now);
     return new Response(null, { status: 200 });

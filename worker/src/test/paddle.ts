@@ -76,6 +76,44 @@ export function subscriptionEvent({
   };
 }
 
+export interface AdjustmentFields {
+  subscriptionId: string;
+  status?: string;
+  action?: string;
+  /** 每個 item 的 type。Paddle 後台的「全額退款」送來的最上層 type 是 partial、item 才是 full（sandbox 實測）。 */
+  itemTypes?: string[];
+  type?: string;
+  eventType?: string;
+  eventId?: string;
+}
+
+/** Paddle 的 adjustment.* 事件（只放 Worker 會讀的欄位）。預設是後台按「全額退款」、Paddle 核准之後送來的樣子。 */
+export function adjustmentEvent({
+  subscriptionId,
+  status = 'approved',
+  action = 'refund',
+  itemTypes = ['full'],
+  type = 'partial',
+  eventType = 'adjustment.updated',
+  eventId = `evt_test_${++events}_${crypto.randomUUID().slice(0, 8)}`,
+}: AdjustmentFields) {
+  return {
+    event_id: eventId,
+    event_type: eventType,
+    occurred_at: new Date().toISOString(),
+    notification_id: `ntf_test_${events}`,
+    data: {
+      id: `adj_test_${events}`,
+      action,
+      type,
+      status,
+      transaction_id: `txn_test_${events}`,
+      subscription_id: subscriptionId,
+      items: itemTypes.map((itemType, i) => ({ type: itemType, item_id: `txnitm_test_${i}`, amount: '2000' })),
+    },
+  };
+}
+
 /** Paddle API 的假回應：依序回傳，記下送出的網址與 body。 */
 export function fakePaddle(responses: (() => Response)[]) {
   const calls: { url: string; init: RequestInit; body: unknown }[] = [];
