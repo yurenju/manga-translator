@@ -33,7 +33,7 @@ import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaC
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
 import { paddle, PaddleError, verifyWebhook } from './paddle.ts';
-import { activeSubscription, applyPaddleEvent, paddleIds } from './subscription.ts';
+import { activeSubscription, applyPaddleEvent, cancellationOnDelete, paddleIds } from './subscription.ts';
 
 type Env = Cloudflare.Env;
 
@@ -170,11 +170,11 @@ const ROUTES: Record<string, Handler> = {
     return email ? Response.json({ email, quota: await quota(env.DB, accountId, clock(env, now)) } satisfies AccountResponse) : signedOut();
   }),
   // 刪除帳號：先取消 Paddle 訂閱，失敗就 502、什麼都不刪（帳號刪了訂閱卻還在扣款就沒有人能取消了）。
-  // 已經排定取消的不再送（Paddle 會回錯誤）；刪除後 Paddle 送來的事件找不到 Account，applyPaddleEvent 會忽略
+  // 要不要送、何時生效見 cancellationOnDelete；刪除後 Paddle 送來的事件找不到 Account，applyPaddleEvent 會忽略
   [`DELETE ${ACCOUNT_PATH}`]: authed(async ({ env }, accountId) =>
     viaPaddle(async () => {
-      const subscription = await activeSubscription(env.DB, accountId);
-      if (subscription && !subscription.cancelScheduled) await paddle(env).cancelSubscription(subscription.paddleSubscriptionId);
+      const cancellation = await cancellationOnDelete(env.DB, accountId);
+      if (cancellation) await paddle(env).cancelSubscription(cancellation.subscriptionId, cancellation.timing);
       await deleteAccount(env.DB, accountId);
       return new Response(null, { status: 204 });
     }),

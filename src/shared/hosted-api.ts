@@ -19,7 +19,7 @@ export const VERIFY_CODE_PATH = '/v1/auth/verify';
 export const SIGN_OUT_PATH = '/v1/auth/sign-out';
 /**
  * GET（帶 token）：目前的 Account 狀態 AccountResponse。
- * DELETE（帶 token）：刪除帳號，204。有訂閱的先取消 Paddle 訂閱（扣款週期結束才失效、不退款），取消失敗回 502 且什麼都不刪；
+ * DELETE（帶 token）：刪除帳號，204。有訂閱的先取消 Paddle 訂閱（不退款；active 到扣款週期結束才失效，扣款失敗中或暫停的立即取消），取消失敗回 502 且什麼都不刪；
  * 之後刪除 Account、所有 session（每個 token 都失效）、額度、用量紀錄、訂閱，只保留 email hash（Free Pages 領取紀錄）。
  */
 export const ACCOUNT_PATH = '/v1/account';

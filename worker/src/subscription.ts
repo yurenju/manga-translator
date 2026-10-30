@@ -42,6 +42,25 @@ export async function activeSubscription(db: D1Database, accountId: string): Pro
   };
 }
 
+/** Paddle 取消訂閱的生效時間（`effective_from`）。 */
+export type CancelTiming = 'next_billing_period' | 'immediately';
+
+/**
+ * 刪除帳號時要怎麼取消這個 Account 的訂閱；undefined＝不用送（沒訂閱過、已經 canceled、或 active 而且已經排定取消）。
+ * - active：到期才失效（已付的這一年照常到期，不退款）
+ * - paused：Paddle 只接受立即取消
+ * - past_due：排到期末的話，到期前 Paddle 會繼續嘗試扣款，帳號刪了還可能被扣到；這一年本來就還沒付成功，所以立即取消（已排定取消的也一樣）
+ */
+export async function cancellationOnDelete(db: D1Database, accountId: string): Promise<{ subscriptionId: string; timing: CancelTiming } | undefined> {
+  const row = await db
+    .prepare('SELECT status, cancel_scheduled, paddle_subscription_id FROM subscriptions WHERE account_id = ?')
+    .bind(accountId)
+    .first<Pick<Row, 'status' | 'cancel_scheduled' | 'paddle_subscription_id'>>();
+  if (!row || row.status === 'canceled') return undefined;
+  if (row.status === 'paused' || row.status === 'past_due') return { subscriptionId: row.paddle_subscription_id, timing: 'immediately' };
+  return row.cancel_scheduled === 1 ? undefined : { subscriptionId: row.paddle_subscription_id, timing: 'next_billing_period' };
+}
+
 /** 這個 Account 的 Paddle customer 與 subscription id（管理訂閱用）；訂閱結束後也還在，才能看收據。 */
 export async function paddleIds(db: D1Database, accountId: string): Promise<{ customerId: string; subscriptionId: string } | undefined> {
   const row = await db

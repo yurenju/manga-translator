@@ -89,7 +89,7 @@ Data on your computer stays until you delete it:
 
 **Deleting your account** (Settings → Delete account in the extension):
 
-- If you have a subscription, it is cancelled first: it stays usable until the end of the paid year and will not renew. **Payments already made are not refunded automatically.** If the cancellation fails, nothing is deleted and you can try again.
+- If you have a subscription, it is cancelled first: it stays usable until the end of the paid year and will not renew. If a renewal payment has failed and is still being retried, or the subscription is paused, it is cancelled immediately, so no further payment is attempted. **Payments already made are not refunded automatically.** If the cancellation fails, nothing is deleted and you can try again.
 - The service then deletes your account, all of your sign-in tokens (signing you out on every computer), your page quota, your usage records, your subscription record, any sign-in code not yet used for your email address, and the count of sign-in codes tried for it.
 - The service keeps only the SHA-256 hash of your email address and when it received free pages, so that registering again with the same email address does not give free pages again, plus the payment notification identifiers described above. **After deletion, the service keeps no copy of your email address.**
 - Data held by third parties is not deleted by the Naruhodo service: Paddle keeps its customer, subscription and transaction records under its own policy and its legal record-keeping obligations, and Resend keeps its email delivery records under its own policy.
