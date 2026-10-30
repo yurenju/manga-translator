@@ -5,7 +5,7 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ACCOUNT_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
+import { ACCOUNT_PATH, SEND_CODE_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
 import type { TranslateInput } from '../../src/shared/translator.ts';
 import { sha256 } from './hash.ts';
 import { fakeAnthropic, reply } from './test/anthropic.ts';
@@ -20,6 +20,7 @@ const canceled = () => Response.json({ data: { id: 'sub_test', status: 'active',
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('刪除帳號', () => {
@@ -120,5 +121,36 @@ describe('刪除帳號', () => {
     }
     const grants = await env.DB.prepare('SELECT * FROM free_page_grants WHERE email_hash = ?').bind(await sha256(email)).all();
     expect(grants.results).toHaveLength(1);
+  });
+
+  it('寄了驗證碼還沒用（例如在別台電腦寄的）：刪除時這個 email 的驗證碼也一起刪掉，D1 裡查不到 email', async () => {
+    const email = freshEmail();
+    const token = await signIn(email);
+    expect((await post(SEND_CODE_PATH, { email })).status).toBe(204);
+
+    expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
+
+    expect((await env.DB.prepare('SELECT * FROM otps WHERE email = ?').bind(email).all()).results).toEqual([]);
+  });
+});
+
+describe('驗證碼不留 email', () => {
+  it('驗證成功後，這個 email 的驗證碼那一列就刪掉', async () => {
+    const email = freshEmail();
+
+    await signIn(email);
+
+    expect((await env.DB.prepare('SELECT * FROM otps WHERE email = ?').bind(email).all()).results).toEqual([]);
+  });
+
+  it('寄了但沒用的驗證碼不會一直留著：過期之後，任何人寄新的驗證碼時就刪掉', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const abandoned = freshEmail();
+    await post(SEND_CODE_PATH, { email: abandoned });
+
+    vi.setSystemTime(Date.now() + 11 * 60_000);
+    await post(SEND_CODE_PATH, { email: freshEmail() });
+
+    expect((await env.DB.prepare('SELECT * FROM otps WHERE email = ?').bind(abandoned).all()).results).toEqual([]);
   });
 });
