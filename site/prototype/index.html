@@ -1,0 +1,719 @@
+<!doctype html>
+<!--
+  PROTOTYPE（#89，用完即丟）：產品網站外觀。
+  首頁三種結構不同的版本，用 ?variant=A|B|C 切換；另外用 ?page=home|privacy|checkout 看法律文件頁與 checkout 頁，
+  ?lang=zh|en 切語言（不帶時依瀏覽器語系）。直接用瀏覽器打開這個檔案即可，不需要建置。
+  沒有任何真正的付款或網路請求：checkout 的 Paddle overlay 是畫出來的假畫面。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naruhodo — prototype</title>
+<style>
+  /* 從 src/shared/tokens.css 複製過來，讓這個檔案單獨打開也能顯示（prototype 不連結真正的檔案） */
+  :root {
+    --naru-ink: #1F1D1A; --naru-ink-2: #5B5750; --naru-ink-3: #75706A; --naru-on-accent: #FFFFFF;
+    --naru-line: #E5E2DC; --naru-line-strong: #C9C4BB; --naru-surface: #FFFFFF; --naru-surface-2: #F2F0EC;
+    --naru-accent: #2F4B7C; --naru-accent-weak: #E7ECF5;
+    --naru-highlight: #2F6FDB; --naru-ruby: #9A3B22;
+    --naru-warn: #6E5000; --naru-warn-bg: #FBF3DC; --naru-danger: #8C1D18; --naru-danger-bg: #FBE9E7; --naru-ok-dot: #2E8B57;
+    --naru-font-sans: 'Noto Sans TC', 'Noto Sans JP', system-ui, -apple-system, 'Segoe UI', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    --naru-font-ja: 'Noto Sans JP', 'Noto Sans TC', system-ui, -apple-system, 'Segoe UI', 'Yu Gothic UI', 'Hiragino Sans', sans-serif;
+    --naru-radius-sm: 6px; --naru-radius-md: 10px; --naru-radius-pill: 999px;
+    --naru-shadow-2: 0 12px 32px rgba(31, 29, 26, 0.16);
+  }
+</style>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--naru-font-sans); color: var(--naru-ink); background: var(--naru-surface-2); line-height: 1.6; }
+  a { color: var(--naru-accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  .tbd { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .04em; color: var(--naru-warn); background: var(--naru-warn-bg); border: 1px dashed var(--naru-warn); border-radius: 4px; padding: 0 5px; margin-left: 6px; vertical-align: middle; line-height: 18px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: var(--naru-radius-md); font-weight: 700; font-size: 15px; text-decoration: none; border: 1px solid transparent; cursor: pointer; }
+  .btn-primary { background: var(--naru-accent); color: var(--naru-on-accent); }
+  .btn-ghost { background: var(--naru-surface); color: var(--naru-accent); border-color: var(--naru-line-strong); }
+  .muted { color: var(--naru-ink-2); }
+  .small { font-size: 13px; }
+
+  /* 共用頁首 */
+  .site-header { background: var(--naru-surface); border-bottom: 1px solid var(--naru-line); }
+  .site-header .wrap { display: flex; align-items: center; gap: 16px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 18px; color: var(--naru-ink); text-decoration: none; }
+  .brand img { width: 30px; height: 30px; }
+  .nav { margin-left: auto; display: flex; gap: 18px; align-items: center; font-size: 14px; }
+  .nav a { color: var(--naru-ink-2); text-decoration: none; }
+  .nav a.btn-primary { color: var(--naru-on-accent); }
+  .lang-toggle { display: inline-flex; border: 1px solid var(--naru-line-strong); border-radius: var(--naru-radius-pill); overflow: hidden; font-size: 12px; }
+  .lang-toggle button { border: 0; background: transparent; padding: 4px 10px; cursor: pointer; color: var(--naru-ink-2); font: inherit; }
+  .lang-toggle button[aria-pressed="true"] { background: var(--naru-accent); color: var(--naru-on-accent); }
+
+  /* 共用頁尾：Paddle 要求每一頁都有三份法律文件連結與公司名稱 */
+  .site-footer { border-top: 1px solid var(--naru-line); background: var(--naru-surface); margin-top: 64px; padding: 24px 0; font-size: 13px; color: var(--naru-ink-2); }
+  .site-footer .wrap { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  .site-footer .legal { display: flex; gap: 16px; }
+  .site-footer .copy { margin-left: auto; }
+
+  /* 假的漫畫截圖：一格漫畫，對話框上疊著外掛的譯文 */
+  .mock-manga { position: relative; background: #fff; border: 3px solid var(--naru-ink); aspect-ratio: 3/4; overflow: hidden; }
+  .mock-manga .figure { position: absolute; left: 18%; bottom: 0; width: 64%; height: 58%; background: repeating-linear-gradient(135deg, #e9e6e0 0 6px, #f6f4f0 6px 12px); border-radius: 50% 50% 0 0; border: 3px solid var(--naru-ink); border-bottom: 0; }
+  .mock-manga .balloon { position: absolute; top: 7%; right: 8%; width: 34%; height: 34%; background: #fff; border: 2.5px solid var(--naru-ink); border-radius: 50%; display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; font-family: var(--naru-font-ja); font-weight: 700; font-size: 15px; }
+  .mock-manga .balloon.b2 { top: 30%; left: 6%; right: auto; width: 28%; height: 26%; font-size: 13px; }
+  .mock-manga .overlay { position: absolute; background: var(--naru-surface); border: 2px solid var(--naru-highlight); box-shadow: var(--naru-shadow-2); border-radius: var(--naru-radius-sm); padding: 6px 8px; font-size: 12px; line-height: 1.4; width: 46%; }
+  .mock-manga .overlay ruby rt { color: var(--naru-ruby); font-size: 9px; }
+  .mock-manga .overlay .ja { font-family: var(--naru-font-ja); font-size: 13px; }
+  .mock-manga .overlay .tr { color: var(--naru-ink-2); border-top: 1px dashed var(--naru-line-strong); margin-top: 4px; padding-top: 4px; }
+
+  /* ===== 版本 A：經典單頁長捲 ===== */
+  .va-hero { padding: 64px 0 48px; background: var(--naru-surface); }
+  .va-hero .wrap { text-align: center; max-width: 760px; }
+  .va-hero .cta { justify-content: center; }
+  .va-hero h1 { font-size: 40px; line-height: 1.25; margin: 0 0 16px; }
+  .va-hero p.lead { font-size: 18px; color: var(--naru-ink-2); margin: 0 0 28px; }
+  .va-hero .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .va-section { padding: 56px 0 0; }
+  .va-section h2 { font-size: 26px; text-align: center; margin: 0 0 32px; }
+  .va-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .va-step { background: var(--naru-surface); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); padding: 20px; }
+  .va-step .n { width: 30px; height: 30px; border-radius: 50%; background: var(--naru-accent-weak); color: var(--naru-accent); font-weight: 800; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .va-step h3 { margin: 0 0 6px; font-size: 17px; }
+  .va-step p { margin: 0; color: var(--naru-ink-2); font-size: 14px; }
+  .va-plans { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 760px; margin: 0 auto; }
+  .va-plan { background: var(--naru-surface); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); padding: 28px; display: flex; flex-direction: column; }
+  .va-plan.featured { border: 2px solid var(--naru-accent); box-shadow: var(--naru-shadow-2); }
+  .va-plan h3 { margin: 0; font-size: 18px; }
+  .va-plan .price { font-size: 34px; font-weight: 800; margin: 10px 0 2px; }
+  .va-plan .price small { font-size: 15px; font-weight: 500; color: var(--naru-ink-2); }
+  .va-plan ul { padding-left: 18px; color: var(--naru-ink-2); font-size: 14px; flex: 1; }
+  .va-byok { text-align: center; margin-top: 18px; font-size: 13px; color: var(--naru-ink-3); }
+  .va-faq { max-width: 760px; margin: 0 auto; }
+  .va-faq details { background: var(--naru-surface); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-sm); padding: 14px 18px; margin-bottom: 10px; }
+  .va-faq summary { font-weight: 700; cursor: pointer; }
+  .va-faq p { color: var(--naru-ink-2); margin: 8px 0 0; font-size: 14px; }
+
+  /* ===== 版本 B：價格優先、文件感 ===== */
+  .vb { padding-top: 40px; }
+  .vb-top { display: grid; grid-template-columns: 300px 1fr; gap: 40px; align-items: start; }
+  .vb-aside { position: sticky; top: 20px; }
+  .vb-aside h1 { font-size: 24px; line-height: 1.35; margin: 0 0 10px; }
+  .vb-aside p { font-size: 14px; color: var(--naru-ink-2); }
+  .vb-aside .mock-manga { width: 100%; margin-top: 12px; }
+  .vb-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--naru-surface); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); overflow: hidden; font-size: 14px; }
+  .vb-table th, .vb-table td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--naru-line); vertical-align: top; }
+  .vb-table thead th { background: var(--naru-surface-2); font-size: 15px; }
+  .vb-table thead th.hl { background: var(--naru-accent); color: var(--naru-on-accent); }
+  .vb-table td.hl { background: var(--naru-accent-weak); }
+  .vb-table td:first-child { color: var(--naru-ink-2); width: 30%; }
+  .vb-table tr:last-child td { border-bottom: 0; }
+  .vb-table .big { font-size: 22px; font-weight: 800; }
+  .vb-table .byok { color: var(--naru-ink-3); }
+  .vb h2 { font-size: 18px; margin: 36px 0 12px; }
+  .vb-feat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; font-size: 14px; }
+  .vb-feat div::before { content: "✓ "; color: var(--naru-ok-dot); font-weight: 800; }
+  .vb-faq dt { font-weight: 700; margin-top: 14px; }
+  .vb-faq dd { margin: 4px 0 0; color: var(--naru-ink-2); font-size: 14px; }
+
+  /* ===== 版本 C：漫畫分鏡 ===== */
+  .vc { padding-top: 32px; }
+  .vc-page { background: #fff; border: 3px solid var(--naru-ink); padding: 10px; display: grid; gap: 10px; grid-template-columns: repeat(6, 1fr); }
+  .koma { border: 3px solid var(--naru-ink); padding: 22px; position: relative; background: #fff; }
+  .koma h1 { font-size: 34px; line-height: 1.25; margin: 0 0 10px; }
+  .koma h2 { font-size: 20px; margin: 0 0 8px; }
+  .koma p { margin: 0; color: var(--naru-ink-2); font-size: 14px; }
+  .koma .num { position: absolute; top: 8px; right: 10px; font-family: var(--naru-font-ja); font-weight: 900; color: var(--naru-line-strong); font-size: 13px; }
+  .k-demo { grid-column: span 6; background: var(--naru-surface-2); }
+  .k-hero { grid-column: span 6; display: flex; flex-direction: column; justify-content: center; background: radial-gradient(circle at 80% 30%, var(--naru-accent-weak), #fff 60%); }
+  .k-img { grid-column: span 2; padding: 0; }
+  .k-img .mock-manga { border: 0; height: 100%; aspect-ratio: auto; min-height: 320px; }
+  .k-step { grid-column: span 2; }
+  .k-step .say { display: inline-block; background: #fff; border: 2.5px solid var(--naru-ink); border-radius: 20px; padding: 8px 14px; font-weight: 700; margin-bottom: 10px; position: relative; }
+  .k-step .say::after { content: ""; position: absolute; left: 20px; bottom: -11px; border: 9px solid transparent; border-top-color: var(--naru-ink); border-bottom: 0; }
+  .k-plan { grid-column: span 3; display: flex; flex-direction: column; gap: 8px; }
+  .k-plan.dark { background: var(--naru-accent); color: var(--naru-on-accent); }
+  .k-plan.dark p, .k-plan.dark .num { color: #dfe6f3; }
+  .k-plan .price { font-size: 32px; font-weight: 900; }
+  .k-plan .btn { align-self: flex-start; margin-top: auto; }
+  .k-plan.dark .btn-primary { background: #fff; color: var(--naru-accent); }
+  .k-faq { grid-column: span 6; }
+  .k-faq .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 8px; }
+  .k-faq h3 { font-size: 15px; margin: 0 0 4px; }
+  .speedlines { background: repeating-conic-gradient(from 0deg at 50% 50%, #fff 0deg 4deg, #f1efeb 4deg 8deg); }
+
+  /* ===== 法律文件頁 ===== */
+  .legal-page { max-width: 760px; margin: 40px auto 0; background: var(--naru-surface); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); padding: 40px 48px; }
+  .legal-page h1 { margin-top: 0; }
+  .legal-page h2 { font-size: 19px; margin-top: 32px; }
+  .legal-page li, .legal-page p { font-size: 15px; }
+  .legal-meta { font-size: 13px; color: var(--naru-ink-3); }
+  .en-only { background: var(--naru-accent-weak); color: var(--naru-accent); border-radius: var(--naru-radius-sm); padding: 10px 14px; font-size: 14px; margin-bottom: 24px; }
+  .legal-tabs { max-width: 760px; margin: 24px auto 0; display: flex; gap: 6px; }
+  .legal-tabs a { padding: 6px 14px; border-radius: var(--naru-radius-pill); text-decoration: none; font-size: 14px; color: var(--naru-ink-2); border: 1px solid var(--naru-line-strong); background: var(--naru-surface); }
+  .legal-tabs a.on { background: var(--naru-ink); color: #fff; border-color: var(--naru-ink); }
+
+  /* ===== checkout 頁 ===== */
+  .co { max-width: 520px; margin: 56px auto 0; text-align: center; }
+  .co .card { background: var(--naru-surface); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); padding: 32px; }
+  .co .spinner { width: 34px; height: 34px; border: 4px solid var(--naru-accent-weak); border-top-color: var(--naru-accent); border-radius: 50%; margin: 0 auto 16px; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .co .summary { text-align: left; margin-top: 24px; border-top: 1px solid var(--naru-line); padding-top: 16px; font-size: 14px; }
+  .co .summary div { display: flex; justify-content: space-between; padding: 4px 0; }
+  .co .err { background: var(--naru-danger-bg); color: var(--naru-danger); border-radius: var(--naru-radius-sm); padding: 12px; margin-top: 16px; font-size: 14px; }
+  .paddle-shade { position: fixed; inset: 0; background: rgba(20, 20, 20, .55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .paddle-box { width: 420px; max-width: 92vw; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.35); font-family: system-ui, sans-serif; }
+  .paddle-box .tag { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .08em; }
+  .paddle-box .fake-input { height: 38px; border: 1px solid #ccc; border-radius: 6px; margin: 8px 0; padding: 8px 10px; color: #aaa; font-size: 13px; }
+  .paddle-box .pay { width: 100%; height: 44px; border: 0; border-radius: 6px; background: #1a1a1a; color: #fff; font-weight: 700; margin-top: 10px; }
+
+  /* ===== 互動展示：假的 Chrome 視窗＋side panel ===== */
+  .demo-caption { text-align: center; color: var(--naru-ink-2); font-size: 14px; margin: 0 0 12px; }
+  .chrome { border-radius: 12px; overflow: hidden; background: #DEE1E6; box-shadow: 0 24px 60px rgba(31,29,26,.22), 0 0 0 1px rgba(0,0,0,.08); text-align: left; font-family: system-ui, 'Segoe UI', sans-serif; }
+  .chrome-tabs { display: flex; align-items: flex-end; gap: 6px; height: 38px; padding: 0 10px; }
+  .chrome-dots { display: flex; gap: 7px; align-self: center; margin-right: 8px; }
+  .chrome-dots i { width: 11px; height: 11px; border-radius: 50%; background: #c4c7cc; display: block; }
+  .chrome-tab { background: #fff; border-radius: 9px 9px 0 0; padding: 8px 14px; font-size: 12px; color: #333; display: flex; align-items: center; gap: 8px; max-width: 240px; white-space: nowrap; overflow: hidden; }
+  .chrome-tab .fav { width: 14px; height: 14px; border-radius: 3px; background: #9AA0A6; flex: none; }
+  .chrome-bar { background: #fff; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid #e3e3e3; }
+  .chrome-bar .navbtn { color: #888; font-size: 14px; width: 22px; text-align: center; }
+  .chrome-url { flex: 1; background: #F1F3F4; border-radius: 999px; padding: 6px 14px; font-size: 12px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chrome-ext { position: relative; width: 30px; height: 30px; border-radius: 50%; border: 0; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .chrome-ext:hover, .chrome-ext.on { background: #E8EAED; }
+  .chrome-ext.pulse::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--naru-highlight); animation: ring 1.4s ease-out infinite; }
+  @keyframes ring { from { transform: scale(.8); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+  .chrome-hint { position: absolute; top: 40px; right: -6px; background: var(--naru-ink); color: #fff; font-size: 12px; padding: 6px 10px; border-radius: 8px; white-space: nowrap; pointer-events: none; z-index: 3; }
+  .chrome-hint::before { content: ""; position: absolute; top: -6px; right: 16px; border: 6px solid transparent; border-top: 0; border-bottom-color: var(--naru-ink); }
+  .chrome-body { position: relative; display: flex; height: 500px; background: #2b2b2b; }
+  .chrome-page { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+
+  /* 漫畫頁：兩格，對話框是直書 */
+  .mpage { position: relative; height: 92%; aspect-ratio: 5/7; background: #fff; display: grid; grid-template-rows: 1fr 1.25fr; gap: 8px; padding: 10px; }
+  .mpanel { position: relative; border: 2.5px solid #111; }
+  .mpanel.p1::after, .mpanel.p2 .person { pointer-events: none; }
+  .mballoon.tip-right .tip { right: auto; left: calc(100% + 10px); }
+  .mpanel.p1 { background: repeating-linear-gradient(90deg, #fff 0 3px, #ececec 3px 4px); }
+  .mpanel.p1::after { content: ""; position: absolute; left: 6%; bottom: 0; width: 55%; height: 55%; background: #3a3a3a; clip-path: polygon(0 100%, 10% 40%, 22% 55%, 30% 20%, 45% 50%, 58% 10%, 72% 45%, 85% 30%, 100% 100%); }
+  .mpanel.p2 .person { position: absolute; bottom: 0; width: 30%; height: 62%; border: 2.5px solid #111; border-bottom: 0; border-radius: 48% 48% 0 0; background: repeating-linear-gradient(135deg, #f4f4f4 0 5px, #e2e2e2 5px 7px); }
+  .mballoon { position: absolute; background: #fff; border: 2px solid #111; border-radius: 46%; display: flex; align-items: center; justify-content: center; padding: 8px 4px; cursor: default; }
+  .mballoon .v { writing-mode: vertical-rl; font-family: var(--naru-font-ja); font-weight: 700; font-size: 13px; line-height: 1.5; color: #111; }
+  .mballoon .v.zh { font-family: var(--naru-font-sans); }
+  .mballoon.cover { border-radius: 6px; background: var(--naru-surface); }
+  .mballoon.scan { outline: 2px dashed var(--naru-highlight); outline-offset: 2px; animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 50% { outline-color: transparent; } }
+  .mballoon.hot { outline: 2px solid var(--naru-highlight); outline-offset: 2px; background: #EAF1FC; }
+  .tip { display: none; position: absolute; top: 4px; right: calc(100% + 10px); width: 220px; background: #23211E; color: #F4F2EE; border-radius: 10px; padding: 10px 12px; z-index: 5; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .learn .mballoon.hot .tip { display: block; }
+  .tip .ja { font-family: var(--naru-font-ja); font-size: 15px; }
+  .tip rt { color: #F2A488; font-size: 9px; }
+  .tip .guess { color: #F2A488; font-size: 11px; margin-top: 6px; }
+
+  /* side panel */
+  .spanel { width: 0; overflow: hidden; background: var(--naru-surface); transition: width .35s ease; flex: none; display: flex; flex-direction: column; border-left: 1px solid #d0d0d0; }
+  .spanel.open { width: 320px; }
+  .spanel-inner { width: 320px; display: flex; flex-direction: column; height: 100%; }
+  .sp-chrome { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; color: #555; background: #F1F3F4; }
+  .sp-chrome .x { margin-left: auto; cursor: pointer; color: #777; border: 0; background: none; font-size: 14px; }
+  .sp-scroll { flex: 1; overflow-y: auto; padding: 0 12px 12px; font-family: var(--naru-font-sans); color: var(--naru-ink); }
+  .sp-head { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+  .sp-head b { font-size: 15px; }
+  .pill-ok { font-size: 12px; color: var(--naru-ok-dot); background: #E4F1E8; border-radius: 999px; padding: 2px 8px; }
+  .pill-ok::before { content: "● "; }
+  .sp-head .stop { margin-left: auto; border: 1px solid var(--naru-line-strong); background: #fff; border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--naru-surface-2); border-radius: 10px; padding: 4px; }
+  .modes button { text-align: left; border: 2px solid transparent; background: transparent; border-radius: 8px; padding: 8px 10px; cursor: pointer; font: inherit; color: var(--naru-ink-2); }
+  .modes button b { display: block; font-size: 14px; color: var(--naru-ink-2); font-weight: 600; }
+  .modes button span { font-size: 11px; }
+  .modes button.on { background: #fff; border-color: var(--naru-accent); }
+  .modes button.on b { color: var(--naru-ink); font-weight: 800; }
+  .levels { display: flex; background: var(--naru-surface-2); border-radius: 8px; padding: 3px; margin-top: 8px; }
+  .levels button { flex: 1; border: 0; background: transparent; padding: 6px 2px; font: inherit; font-size: 12px; border-radius: 6px; cursor: pointer; color: var(--naru-ink-2); }
+  .levels button.on { background: #fff; color: var(--naru-ink); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .switch { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; cursor: pointer; user-select: none; }
+  .switch i { width: 34px; height: 20px; border-radius: 999px; background: var(--naru-line-strong); position: relative; flex: none; transition: background .2s; }
+  .switch i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s; }
+  .switch.on i { background: var(--naru-accent); }
+  .switch.on i::after { left: 17px; }
+  .sp-page { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0 6px; font-size: 13px; border-bottom: 1px solid var(--naru-line); padding-bottom: 6px; }
+  .sp-page small { color: var(--naru-ink-3); font-size: 11px; }
+  .tline { padding: 6px 8px; border-left: 3px solid transparent; border-radius: 0 6px 6px 0; margin-bottom: 4px; }
+  .tline.hot { background: var(--naru-accent-weak); border-left-color: var(--naru-accent); }
+  .tline .ja { font-family: var(--naru-font-ja); font-size: 15px; line-height: 1.9; }
+  .tline rt { color: var(--naru-ruby); font-size: 9px; }
+  .tline .zh { font-size: 14px; margin-top: 2px; }
+  .chip { display: flex; align-items: center; gap: 8px; margin-top: 4px; border: 1px dashed var(--naru-line-strong); background: var(--naru-surface-2); border-radius: 6px; padding: 5px 8px; font-size: 12px; color: var(--naru-ink-3); cursor: default; }
+  .chip .k { background: var(--naru-accent); color: #fff; border-radius: 4px; font-size: 11px; padding: 1px 4px; font-weight: 700; }
+  .chip.revealed { border-style: solid; background: #fff; color: var(--naru-ink); font-size: 14px; }
+  .tip .chip { background: #34312C; border-color: #6F6A61; color: #C9C4BB; }
+  .tip .chip .k { background: #F4F2EE; color: #23211E; }
+  .tip .chip.revealed { background: #3A3F4D; border-color: #5A6175; color: #F4F2EE; }
+  .sp-loading { text-align: center; padding: 40px 0; color: var(--naru-ink-2); font-size: 13px; }
+  .sp-loading .spinner { width: 26px; height: 26px; border: 3px solid var(--naru-accent-weak); border-top-color: var(--naru-accent); border-radius: 50%; margin: 0 auto 10px; animation: spin 1s linear infinite; }
+  .sp-foot { border-top: 1px solid var(--naru-line); padding: 8px 12px; font-size: 12px; color: var(--naru-ink-2); display: flex; justify-content: space-between; align-items: center; }
+  .quota { height: 4px; background: var(--naru-surface-2); border-radius: 2px; width: 90px; overflow: hidden; }
+  .quota i { display: block; height: 100%; background: var(--naru-accent); }
+  .demo-replay { display: block; margin: 12px auto 0; border: 0; background: none; color: var(--naru-accent); cursor: pointer; font: inherit; font-size: 13px; }
+
+  /* 手機寬度 */
+  @media (max-width: 760px) {
+    .va-hero .wrap, .va-steps, .va-plans, .vb-top, .vb-feat, .k-faq .grid { grid-template-columns: 1fr; }
+    .vb-aside { position: static; }
+    .vc-page { grid-template-columns: 1fr; }
+    .k-hero, .k-demo, .k-step, .k-plan, .k-faq { grid-column: auto; }
+    .nav a.hide-sm { display: none; }
+    .legal-page { padding: 24px 20px; }
+    .spanel.open { position: absolute; right: 0; top: 0; bottom: 0; width: 86%; z-index: 6; }
+    .spanel-inner { width: 100%; min-width: 280px; }
+    .chrome-body { height: 440px; }
+    .site-footer .copy { margin-left: 0; }
+  }
+
+  /* prototype 切換列：故意做得跟網站本身不像 */
+  #proto-bar { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; align-items: center; gap: 6px; background: #111; color: #fff; border-radius: 999px; padding: 6px 8px; box-shadow: 0 8px 30px rgba(0,0,0,.4); font: 12px/1 ui-monospace, Consolas, monospace; white-space: nowrap; }
+  #proto-bar button { background: #333; color: #fff; border: 0; border-radius: 999px; padding: 6px 10px; cursor: pointer; font: inherit; }
+  #proto-bar button.on { background: #f5c518; color: #111; }
+  #proto-bar .sep { width: 1px; height: 18px; background: #555; margin: 0 4px; }
+  #proto-bar .label { padding: 0 6px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="proto-bar">
+  <button id="prev" title="上一個版本（←）">◀</button>
+  <span class="label" id="variant-label"></span>
+  <button id="next" title="下一個版本（→）">▶</button>
+  <span class="sep"></span>
+  <button data-page="home">home</button>
+  <button data-page="privacy">legal</button>
+  <button data-page="checkout">checkout</button>
+  <button data-page="checkout-error">checkout 失敗</button>
+</div>
+
+<script>
+const VARIANTS = { A: '經典長捲', B: '價格優先', C: '漫畫分鏡' };
+const KEYS = Object.keys(VARIANTS);
+
+// 文案：網站本身中英雙語，法律文件只有英文
+const T = {
+  zh: {
+    nav_pricing: '價格', nav_faq: '常見問題', nav_install: '安裝外掛',
+    tagline: '看得懂的日文漫畫',
+    hero_title: '在日文漫畫網站上翻譯成中文',
+    hero_lead: 'Naruhodo 是一個 Chrome 外掛。點一下圖示，對話框旁就出現繁體中文翻譯，還附上振り仮名，邊看邊學日文。',
+    cta_install: '加到 Chrome', cta_pricing: '看價格',
+    how: '怎麼用', s1t: '安裝並註冊', s1: '輸入 email，收到驗證碼貼回來就登入，不用設定密碼。',
+    s2t: '打開漫畫網站', s2: '在少年 Jump+ 或 Kindle Manga 上點外掛圖示，或按 Alt+Shift+M。',
+    s3t: '對照著看', s3: '譯文疊在對話框旁邊，原文與讀音都留著，翻過的頁面再看不會重新計費。',
+    pricing: '價格',
+    free_t: '免費試用', free_price: '0', free_unit: '',
+    free_items: ['註冊就有 50 頁免費額度（大約兩話）', '不需要信用卡'],
+    free_cta: '免費開始',
+    sub_t: '年繳訂閱', sub_unit: '／年',
+    sub_items: ['每月 800 頁翻譯，大約 4 本單行本', '每月在你訂閱的那天重置', '隨時取消，用到這一年結束'],
+    sub_cta: '訂閱',
+    byok: '已經有 Anthropic API key？也可以改用自備金鑰，不需要帳號、沒有頁數限制。',
+    byok_short: '自備金鑰', byok_price: '付給 Anthropic', byok_items: '不限頁數・不需要帳號',
+    faq: '常見問題',
+    q1: 'Naruhodo 怎麼處理漫畫頁面？', a1: '找出對話框與辨識文字都在你的電腦上進行，辨識出來的日文會送去翻譯。詳見隱私權政策。',
+    q2: '一頁怎麼算？', a2: '成功翻譯一頁算一頁；跨頁算兩頁。看已經翻過的頁面、或翻譯失敗，都不算。',
+    q3: '可以退款嗎？', a3: '詳見退款政策。',
+    q4: '支援哪些網站？', a4: '目前支援少年 Jump+ 與 Kindle Manga。',
+    feat_h: '包含的功能', features: ['日文 → 繁體中文翻譯', '振り仮名與原文對照', '同一部作品的人名與用語保持一致', '翻過的頁面離線也看得到', '支援跨頁閱讀', '開源程式碼'],
+    compare_h: '方案比較', row_price: '價格', row_pages: '頁數', row_account: '需要帳號', row_reset: '重置',
+    yes: '需要', no: '不需要', once: '一次性', monthly: '每月 800 頁', reset_day: '每月訂閱日', none: '—', unlimited: '不限',
+    step_say1: 'これ、なんて意味？', step_say2: 'ポチッ', step_say3: 'なるほど！',
+    legal_terms: '服務條款', legal_refund: '退款政策', legal_privacy: '隱私權政策',
+    en_only: '法律文件僅提供英文版本，以英文內容為準。',
+    co_loading: '正在開啟付款畫面…', co_hint: '付款由 Paddle 處理，Naruhodo 不會看到你的卡號。',
+    co_plan: 'Naruhodo 年繳訂閱', co_err: '付款畫面沒有成功載入。請檢查網路連線後再試一次。', co_retry: '重新載入',
+    co_back: '回到外掛', co_sum_pages: '每月頁數',
+    demo_caption: '實際操作看看：點右上角的 Naruhodo 圖示，切到「學習」後把滑鼠移到對話框上。', demo_hint: '點這裡開始翻譯', demo_replay: '重新播放',
+  },
+  en: {
+    nav_pricing: 'Pricing', nav_faq: 'FAQ', nav_install: 'Install',
+    tagline: 'Read Japanese manga, understood',
+    hero_title: 'Translate Japanese manga into Chinese on the manga site',
+    hero_lead: 'Naruhodo is a Chrome extension. Click its icon and Traditional Chinese translations appear beside each speech balloon, with furigana so you learn as you read.',
+    cta_install: 'Add to Chrome', cta_pricing: 'See pricing',
+    how: 'How it works', s1t: 'Install and sign in', s1: 'Enter your email and paste back the code we send. No password needed.',
+    s2t: 'Open a manga site', s2: 'On Shonen Jump+ or Kindle Manga, click the extension icon or press Alt+Shift+M.',
+    s3t: 'Read side by side', s3: 'Translations sit beside the balloons, original text and readings kept. Revisiting a page is never charged again.',
+    pricing: 'Pricing',
+    free_t: 'Free trial', free_price: '0', free_unit: '',
+    free_items: ['50 free pages when you sign up (about two chapters)', 'No credit card'],
+    free_cta: 'Start free',
+    sub_t: 'Yearly subscription', sub_unit: '/year',
+    sub_items: ['800 translated pages a month, about 4 volumes', 'Resets on your subscription day', 'Cancel anytime, use until the year ends'],
+    sub_cta: 'Subscribe',
+    byok: 'Already have an Anthropic API key? Use your own key instead: no account, no page limit.',
+    byok_short: 'Own API key', byok_price: 'Paid to Anthropic', byok_items: 'Unlimited pages · no account',
+    faq: 'FAQ',
+    q1: 'How does Naruhodo handle manga pages?', a1: 'Finding balloons and recognizing text happen on your computer. The recognized Japanese text is sent for translation. See the Privacy Policy for details.',
+    q2: 'What counts as a page?', a2: 'Each successfully translated page counts once; a two-page spread counts as two. Revisits and failed translations don’t count.',
+    q3: 'Can I get a refund?', a3: 'See the Refund Policy.',
+    q4: 'Which sites are supported?', a4: 'Shonen Jump+ and Kindle Manga for now.',
+    feat_h: 'What’s included', features: ['Japanese → Traditional Chinese', 'Furigana with original text', 'Consistent names and terms per series', 'Translated pages available offline', 'Two-page spread reading', 'Open source'],
+    compare_h: 'Compare plans', row_price: 'Price', row_pages: 'Pages', row_account: 'Account', row_reset: 'Resets',
+    yes: 'Required', no: 'Not needed', once: 'One-time', monthly: '800 / month', reset_day: 'Monthly, on your day', none: '—', unlimited: 'Unlimited',
+    step_say1: 'これ、なんて意味？', step_say2: 'ポチッ', step_say3: 'なるほど！',
+    legal_terms: 'Terms', legal_refund: 'Refund Policy', legal_privacy: 'Privacy Policy',
+    en_only: '',
+    co_loading: 'Opening checkout…', co_hint: 'Payment is handled by Paddle. Naruhodo never sees your card number.',
+    co_plan: 'Naruhodo yearly subscription', co_err: 'Checkout failed to load. Check your connection and try again.', co_retry: 'Try again',
+    co_back: 'Back to the extension', co_sum_pages: 'Pages per month',
+    demo_caption: 'Try it: click the Naruhodo icon at the top right, then switch to 學習 (Study) and hover a balloon.', demo_hint: 'Click to translate', demo_replay: 'Replay',
+  },
+};
+
+const params = new URLSearchParams(location.search);
+const state = {
+  variant: KEYS.includes(params.get('variant')) ? params.get('variant') : 'A',
+  page: params.get('page') || 'home',
+  lang: params.get('lang') || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'),
+};
+
+const TBD = '<span class="tbd">TBD</span>';
+const price = () => '$20' + TBD;
+
+function header(t) {
+  return `<header class="site-header"><div class="wrap">
+    <a class="brand" href="?page=home"><svg viewBox="0 0 128 128" width="30" height="30" aria-hidden="true"><path fill="#2F4B7C" d="M64 12C34 12 10 31 10 56c0 15 8 28 21 36l-7 26 26-18c4.5 1 9 1.4 14 1.4 30 0 54-20 54-45.4S94 12 64 12z"/><text x="64" y="80" text-anchor="middle" font-size="58" font-weight="900" fill="#fff" font-family="sans-serif">な</text></svg>Naruhodo</a>
+    <nav class="nav">
+      <a class="hide-sm" href="#pricing">${t.nav_pricing}</a>
+      <a class="hide-sm" href="#faq">${t.nav_faq}</a>
+      <span class="lang-toggle">
+        <button data-lang="zh" aria-pressed="${state.lang === 'zh'}">中文</button>
+        <button data-lang="en" aria-pressed="${state.lang === 'en'}">EN</button>
+      </span>
+      <a class="btn btn-primary" style="padding:7px 14px;font-size:14px" href="#">${t.nav_install}</a>
+    </nav></div></header>`;
+}
+
+function footer(t) {
+  return `<footer class="site-footer"><div class="wrap">
+    <div class="legal">
+      <a href="?page=terms">${t.legal_terms}</a>
+      <a href="?page=refund">${t.legal_refund}</a>
+      <a href="?page=privacy">${t.legal_privacy}</a>
+      <a href="#">GitHub</a>
+    </div>
+    <div class="copy">© 2026 Sad Coder, Inc.</div>
+  </div></footer>`;
+}
+
+function mockManga() {
+  return `<div class="mock-manga">
+    <div class="balloon">なるほど！</div>
+    <div class="balloon b2">そうか…</div>
+    <div class="figure"></div>
+    <div class="overlay" style="top:42%;right:5%">
+      <div class="ja"><ruby>成程<rt>なるほど</rt></ruby>！</div>
+      <div class="tr">原來如此！</div>
+    </div>
+  </div>`;
+}
+
+const list = items => '<ul>' + items.map(i => `<li>${i.replace('800', '800' + TBD)}</li>`).join('') + '</ul>';
+
+function variantA(t) {
+  return `
+  <section class="va-hero"><div class="wrap">
+    <div>
+      <h1>${t.hero_title}</h1>
+      <p class="lead">${t.hero_lead}</p>
+      <div class="cta"><a class="btn btn-primary" href="#">${t.cta_install}</a><a class="btn btn-ghost" href="#pricing">${t.cta_pricing}</a></div>
+    </div>
+  </div>
+  <div class="wrap" style="margin-top:40px">${demoBlock(t)}</div></section>
+  <section class="va-section"><div class="wrap">
+    <h2>${t.how}</h2>
+    <div class="va-steps">
+      ${[1, 2, 3].map(n => `<div class="va-step"><div class="n">${n}</div><h3>${t['s' + n + 't']}</h3><p>${t['s' + n]}</p></div>`).join('')}
+    </div>
+  </div></section>
+  <section class="va-section" id="pricing"><div class="wrap">
+    <h2>${t.pricing}</h2>
+    <div class="va-plans">
+      <div class="va-plan"><h3>${t.free_t}</h3><div class="price">$0</div>${list(t.free_items)}<a class="btn btn-ghost" href="#">${t.free_cta}</a></div>
+      <div class="va-plan featured"><h3>${t.sub_t}</h3><div class="price">${price()} <small>${t.sub_unit}</small></div>${list(t.sub_items)}<a class="btn btn-primary" href="?page=checkout">${t.sub_cta}</a></div>
+    </div>
+    <p class="va-byok">${t.byok}</p>
+  </div></section>
+  <section class="va-section" id="faq"><div class="wrap va-faq">
+    <h2>${t.faq}</h2>
+    ${[1, 2, 3, 4].map(n => `<details ${n === 1 ? 'open' : ''}><summary>${t['q' + n]}</summary><p>${t['a' + n]}</p></details>`).join('')}
+  </div></section>`;
+}
+
+function variantB(t) {
+  return `<div class="wrap vb">
+    <div class="vb-top">
+      <aside class="vb-aside">
+        <h1>${t.hero_title}</h1>
+        <p>${t.hero_lead}</p>
+        <a class="btn btn-primary" href="#">${t.cta_install}</a>
+      </aside>
+      <main>
+        ${demoBlock(t)}
+        <h2 id="pricing">${t.compare_h}</h2>
+        <table class="vb-table">
+          <thead><tr><th></th><th>${t.free_t}</th><th class="hl">${t.sub_t}</th><th class="byok">${t.byok_short}</th></tr></thead>
+          <tbody>
+            <tr><td>${t.row_price}</td><td class="big">$0</td><td class="hl"><span class="big">${price()}</span> ${t.sub_unit}</td><td class="byok">${t.byok_price}</td></tr>
+            <tr><td>${t.row_pages}</td><td>50</td><td class="hl">${t.monthly}${TBD}</td><td class="byok">${t.unlimited}</td></tr>
+            <tr><td>${t.row_reset}</td><td>${t.none}</td><td class="hl">${t.reset_day}</td><td class="byok">${t.none}</td></tr>
+            <tr><td>${t.row_account}</td><td>${t.yes}</td><td class="hl">${t.yes}</td><td class="byok">${t.no}</td></tr>
+            <tr><td></td><td><a class="btn btn-ghost" href="#">${t.free_cta}</a></td><td class="hl"><a class="btn btn-primary" href="?page=checkout">${t.sub_cta}</a></td><td class="byok small">GitHub →</td></tr>
+          </tbody>
+        </table>
+        <h2>${t.feat_h}</h2>
+        <div class="vb-feat">${t.features.map(f => `<div>${f}</div>`).join('')}</div>
+        <h2 id="faq">${t.faq}</h2>
+        <dl class="vb-faq">${[1, 2, 3, 4].map(n => `<dt>${t['q' + n]}</dt><dd>${t['a' + n]}</dd>`).join('')}</dl>
+      </main>
+    </div>
+  </div>`;
+}
+
+function variantC(t) {
+  return `<div class="wrap vc"><div class="vc-page">
+    <div class="koma k-hero speedlines"><span class="num">1</span>
+      <h1>${t.hero_title}</h1>
+      <p style="font-size:16px;max-width:520px">${t.hero_lead}</p>
+      <div style="margin-top:20px;display:flex;gap:10px"><a class="btn btn-primary" href="#">${t.cta_install}</a><a class="btn btn-ghost" href="#pricing">${t.cta_pricing}</a></div>
+    </div>
+    <div class="koma k-demo"><span class="num">2</span>${demoBlock(t)}</div>
+    ${[1, 2, 3].map(n => `<div class="koma k-step"><span class="num">${n + 2}</span><div class="say">${t['step_say' + n]}</div><h2>${t['s' + n + 't']}</h2><p>${t['s' + n]}</p></div>`).join('')}
+    <div class="koma k-plan" id="pricing"><span class="num">6</span>
+      <h2>${t.free_t}</h2><div class="price">$0</div><p>${t.free_items.join('・')}</p>
+      <a class="btn btn-ghost" href="#">${t.free_cta}</a>
+    </div>
+    <div class="koma k-plan dark"><span class="num">7</span>
+      <h2>${t.sub_t}</h2><div class="price">${price()} <span style="font-size:15px;font-weight:500">${t.sub_unit}</span></div><p>${t.sub_items.join('・').replace('800', '800' + TBD)}</p>
+      <a class="btn btn-primary" href="?page=checkout">${t.sub_cta}</a>
+    </div>
+    <div class="koma k-faq" id="faq"><span class="num">8</span>
+      <h2>${t.faq}</h2>
+      <div class="grid">${[1, 2, 4].map(n => `<div><h3>${t['q' + n]}</h3><p>${t['a' + n]}</p></div>`).join('')}</div>
+      <p class="small" style="margin-top:16px;color:var(--naru-ink-3)">${t.byok}</p>
+    </div>
+  </div></div>`;
+}
+
+// 法律文件：實作時由 PRIVACY.md 等 Markdown 轉出；這裡只節錄 PRIVACY.md 開頭當版面樣本
+function legal(t, which) {
+  const tabs = ['terms', 'refund', 'privacy'].map(k => `<a class="${k === which ? 'on' : ''}" href="?page=${k}">${t['legal_' + k]}</a>`).join('');
+  const body = which === 'privacy' ? `
+    <h1>Naruhodo Privacy Policy</h1>
+    <p class="legal-meta">Effective date: 2026-10-28 · Publisher: Sad Coder, Inc.</p>
+    <p>Naruhodo is a Chrome extension that translates Japanese manga on screen into Traditional Chinese, in place. This policy explains what data the extension handles and where it goes.</p>
+    <h2>Data processed only on your computer</h2>
+    <ul><li><strong>Screen captures</strong>: captured and processed locally. Captures are never uploaded.</li>
+    <li><strong>Recognized text, translations and readings</strong>: stored in the extension's local database as a translation cache.</li>
+    <li><strong>Series Notes</strong>: per-series names and glossary.</li></ul>
+    <h2>Data sent off your computer</h2>
+    <p>（#96 改寫成 Worker、Paddle、Resend 的新資料流）</p>
+    <h2>Retention and deletion</h2>
+    <p>…</p>` : `
+    <h1>${which === 'terms' ? 'Terms of Service' : 'Refund Policy'}</h1>
+    <p class="legal-meta">Effective date: <span class="tbd">TBD</span> · Sad Coder, Inc.</p>
+    <p style="padding:24px;border:2px dashed var(--naru-warn);background:var(--naru-warn-bg);color:var(--naru-warn);border-radius:8px">
+      TO BE FILLED BY THE DEVELOPER — ${which === 'terms' ? 'terms content' : 'refund conditions'} pending.</p>`;
+  return `<div class="wrap"><nav class="legal-tabs">${tabs}</nav>
+    <article class="legal-page">${t.en_only ? `<div class="en-only">${t.en_only}</div>` : ''}${body}</article></div>`;
+}
+
+function checkout(t, failed) {
+  return `<div class="wrap co"><div class="card">
+    ${failed ? '' : '<div class="spinner"></div>'}
+    <h2 style="margin:0 0 6px">${failed ? t.co_plan : t.co_loading}</h2>
+    <p class="muted small" style="margin:0">${t.co_hint}</p>
+    ${failed ? `<div class="err">${t.co_err}</div><p><button class="btn btn-primary" onclick="location.reload()">${t.co_retry}</button></p>` : ''}
+    <div class="summary">
+      <div><span>${t.co_plan}</span><strong>${price()} ${t.sub_unit}</strong></div>
+      <div><span>${t.co_sum_pages}</span><span>800${TBD}</span></div>
+    </div>
+  </div></div>
+  ${failed ? '' : `<div class="paddle-shade"><div class="paddle-box">
+    <div class="tag">Paddle checkout overlay（假畫面，prototype 用）</div>
+    <h3 style="margin:8px 0">${t.co_plan}</h3>
+    <div class="fake-input">email</div><div class="fake-input">Card number</div>
+    <div style="display:flex;gap:8px"><div class="fake-input" style="flex:1">MM / YY</div><div class="fake-input" style="flex:1">CVC</div></div>
+    <button class="pay">Pay $20.00</button>
+  </div></div>`}`;
+}
+
+// ===== 互動展示：假的 Chrome 視窗＋side panel =====
+// 外掛 UI 本身只有繁中（翻譯目標就是繁中），所以展示內容不跟網站語系切換，只有外框的說明文字切換。
+const DEMO_LINES = [
+  { id: 1, ja: [['突如', 'とつじょ'], ['現', 'あらわ'], 'れた', ['巨大', 'きょだい'], 'な', ['影', 'かげ'], '——'], zh: '突然出現的巨大黑影——' },
+  { id: 2, ja: [['街', 'まち'], 'が…', ['崩壊', 'ほうかい'], 'していく…！'], zh: '城鎮……正在崩毀……！' },
+  { id: 3, ja: [['逃', 'に'], 'げるんだ、', ['勝', 'か'], 'てるわけがない！'], zh: '快逃！根本不可能贏的！' },
+];
+const DEMO_POS = { 1: 'top:8%;right:5%;height:78%', 2: 'top:6%;right:6%;height:52%', 3: 'top:8%;left:6%;height:58%' };
+const demo = { open: false, status: 'idle', mode: 'read', level: 'furi', furigana: true, revealed: new Set() };
+
+const jaPlain = l => l.ja.map(s => typeof s === 'string' ? s : s[0]).join('');
+const jaRuby = (l, furi) => l.ja.map(s => typeof s === 'string' ? s : furi ? `<ruby>${s[0]}<rt>${s[1]}</rt></ruby>` : s[0]).join('');
+const chip = id => demo.revealed.has(id)
+  ? `<div class="chip revealed" data-chip="${id}"><span class="k">譯</span>${DEMO_LINES[id - 1].zh}</div>`
+  : `<div class="chip" data-chip="${id}"><span class="k">譯</span>滑過這裡看譯文</div>`;
+
+function demoBalloon(l) {
+  const done = demo.status === 'done';
+  const cover = done && demo.mode === 'read';
+  const cls = ['mballoon', l.id === 3 ? 'tip-right' : '', cover ? 'cover' : '', demo.status === 'translating' ? 'scan' : ''].join(' ');
+  return `<div class="${cls}" data-line="${l.id}" style="${DEMO_POS[l.id]}">
+    <div class="v ${cover ? 'zh' : ''}">${cover ? l.zh : jaPlain(l)}</div>
+    ${done ? `<div class="tip"><div class="ja">${jaRuby(l, true)}</div>${chip(l.id)}<div class="guess">讀音為推測</div></div>` : ''}
+  </div>`;
+}
+
+function demoTranscript() {
+  return DEMO_LINES.map(l => {
+    let body;
+    if (demo.mode === 'learn') body = `<div class="ja">${jaRuby(l, demo.furigana)}</div>${chip(l.id)}`;
+    else if (demo.level === 'zh') body = `<div class="zh" style="font-size:15px">${l.zh}</div>`;
+    else body = `<div class="ja">${jaRuby(l, demo.level === 'furi')}</div><div class="zh">${l.zh}</div>`;
+    return `<div class="tline" data-line="${l.id}">${body}</div>`;
+  }).join('');
+}
+
+function demoPanel() {
+  const levels = [['zh', '只看譯文'], ['both', '原文＋譯文'], ['furi', '加振り仮名']];
+  const content = demo.status === 'translating'
+    ? `<div class="sp-loading"><div class="spinner"></div>正在辨識與翻譯這一頁…</div>`
+    : `<div class="sp-page"><b>右頁</b><small>已翻譯・3.1 秒</small></div>${demoTranscript()}`;
+  return `<div class="spanel-inner">
+    <div class="sp-chrome">Naruhodo<button class="x" data-act="close">✕</button></div>
+    <div class="sp-scroll">
+      <div class="sp-head"><svg viewBox="0 0 128 128" width="22" height="22"><path fill="#2F4B7C" d="M64 12C34 12 10 31 10 56c0 15 8 28 21 36l-7 26 26-18c4.5 1 9 1.4 14 1.4 30 0 54-20 54-45.4S94 12 64 12z"/><text x="64" y="80" text-anchor="middle" font-size="58" font-weight="900" fill="#fff" font-family="sans-serif">な</text></svg>
+        <b>Naruhodo</b><span class="pill-ok">已啟動</span><button class="stop">停止</button></div>
+      <div class="modes">
+        <button data-mode="read" class="${demo.mode === 'read' ? 'on' : ''}"><b>閱讀</b><span>頁面直接顯示中文</span></button>
+        <button data-mode="learn" class="${demo.mode === 'learn' ? 'on' : ''}"><b>學習</b><span>保留日文，滑過看讀音</span></button>
+      </div>
+      ${demo.mode === 'read'
+        ? `<div class="levels">${levels.map(([k, v]) => `<button data-level="${k}" class="${demo.level === k ? 'on' : ''}">${v}</button>`).join('')}</div>`
+        : `<div class="switch ${demo.furigana ? 'on' : ''}" data-act="furi"><i></i>逐字稿加振り仮名</div>`}
+      ${content}
+    </div>
+    <div class="sp-foot"><span>免費頁數剩 <b>${demo.status === 'done' ? 49 : 50}</b> / 50</span><span class="quota"><i style="width:${demo.status === 'done' ? 98 : 100}%"></i></span></div>
+  </div>`;
+}
+
+function renderDemo() {
+  const root = document.getElementById('demo-root');
+  if (!root) return;
+  const [a, b, c] = DEMO_LINES;
+  root.querySelector('.chrome-page').className = 'chrome-page' + (demo.mode === 'learn' ? ' learn' : '');
+  root.querySelector('.mpage').innerHTML = `
+    <div class="mpanel p1">${demoBalloon(a)}</div>
+    <div class="mpanel p2"><div class="person" style="left:12%"></div><div class="person" style="left:52%;height:70%"></div>${demoBalloon(b)}${demoBalloon(c)}</div>`;
+  const ext = root.querySelector('.chrome-ext');
+  ext.classList.toggle('pulse', !demo.open);
+  ext.classList.toggle('on', demo.open);
+  root.querySelector('.chrome-hint').style.display = demo.open ? 'none' : '';
+  const panel = root.querySelector('.spanel');
+  panel.classList.toggle('open', demo.open);
+  panel.innerHTML = demo.open ? demoPanel() : '';
+}
+
+function demoBlock(t) {
+  return `<div id="demo-root">
+    <p class="demo-caption">${t.demo_caption}</p>
+    <div class="chrome">
+      <div class="chrome-tabs"><span class="chrome-dots"><i></i><i></i><i></i></span><span class="chrome-tab"><span class="fav"></span>第12話 ｜ Sample Manga</span></div>
+      <div class="chrome-bar"><span class="navbtn">←</span><span class="navbtn">→</span><span class="navbtn">↻</span>
+        <span class="chrome-url">manga.example.com/sample-series/chapter-12</span>
+        <button class="chrome-ext" data-act="toggle" title="Naruhodo"><svg viewBox="0 0 128 128" width="20" height="20"><path fill="#2F4B7C" d="M64 12C34 12 10 31 10 56c0 15 8 28 21 36l-7 26 26-18c4.5 1 9 1.4 14 1.4 30 0 54-20 54-45.4S94 12 64 12z"/><text x="64" y="80" text-anchor="middle" font-size="58" font-weight="900" fill="#fff" font-family="sans-serif">な</text></svg><span class="chrome-hint">${t.demo_hint}</span></button>
+        <span class="navbtn">⋮</span></div>
+      <div class="chrome-body"><div class="chrome-page"><div class="mpage"></div></div><div class="spanel"></div></div>
+    </div>
+    <button class="demo-replay" data-act="replay">↺ ${t.demo_replay}</button>
+  </div>`;
+}
+
+function setHot(id) {
+  document.querySelectorAll('#demo-root [data-line]').forEach(el => el.classList.toggle('hot', el.dataset.line === id));
+}
+
+function wireDemo() {
+  const root = document.getElementById('demo-root');
+  if (!root) return;
+  renderDemo();
+  root.addEventListener('click', e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    const mode = e.target.closest('[data-mode]')?.dataset.mode;
+    const level = e.target.closest('[data-level]')?.dataset.level;
+    if (act === 'toggle' || act === 'close') {
+      demo.open = act === 'toggle' ? !demo.open : false;
+      if (demo.open && demo.status === 'idle') {
+        demo.status = 'translating';
+        setTimeout(() => { demo.status = 'done'; renderDemo(); }, 1600);
+      }
+    } else if (act === 'replay') {
+      Object.assign(demo, { open: false, status: 'idle', mode: 'read', level: 'furi', furigana: true });
+      demo.revealed.clear();
+    } else if (act === 'furi') demo.furigana = !demo.furigana;
+    else if (mode) demo.mode = mode;
+    else if (level) demo.level = level;
+    else return;
+    renderDemo();
+  });
+  // 滑過：對話框與逐字稿互相高亮；學習模式下滑過「譯」才揭露譯文。只切 class，不重畫，避免滑鼠底下的元素被換掉
+  root.addEventListener('mouseover', e => {
+    if (demo.status !== 'done') return;
+    setHot(e.target.closest('[data-line]')?.dataset.line);
+    const c = e.target.closest('[data-chip]');
+    if (c && !demo.revealed.has(+c.dataset.chip)) {
+      const id = +c.dataset.chip;
+      demo.revealed.add(id);
+      root.querySelectorAll(`[data-chip="${id}"]`).forEach(el => { el.classList.add('revealed'); el.innerHTML = `<span class="k">譯</span>${DEMO_LINES[id - 1].zh}`; });
+    }
+  });
+  root.addEventListener('mouseleave', () => setHot(null));
+}
+
+function render() {
+  const t = T[state.lang];
+  document.documentElement.lang = state.lang === 'zh' ? 'zh-Hant' : 'en';
+  let main;
+  if (state.page === 'home') main = { A: variantA, B: variantB, C: variantC }[state.variant](t);
+  else if (['terms', 'refund', 'privacy'].includes(state.page)) main = legal(t, state.page);
+  else main = checkout(t, state.page === 'checkout-error');
+  document.getElementById('app').innerHTML = header(t) + main + footer(t);
+  wireDemo();
+
+  document.getElementById('variant-label').textContent = `${state.variant} (${VARIANTS[state.variant]}) · ${state.page} · ${state.lang}`;
+  document.querySelectorAll('#proto-bar [data-page]').forEach(b =>
+    b.classList.toggle('on', b.dataset.page === state.page || (b.dataset.page === 'privacy' && ['terms', 'refund'].includes(state.page))));
+  document.querySelectorAll('[data-lang]').forEach(b => b.onclick = () => go({ lang: b.dataset.lang }));
+}
+
+function go(patch) {
+  Object.assign(state, patch);
+  const p = new URLSearchParams({ variant: state.variant, page: state.page, lang: state.lang });
+  try { history.replaceState(null, '', '?' + p); } catch { /* data: 或某些預覽環境不能改網址 */ }
+  render();
+  window.scrollTo(0, 0);
+}
+
+// 站內連結也走 go()，避免整頁重載後失去 variant
+document.addEventListener('click', e => {
+  const a = e.target.closest('a[href^="?page="]');
+  if (!a) return;
+  e.preventDefault();
+  go({ page: new URLSearchParams(a.getAttribute('href').slice(1)).get('page') });
+});
+const step = d => go({ variant: KEYS[(KEYS.indexOf(state.variant) + d + KEYS.length) % KEYS.length], page: 'home' });
+document.getElementById('prev').onclick = () => step(-1);
+document.getElementById('next').onclick = () => step(1);
+document.querySelectorAll('#proto-bar [data-page]').forEach(b => b.onclick = () => go({ page: b.dataset.page }));
+document.addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, [contenteditable]')) return;
+  if (e.key === 'ArrowLeft') step(-1);
+  if (e.key === 'ArrowRight') step(1);
+});
+render();
+</script>
+</body>
+</html>
