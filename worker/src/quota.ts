@@ -62,12 +62,20 @@ export async function deductPage(db: D1Database, accountId: string, { now, limit
 
 export type UsageKind = 'translate' | 'notes';
 
-/** 一次 Anthropic 呼叫的用量：只有時間、種類、tokens 與成本，不存任何內容。 */
-export async function recordUsage(db: D1Database, accountId: string, kind: UsageKind, usage: Usage, now: number): Promise<void> {
-  await db
-    .prepare('INSERT INTO usage_records (account_id, created_at, kind, input_tokens, output_tokens, cache_read_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(accountId, now, kind, usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.costUsd)
-    .run();
+/**
+ * 一次 Anthropic 呼叫的用量：只有時間、種類、tokens 與成本，不存任何內容；回傳這筆紀錄的 id。
+ * pageRecordId 是 Notes 那一頁的翻譯紀錄 id（client 帶來的）：是這個 Account 的翻譯紀錄才記，不是就當作沒帶。
+ */
+export async function recordUsage(db: D1Database, accountId: string, kind: UsageKind, usage: Usage, now: number, pageRecordId?: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `INSERT INTO usage_records (account_id, created_at, kind, input_tokens, output_tokens, cache_read_tokens, cost_usd, page_record_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT id FROM usage_records WHERE id = ?8 AND account_id = ?1 AND kind = 'translate'))
+       RETURNING id`,
+    )
+    .bind(accountId, now, kind, usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.costUsd, pageRecordId ?? null)
+    .first<{ id: number }>();
+  return row!.id;
 }
 
 /** 開發用：直接設定這個 email 的 Account 的免費額度；沒有這個 Account 就是 false。 */

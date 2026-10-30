@@ -52,6 +52,8 @@ export interface NotesInput {
   seriesNotes: NotesEntry[];
   /** 依閱讀順序。 */
   items: TranslatedLine[];
+  /** 只有 Hosted Translation 有：同一頁 ① 的 TranslateOutput.usageRecordId，Worker 用它把 Notes 的用量歸到這一頁（不進 prompt）。 */
+  pageUsageRecordId?: number;
 }
 
 /** LLM 對 Series Notes 的變更：新增／補空欄位／建議修改。套用規則在 series-notes.ts（SW 執行）。 */
@@ -79,6 +81,8 @@ export interface CallInfo {
 
 export interface TranslateOutput extends CallInfo {
   items: { id: string; 讀音: string; 譯文: string; unreadable: boolean }[];
+  /** 只有 Hosted Translation 有：Worker 這次翻譯的用量紀錄 id，同一頁的 Notes 請求帶回去（NotesInput.pageUsageRecordId）。 */
+  usageRecordId?: number;
 }
 
 export interface NotesOutput extends CallInfo {

@@ -862,6 +862,18 @@ describe('Series Notes 累積（#37、ADR 0005）', () => {
     expect(notesInputs).toEqual([{ seriesNotes: [note('明日', '明天')], items: [{ kind: 'balloon', 原文: '今日は', 譯文: '譯-b1' }] }]);
   });
 
+  it('① 帶回用量紀錄 id（Hosted Translation）時，② 把它帶回去，Notes 的用量歸到這一頁', async () => {
+    const notesInputs: NotesInput[] = [];
+    const translator = translatorWithNotes([], [], notesInputs);
+    const hosted: Translator = { ...translator, translatePage: async (input) => ({ ...(await translator.translatePage(input)), usageRecordId: 42 }) };
+    const { transcriber } = setup({ getTranslator: () => hosted, notes: memoryNotes() });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.notesSettled();
+
+    expect(notesInputs.map((i) => i.pageUsageRecordId)).toEqual([42]);
+  });
+
   it('① 回來就顯示、寫快取，不等 ②', async () => {
     const cache = memoryCache();
     const sent: Parameters<typeof gatedNotes>[0] = [];

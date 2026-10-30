@@ -91,10 +91,16 @@ const clock = (env: Env, now: number): QuotaClock => ({ now, limit: monthlyLimit
  * 翻譯與 Notes：先把 body 整理成只含已知欄位的輸入（client 送的 model、max_tokens、system 之類一律不看），
  * 再交給 Translator；request body 由 Translator 裡的 claude-request.ts 組。
  * 翻譯（spec #86「額度規則」）：送出前先看還有沒有額度，成功後才用條件式 UPDATE 扣一頁；同時送來的兩頁搶最後一頁時，
- * 扣不到的那個回 402（譯文丟掉）。Notes 不扣。成功的呼叫都寫一筆用量紀錄，扣不到的那次也算（Anthropic 的錢已經花了）。
+ * 扣不到的那個回 402（譯文丟掉）。Notes 不扣。成功的呼叫都寫一筆用量紀錄，扣不到的那次也算（Anthropic 的錢已經花了）；
+ * Notes 那筆記下同一頁翻譯那筆的 id。
  */
 const llm =
-  <I,>(kind: UsageKind, parse: (body: unknown) => I | undefined, run: (t: Translator, input: I) => Promise<CallInfo>): AuthedHandler =>
+  <I,>(
+    kind: UsageKind,
+    parse: (body: unknown) => I | undefined,
+    run: (t: Translator, input: I) => Promise<CallInfo>,
+    pageRecord: (input: I) => number | undefined = () => undefined,
+  ): AuthedHandler =>
   async ({ request, env, now }, accountId) => {
     const input = parse(await request.json().catch(() => undefined));
     if (input === undefined) return invalid();
@@ -110,9 +116,10 @@ const llm =
       // Anthropic 重試後仍失敗，或回答不符合 schema
       return error(502, e instanceof Error ? e.message : String(e));
     }
-    await recordUsage(env.DB, accountId, kind, output.usage, now);
+    const usageRecordId = await recordUsage(env.DB, accountId, kind, output.usage, now, pageRecord(input));
     if (charged && !(await deductPage(env.DB, accountId, clock(env, now)))) return exhausted((await quota(env.DB, accountId, clock(env, now))).plan);
-    return Response.json(output);
+    // 翻譯回應帶回用量紀錄 id：同一頁的 Notes 請求帶回來，Notes 的成本才歸得到這一頁
+    return Response.json(charged ? { ...output, usageRecordId } : output);
   };
 
 const CHECKOUT_LOCALES: readonly CheckoutLocale[] = ['zh-tw', 'en'];
@@ -143,7 +150,7 @@ const VERIFY_ERRORS = {
 
 const ROUTES: Record<string, Handler> = {
   [`POST ${TRANSLATE_PATH}`]: authed(llm('translate', parseTranslateInput, (t, input) => t.translatePage(input))),
-  [`POST ${NOTES_PATH}`]: authed(llm('notes', parseNotesInput, (t, input) => t.proposeNotes(input))),
+  [`POST ${NOTES_PATH}`]: authed(llm('notes', parseNotesInput, (t, input) => t.proposeNotes(input), (input) => input.pageUsageRecordId)),
   [`POST ${SEND_CODE_PATH}`]: async ({ request, env, now }) => {
     const email = parseEmail(field(await request.json().catch(() => undefined), 'email'));
     if (!email) return invalid();

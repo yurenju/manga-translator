@@ -60,7 +60,7 @@ Only Hosted Translation uses the Naruhodo service. It keeps:
 | A SHA-256 hash of your email address and how many sign-in codes were tried for it in the past hour | Limiting how many sign-in codes can be tried. Deleted when you sign in. Otherwise the count expires one hour after the first try and is deleted later, the next time anyone requests a sign-in code |
 | A hash of each sign-in token, when it was created and last used, and when you signed out | Keeping you signed in. A token stops working after 180 days without use, or when you sign out |
 | Free pages remaining; for subscribers, the start of the current monthly period and pages used in it | Your page quota |
-| One usage record for each successful translation or Series Notes request: the time, the kind of request, token counts and cost | Usage and cost accounting. Usage records contain no text, translations, series names or page addresses |
+| One usage record for each successful translation or Series Notes request: the time, the kind of request, token counts and cost, and for a Series Notes request, which page's translation record it belongs to | Usage and cost accounting. Usage records contain no text, translations, series names or page addresses |
 | A SHA-256 hash of each email address that has received free pages, and when | Making sure free pages are given only once per email address |
 | Your Paddle subscription and customer identifiers, subscription status, start date, end of the paid period, whether cancellation is scheduled, and the time of the last update from Paddle | Your subscription |
 | Identifiers of the payment notifications Paddle has sent, and when they arrived | Processing each notification only once. They contain no account or email information |

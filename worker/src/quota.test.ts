@@ -125,9 +125,49 @@ describe('用量紀錄', () => {
       output_tokens: 200,
       cache_read_tokens: 700,
       cost_usd: expect.any(Number),
+      page_record_id: null,
     });
     expect(results).toEqual([record('translate'), record('notes')]);
     const stored = JSON.stringify(results);
     for (const content of ['おはよう', '早安', '霧島湊', 'パン屋', '麵包店', 'shonenjumpplus']) expect(stored).not.toContain(content);
   });
+
+  it('Notes 的用量歸到同一頁：翻譯回應帶回用量紀錄 id，Notes 請求帶回來，Notes 那筆就記下它', async () => {
+    const email = freshEmail();
+    const token = await signIn(email);
+    fakeAnthropic([ok, notesOk]);
+
+    const translated = (await (await translate(token)).json()) as { usageRecordId: number };
+    await post(NOTES_PATH, { ...notesInput, pageUsageRecordId: translated.usageRecordId }, { token });
+
+    expect(await usageRecords(email)).toEqual([
+      { id: translated.usageRecordId, kind: 'translate', page_record_id: null },
+      { id: expect.any(Number), kind: 'notes', page_record_id: translated.usageRecordId },
+    ]);
+  });
+
+  it('Notes 帶來的 id 不是自己的翻譯紀錄（別人的、或是 Notes 的）就不記，Notes 照常回 200', async () => {
+    const other = await signIn();
+    const email = freshEmail();
+    const token = await signIn(email);
+    fakeAnthropic([ok, notesOk, notesOk, notesOk]);
+    const othersRecord = ((await (await translate(other)).json()) as { usageRecordId: number }).usageRecordId;
+
+    expect((await post(NOTES_PATH, { ...notesInput, pageUsageRecordId: othersRecord }, { token })).status).toBe(200);
+    const [ownNotes] = await usageRecords(email);
+    expect((await post(NOTES_PATH, { ...notesInput, pageUsageRecordId: ownNotes!.id }, { token })).status).toBe(200);
+    expect((await post(NOTES_PATH, { ...notesInput, pageUsageRecordId: 'x' }, { token })).status).toBe(200);
+
+    expect((await usageRecords(email)).map((r) => r.page_record_id)).toEqual([null, null, null]);
+  });
 });
+
+/** 這個 email 的 Account 的用量紀錄：id、種類與歸屬的翻譯紀錄。 */
+async function usageRecords(email: string) {
+  const { results } = await env.DB.prepare(
+    'SELECT id, kind, page_record_id FROM usage_records WHERE account_id = (SELECT id FROM accounts WHERE email = ?) ORDER BY id',
+  )
+    .bind(email)
+    .all<{ id: number; kind: string; page_record_id: number | null }>();
+  return results;
+}
