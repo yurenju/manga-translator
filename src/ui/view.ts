@@ -138,8 +138,14 @@ export function setupNotices({
   return { consentCard: !consented, notice };
 }
 
-/** 從 ⚙ 選單打開、整個取代 side panel 內容的一頁（頂部是「← 返回」＋標題，#93）。 */
-export type PanelPage = 'settings' | 'notes';
+/**
+ * 整個取代 side panel 內容的一頁（頂部是「← 返回」＋標題，#93）：設定、Series Notes 從 ⚙ 選單打開；
+ * 刪除帳號（#95）從設定頁打開，不用 dialog（side panel 裡的 dialog 只蓋得住 panel 自己）。
+ */
+export type PanelPage = 'settings' | 'notes' | 'deleteAccount';
+
+/** 這一頁的「←」回到哪一頁；undefined＝回到逐字稿。 */
+export const parentPage = (page: PanelPage): PanelPage | undefined => (page === 'deleteAccount' ? 'settings' : undefined);
 
 /** side panel 這時顯示哪一個畫面：沒做完 onboarding 時只有「完成設定」（沒有頂部的狀態與 ⚙）。 */
 export function sidePanelScreen({ setupComplete, page }: { setupComplete: boolean; page: PanelPage | undefined }): 'finishSetup' | 'transcript' | PanelPage {

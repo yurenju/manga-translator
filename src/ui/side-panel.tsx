@@ -16,6 +16,7 @@ import { DEFAULT_LEVEL, DisplaySwitch, Transcript, type Display, type Level } fr
 import {
   quotaView,
   setupNotices,
+  parentPage,
   sidePanelScreen,
   sidePanelView,
   type OverallStatus,
@@ -325,9 +326,9 @@ function PanelMenu({
 }: {
   running: boolean;
   autoTranslate: ComponentChildren;
-  sections: Record<PanelPage, boolean>;
+  sections: Record<MenuPage, boolean>;
   onScan: () => void;
-  onOpen: (page: PanelPage) => void;
+  onOpen: (page: MenuPage) => void;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -414,8 +415,10 @@ export interface SidePanelProps {
   autoTranslate?: ComponentChildren;
   /** 底部列的系列。 */
   series?: ComponentChildren;
-  /** 「設定」頁的內容（標題列由 SidePanel 畫）。 */
-  renderSettings?: (close: () => void) => ComponentChildren;
+  /** 「設定」頁的內容（標題列由 SidePanel 畫）；openDeleteAccount 換到「刪除帳號」那一頁。 */
+  renderSettings?: (close: () => void, openDeleteAccount: () => void) => ComponentChildren;
+  /** 「刪除帳號」頁的內容（#95）；back 回到設定頁（「取消」、刪除成功）。 */
+  renderDeleteAccount?: (back: () => void) => ComponentChildren;
   /** 「Series Notes」頁的內容。 */
   renderNotes?: (close: () => void) => ComponentChildren;
 }
@@ -436,7 +439,10 @@ function FinishSetup({ logoSrc, onFinishSetup }: { logoSrc: string; onFinishSetu
   );
 }
 
-const PAGE_TITLES: Record<PanelPage, string> = { settings: '設定', notes: 'Series Notes' };
+const PAGE_TITLES: Record<PanelPage, string> = { settings: '設定', notes: 'Series Notes', deleteAccount: '刪除帳號' };
+
+/** ⚙ 選單打得開的頁。 */
+type MenuPage = Exclude<PanelPage, 'deleteAccount'>;
 
 /** 從 ⚙ 選單打開的一頁（設定、Series Notes）：整個 side panel 換成它，頂部是「←」＋標題，沒有逐字稿與底部狀態列。 */
 function PanelPageView({ title, onBack, children }: { title: string; onBack: () => void; children: ComponentChildren }) {
@@ -465,12 +471,19 @@ export function SidePanel(props: SidePanelProps) {
   const close = () => setPage(undefined);
   const screen = sidePanelScreen({ setupComplete: props.setupComplete ?? true, page });
   if (screen === 'finishSetup') return <FinishSetup logoSrc={props.logoSrc} onFinishSetup={props.onFinishSetup} />;
-  if (screen !== 'transcript')
+  if (screen !== 'transcript') {
+    const back = () => setPage(parentPage(screen));
+    const content = {
+      settings: () => props.renderSettings?.(close, () => setPage('deleteAccount')),
+      notes: () => props.renderNotes?.(close),
+      deleteAccount: () => props.renderDeleteAccount?.(back),
+    }[screen];
     return (
-      <PanelPageView title={PAGE_TITLES[screen]} onBack={close}>
-        {screen === 'settings' ? props.renderSettings?.(close) : props.renderNotes?.(close)}
+      <PanelPageView title={PAGE_TITLES[screen]} onBack={back}>
+        {content()}
       </PanelPageView>
     );
+  }
   // 頂部只有 logo、名稱、狀態、停止、⚙（#77）；其餘收進 ⚙ 選單
   const header = (
     <div class="panel-header">

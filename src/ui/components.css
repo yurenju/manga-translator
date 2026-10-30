@@ -17,6 +17,9 @@
 .naru-btn--ghost:hover:not(:disabled), .naru-btn--ghost[aria-expanded='true'] { background: var(--naru-surface-2); }
 .naru-btn--icon { width: 32px; padding: 0; background: var(--naru-surface-2); color: var(--naru-ink-2); }
 .naru-btn--icon:hover:not(:disabled) { background: var(--naru-line); }
+.naru-btn--danger { background: var(--naru-danger); border-color: var(--naru-danger); color: var(--naru-on-accent); }
+/* 通往危險動作的按鈕（例如設定頁 ghost 的「刪除帳號」）：只換字的顏色，確定的那一步才用 danger */
+.naru-btn.naru-text-danger { color: var(--naru-danger); }
 .naru-btn--link { min-height: 0; padding: 0; border: 0; font-size: var(--naru-text-caption); font-weight: 400; color: var(--naru-ink-2); text-decoration: underline; }
 
 /* 一排按鈕，窄的時候換行 */

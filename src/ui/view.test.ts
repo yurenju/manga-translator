@@ -3,7 +3,7 @@ import type { Quota } from '../shared/hosted-api.ts';
 import type { PageView } from '../shared/messages.ts';
 import type { RatioRect } from '../shared/page-text.ts';
 import type { TranslationMode } from '../shared/translation-mode.ts';
-import { accountPlanView, quotaView, setupNotices, sidePanelScreen, sidePanelView } from './view.ts';
+import { accountPlanView, parentPage, quotaView, setupNotices, sidePanelScreen, sidePanelView } from './view.ts';
 
 type Transcript = PageView['transcript'];
 type Done = Extract<Transcript, { state: 'done' }>;
@@ -204,6 +204,13 @@ describe('side panel 顯示哪一個畫面', () => {
     expect(sidePanelScreen({ setupComplete: true, page: undefined })).toBe('transcript');
     expect(sidePanelScreen({ setupComplete: true, page: 'settings' })).toBe('settings');
     expect(sidePanelScreen({ setupComplete: true, page: 'notes' })).toBe('notes');
+  });
+
+  it('刪除帳號是設定頁再進去的一頁：「←」與「取消」回到設定頁；設定、Series Notes 的「←」回到逐字稿', () => {
+    expect(sidePanelScreen({ setupComplete: true, page: 'deleteAccount' })).toBe('deleteAccount');
+    expect(parentPage('deleteAccount')).toBe('settings');
+    expect(parentPage('settings')).toBeUndefined();
+    expect(parentPage('notes')).toBeUndefined();
   });
 });
 

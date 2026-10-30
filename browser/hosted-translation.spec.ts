@@ -11,6 +11,8 @@
  * 訂閱（#94）：side panel 的「訂閱」向 Worker 建立 checkout、用新分頁打開 checkout 頁 → Paddle 的 webhook 送到 Worker →
  * side panel 重新取得焦點時重讀額度、顯示本月額度。Worker 的 Paddle 是假的（env.test），webhook 由測試用 env.test 的 secret 簽好送出；
  * 真的 Paddle sandbox 只在 `npm run smoke:paddle`。webhook 與額度的規則在 worker/src/subscription.test.ts。
+ * 刪除帳號（#95）：設定頁 → 確認頁 → Worker 的 DELETE /v1/account → 清掉 session → side panel 回到未登入。刪除的規則在
+ * worker/src/account-deletion.test.ts，清掉 session 的流程在 src/shared/account-exit.test.ts。
  */
 import { createHmac } from 'node:crypto';
 import type { BrowserContext, Page } from '@playwright/test';
@@ -167,4 +169,28 @@ test('免費額度用完：Worker 回額度不足後，side panel 顯示用完�
   await expect(panel.getByText(/翻譯失敗/)).toHaveCount(0);
   await expect(transcript.getByText('讀音為推測').first()).toBeVisible();
   await expect(transcript.getByText('未翻譯').first()).toBeVisible();
+});
+
+test('刪除帳號：設定頁的「刪除帳號」換到確認頁 → 確定刪除 → 回到設定頁是未登入，side panel 顯示「尚未登入」', async ({
+  context,
+  sw,
+  extensionId,
+  mockSite,
+}, testInfo) => {
+  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const email = freshEmail(testInfo.workerIndex);
+  await signInOnPanel(panel, context, email);
+  await chooseFromPanelMenu(panel, '設定');
+  await panel.getByRole('region', { name: '設定' }).getByRole('button', { name: '刪除帳號' }).click();
+
+  const confirm = panel.getByRole('region', { name: '刪除帳號' });
+  await expect(confirm).toContainText(`確定要刪除 ${email} 的帳號？`);
+  await confirm.getByRole('button', { name: '刪除帳號' }).click();
+
+  // Worker 刪除成功 → 外掛清掉 session → 回到設定頁，內建翻譯卡片是未登入
+  const settings = panel.getByRole('region', { name: '設定' });
+  await expect(settings.getByText('尚未登入。')).toBeVisible();
+  await expect(settings.getByRole('button', { name: '登入' })).toBeVisible();
+  await panel.getByRole('button', { name: '返回' }).click();
+  await expect(panel.getByRole('group', { name: '尚未登入' })).toBeVisible();
 });

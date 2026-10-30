@@ -1,5 +1,5 @@
 /**
- * Paddle（Merchant of Record，spec #86「Worker API」、#94）：Worker 對 Paddle API 的兩個呼叫，以及驗 webhook 的簽章。
+ * Paddle（Merchant of Record，spec #86「Worker API」、#94、#95）：Worker 對 Paddle API 的三個呼叫，以及驗 webhook 的簽章。
  * env.test（browser test）的 __FAKE_PADDLE__ 換成假的實作，不碰真的 Paddle；Worker 測試用 env.dev，Paddle API 用 vi.spyOn(fetch) 假的。
  */
 type Env = Cloudflare.Env;
@@ -12,6 +12,8 @@ export interface Paddle {
   createTransaction(accountId: string): Promise<string>;
   /** 替這個 customer 建立 customer portal session（取消訂閱、更新付款方式、收據），回傳網址。 */
   portalUrl(customerId: string, subscriptionId: string): Promise<string>;
+  /** 刪除帳號時取消訂閱：扣款週期結束時才失效，不退款（已付的這一年照常到期）。 */
+  cancelSubscription(subscriptionId: string): Promise<void>;
 }
 
 export function paddle(env: Env): Paddle {
@@ -52,6 +54,9 @@ function paddleApi(env: Env): Paddle {
       if (!url) throw new PaddleError('Paddle 沒有回傳 customer portal 網址');
       return url;
     },
+    async cancelSubscription(subscriptionId) {
+      await call(`/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, { effective_from: 'next_billing_period' });
+    },
   };
 }
 
@@ -60,6 +65,7 @@ function fakePaddle(env: Env): Paddle {
   return {
     createTransaction: async (accountId) => `txn_fake_${accountId}`,
     portalUrl: async (customerId) => `${env.SITE_ORIGIN}/zh-tw/?fake-portal=${encodeURIComponent(customerId)}`,
+    cancelSubscription: async () => {},
   };
 }
 
