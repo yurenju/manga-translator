@@ -1,18 +1,48 @@
 /**
- * 外掛與 Worker 之間的 API 契約（spec #86「Worker API」）：路徑與開發用 token。外掛的 Hosted Translation Translator
- * 與 Worker 都 import 這一份。請求 body 是 TranslateInput／NotesInput 原樣（結構化輸入，不是 prompt）；
- * 回應是 TranslateOutput／NotesOutput（latencyMs 只算 Worker 到 Anthropic，外掛換成自己量的）。錯誤回應是 HostedError：
- * 401 沒登入、400 輸入格式不符、502 Anthropic 重試後仍失敗。
+ * 外掛與 Worker 之間的 API 契約（spec #86「Worker API」）：路徑、請求與回應的形狀、錯誤。外掛的 Hosted Translation Translator、
+ * 登入畫面與 Worker 都 import 這一份。
+ *
+ * 翻譯與 Notes：body 是 TranslateInput／NotesInput 原樣（結構化輸入，不是 prompt）；回應是 TranslateOutput／NotesOutput
+ * （latencyMs 只算 Worker 到 Anthropic，外掛換成自己量的）。要帶 `Authorization: Bearer <session token>`。
+ *
+ * 錯誤回應一律是 HostedError：401 沒登入（reason signedOut）、400 輸入格式不符或驗證碼不對、429 寄送太頻繁、
+ * 404 沒有這個端點、502 Anthropic 重試後仍失敗。
  */
 export const TRANSLATE_PATH = '/v1/translate';
 export const NOTES_PATH = '/v1/notes';
 
+/** POST { email }：寄出 6 位數驗證碼，204。 */
+export const SEND_CODE_PATH = '/v1/auth/send-code';
+/** POST { email, code }：驗證成功回 VerifyCodeResponse；第一次驗證成功時建立 Account。 */
+export const VERIFY_CODE_PATH = '/v1/auth/verify';
+/** POST（帶 token）：撤銷這個 token，204。 */
+export const SIGN_OUT_PATH = '/v1/auth/sign-out';
+/** GET（帶 token）：目前的 Account 狀態 AccountResponse。 */
+export const ACCOUNT_PATH = '/v1/account';
 /**
- * 還沒有 Account 時（#90）先用的固定 token。Worker 只在 ALLOW_DEV_TOKEN（wrangler.jsonc 的 env.dev／env.test）
- * 時接受它，production 一律拒絕；外掛只有 e2e 與 debug build 會帶。登入（#91）換成 session token。
+ * GET ?email=：假的寄信實作最後寄給這個 email 的驗證碼 { code }。只有 FAKE_MAIL 的 env（dev、test）有，
+ * browser test 與本機開發用它代替收信；production 一律 404。
  */
-export const DEV_SESSION_TOKEN = 'naruhodo-dev-session-token';
+export const DEV_OUTBOX_PATH = '/v1/dev/outbox';
+
+export interface VerifyCodeResponse {
+  /** 長期有效的 session token；每次使用都會延長期限。 */
+  token: string;
+}
+
+export interface AccountResponse {
+  email: string;
+}
+
+/**
+ * 外掛要依原因換畫面的錯誤：
+ * - signedOut：沒帶 token、token 錯誤、過期或已撤銷
+ * - rateLimited：寄送驗證碼太頻繁（依 IP 與 email）
+ * - wrongCode／codeExpired／tooManyAttempts：驗證碼錯、過期（或沒寄過）、錯太多次這組已失效
+ */
+export type HostedErrorReason = 'signedOut' | 'rateLimited' | 'wrongCode' | 'codeExpired' | 'tooManyAttempts';
 
 export interface HostedError {
   error: string;
+  reason?: HostedErrorReason;
 }

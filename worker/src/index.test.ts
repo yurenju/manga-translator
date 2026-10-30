@@ -1,11 +1,12 @@
 /**
  * Worker 的 HTTP API（spec #86 接縫一）：送請求給真正的 Worker，看回應。Anthropic 用 vi.spyOn(fetch) 假的。
+ * 每個測試先用 email 驗證碼登入（寄信是假的實作），帶 session token 呼叫翻譯與 Notes。
  */
-import { exports } from 'cloudflare:workers';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAUDE_MODEL, notesRequest, translateRequest } from '../../src/shared/claude-request.ts';
-import { DEV_SESSION_TOKEN, NOTES_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
+import { NOTES_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
 import type { NotesInput, TranslateInput } from '../../src/shared/translator.ts';
+import { post as postAs, signIn } from './test/http.ts';
 
 const input: TranslateInput = {
   seriesNotes: [],
@@ -13,15 +14,14 @@ const input: TranslateInput = {
   items: [{ id: 'b1', kind: 'balloon', 原文: 'おはよう！今日は早いね', orientation: 'vertical' }],
 };
 
-function post(path: string, body: unknown, token: string | null = DEV_SESSION_TOKEN): Promise<Response> {
-  return exports.default.fetch(
-    new Request(`https://api.test${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(token === null ? {} : { authorization: `Bearer ${token}` }) },
-      body: JSON.stringify(body),
-    }),
-  );
-}
+let token: string;
+
+beforeEach(async () => {
+  token = await signIn();
+});
+
+/** 帶這個測試登入拿到的 token；token: null＝不帶。 */
+const post = (path: string, body: unknown, as: string | null = token) => postAs(path, body, as === null ? {} : { token: as });
 
 const usage = { input_tokens: 300, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 700 };
 
