@@ -23,7 +23,8 @@
     "test:browser": "npm run build:e2e && npm run site:build && playwright test",
     "e2e": "npm run build:e2e && playwright test --config playwright.e2e.config.ts",
     "record:ocr": "npm run build:e2e && playwright test --config playwright.record.config.ts",
-    "smoke": "vitest run --config vitest.smoke.config.ts && npm run build:e2e && playwright test --config playwright.smoke.config.ts"
+    "smoke": "vitest run --config vitest.smoke.config.ts && npm run build:e2e && playwright test --config playwright.smoke.config.ts",
+    "smoke:paddle": "npm run build:e2e && playwright test --config playwright.smoke-paddle.config.ts"
   },
   "dependencies": {
     "kuromoji": "0.1.2",
