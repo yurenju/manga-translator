@@ -105,6 +105,8 @@ npm run build
 | `npm run test:browser` | 用 mock 漫畫網站跑的 browser test（Playwright；OCR 重播錄好的結果，不跑模型） |
 | `npm run e2e` | 少數主要流程跑真的 OCR 模型（改到 OCR／流水線、或開整合 PR 前才跑） |
 | `npm run debug:chrome` | 開一個載入 debug build 的 Chrome，並記錄整個流水線的 trace |
+| `bash scripts/paddle-sandbox-wizard.sh` | 一步一步設定 Paddle sandbox（API key、price、webhook），值存在 repo 外的 `~/.config/naruhodo/paddle-sandbox.env` |
+| `node scripts/paddle-tunnel.ts` | 開 cloudflared tunnel，讓 Paddle sandbox 的 webhook 送到本機 `wrangler dev`（`--echo`：Worker 還沒跑時只驗簽章） |
 
 各層測試怎麼分見 [docs/agents/testing.md](docs/agents/testing.md)，真實網站除錯見 [docs/agents/real-site-debugging.md](docs/agents/real-site-debugging.md)，架構決策見 [docs/adr/](docs/adr/)，程式碼規範見 [CODING_STANDARDS.md](CODING_STANDARDS.md)。
 
