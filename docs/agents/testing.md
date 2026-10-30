@@ -5,15 +5,17 @@
 | Layer | Answers | Command | Browser + extension | OCR | LLM | Budget | When |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | unit | Is the rule computed right? | `npm test` | no | — | — | < 15 s | every change |
-| browser test | Do the pieces connect? | `npm run test:browser` | real (mock site) | FakeEngine (replayed) | FakeTranslator | < 90 s, build included | every change that touches the extension's behaviour |
+| Worker | Does the Worker's HTTP API answer right? | `npm test` (vitest project `worker`) | no | — | Anthropic faked with `vi.spyOn(fetch)` | shares unit's 15 s | every change |
+| browser test | Do the pieces connect? | `npm run test:browser` | real (mock site) | FakeEngine (replayed) | FakeTranslator (in the extension, or in the local Worker) | < 90 s, build and `wrangler dev` included | every change that touches the extension's behaviour |
 | e2e | Still right with the real models? | `npm run e2e` | real (mock site) | real models (wasm) | FakeTranslator | none; run only when needed | see below |
-| smoke | Does the real Claude API still work? | `npm run smoke` | real (mock site) | real models | real Claude API | — | only when the Claude integration changes; costs money |
+| smoke | Does the real Claude API still work? | `npm run smoke` | real (mock site) | real models | real Claude API (direct, and through the local Worker) | — | only when the Claude integration changes; costs money |
 
 A layer over its budget is a signal that tests have drifted up: find the ones that belong lower.
 
 ## Where a test goes
 
 - **unit**, next to the module (`src/**/*.test.ts`): every rule and every edge case — geometry, parsing, reading order, Notes rules, cache hits, queue order, status-line text, what a backup contains. When the rule sits inside a component or a content script, pull it out into a plain function and unit-test that.
+- **Worker**, next to the module (`worker/src/**/*.test.ts`): the Hosted Translation backend (ADR 0006) tested from HTTP: send a request to the real Worker, check the response and what later requests see. It runs inside workerd with local D1 (`@cloudflare/vitest-plugin`, the renamed `vitest-pool-workers`); Anthropic, Paddle and Resend are faked by `vi.spyOn(globalThis, 'fetch')`. Rules about tokens, quota, webhooks and what the client may not choose go here, not in browser tests. Don't query D1 directly; observe through the API.
 - **browser test**, in `browser/*.spec.ts`: the wiring unit cannot see — messages between content script, background, offscreen and side panel; real DOM layout; scrolling; page turns; screenshots; real downloads and file pickers. Each feature keeps **one representative path** here; its edge cases are unit tests. A new browser test names what it catches that unit cannot.
 - **e2e**: a browser test tagged `{ tag: '@e2e' }` runs in both layers, with FakeEngine and with real OCR. The entry test: **would the real models change this test's result?** Yes for OCR accuracy, model download, and flows where real models run on downscaled or cropped screenshots or must ignore toolbar text; no for anything FakeEngine's replay already covers. `grep -rn "@e2e" browser/` lists the current set. A test that only means something with real models calls `test.skip(fakeOcr, ...)`.
 

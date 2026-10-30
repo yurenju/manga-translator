@@ -1,0 +1,2 @@
+# 複製成 worker/.dev.vars（已 gitignore），給 `wrangler dev --env dev` 呼叫真的 Anthropic 用
+CLAUDE_API_KEY=

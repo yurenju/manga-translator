@@ -1,0 +1,25 @@
+// Hosted Translation 的 Worker（ADR 0006）。最上層是 production；本機用 env.dev 或 env.test：
+//   npx wrangler dev -c worker/wrangler.jsonc --env dev   真的 Anthropic（key 放 worker/.dev.vars 的 CLAUDE_API_KEY）
+//   npx wrangler dev -c worker/wrangler.jsonc --env test  假的 Anthropic（FakeTranslator），browser test 用
+// define 與 vars、d1_databases 都不會從最上層繼承，每個 env 各寫一次。
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "naruhodo-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // 正式的 database_id 在開通 production 時填（#97）；本機 D1 不看這個值
+  "d1_databases": [{ "binding": "DB", "database_name": "naruhodo", "database_id": "local", "migrations_dir": "migrations" }],
+  "define": { "__FAKE_ANTHROPIC__": "false" },
+  "env": {
+    "dev": {
+      "vars": { "ALLOW_DEV_TOKEN": "true" },
+      "d1_databases": [{ "binding": "DB", "database_name": "naruhodo", "database_id": "local", "migrations_dir": "migrations" }],
+      "define": { "__FAKE_ANTHROPIC__": "false" }
+    },
+    "test": {
+      "vars": { "ALLOW_DEV_TOKEN": "true" },
+      "d1_databases": [{ "binding": "DB", "database_name": "naruhodo", "database_id": "local", "migrations_dir": "migrations" }],
+      "define": { "__FAKE_ANTHROPIC__": "true" }
+    }
+  }
+}

@@ -9,6 +9,8 @@ export default defineConfig<TestOptions>({
   testDir: 'browser',
   // 錄 FakeEngine 重播結果的在 playwright.record.config.ts
   testIgnore: ['smoke/**', 'record-ocr.spec.ts'],
+  // Hosted Translation 的本機 Worker（wrangler dev，約 2 秒）；e2e build 連它
+  globalSetup: './browser/worker-setup.ts',
   // 每個 test 各自開 Chromium context 與 mock site，同一個檔案的測試也能分到不同 worker
   fullyParallel: true,
   // FakeEngine 幾乎不花時間：測試不設更長的 timeout，失敗時很快就紅；真 OCR 的放寬在 playwright.e2e.config.ts
