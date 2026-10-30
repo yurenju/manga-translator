@@ -80,7 +80,7 @@ const S = {
 const VARIANT_NAMES = {
   onboarding: { A: '單欄步驟精靈', B: '左側步驟清單＋右側內容', C: '一頁長捲、逐段解鎖' },
   panel: { A: '額度放在底部狀態列', B: '額度是頂部的徽章', C: '額度是一張帳號卡' },
-  settings: { A: '分段切換＋下方跟著模式', B: '兩張可選的卡片', C: '分成翻譯方式／帳號／資料三段' },
+  settings: { A: '卡片版面・刪除確認是另一頁', B: '卡片版面・刪除確認原地展開' },
 };
 
 const PANEL_STATES = {
@@ -89,7 +89,6 @@ const PANEL_STATES = {
   free: '免費，剩 37 頁',
   freeLow: '免費，剩 3 頁',
   sub: '訂閱中，本月剩 612 頁',
-  subUsingFree: '訂閱：本月用完，改扣免費頁數',
   exFree: '免費頁數用完',
   exMonthly: '本月額度用完',
   ownKeyHint: '自備金鑰＋內建翻譯提示（一次）',
@@ -194,10 +193,9 @@ function quota(state) {
     signedOut: { mode: 'hosted', signedIn: false, canTranslate: false },
     free: { mode: 'hosted', signedIn: true, plan: 'free', free: 37, canTranslate: true },
     freeLow: { mode: 'hosted', signedIn: true, plan: 'free', free: 3, canTranslate: true, low: true },
-    sub: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, monthLimit: 800, reset: '11 月 15 日', free: 12, canTranslate: true },
-    subUsingFree: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 0, monthLimit: 800, reset: '11 月 15 日', free: 12, canTranslate: true, usingFree: true },
+    sub: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, monthLimit: 800, reset: '11 月 15 日', canTranslate: true },
     exFree: { mode: 'hosted', signedIn: true, plan: 'free', free: 0, canTranslate: false, reason: 'free' },
-    exMonthly: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 0, monthLimit: 800, reset: '11 月 15 日', free: 0, canTranslate: false, reason: 'monthly' },
+    exMonthly: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 0, monthLimit: 800, reset: '11 月 15 日', canTranslate: false, reason: 'monthly' },
     ownKeyHint: { mode: 'ownKey', hint: true, canTranslate: true },
     ownKey: { mode: 'ownKey', hint: false, canTranslate: true },
   }[state];
@@ -206,7 +204,6 @@ function quota(state) {
 /** 一行文字的剩餘頁數（A、B 版共用的文案）。 */
 function remainingText(q) {
   if (q.plan === 'free') return `免費頁數剩 ${q.free} 頁`;
-  if (q.usingFree) return `本月額度已用完，改用免費頁數（剩 ${q.free} 頁）`;
   return `本月剩 ${q.monthLeft} 頁・${q.reset}重置`;
 }
 
@@ -291,13 +288,12 @@ function panelC(q) {
   else if (q.mode === 'hosted' && q.reason)
     card = `<section class="proto-card proto-card--warn" aria-label="內建翻譯"><p class="proto-card__title">${exhaustedTitle(q)}</p><p>${exhaustedBody(q)}</p><div class="proto-row">${q.reason === 'free' ? btn('訂閱：每月 800 頁', { variant: 'primary', act: 'subscribe' }) : ''}${ownKeyLink()}</div></section>`;
   else if (q.mode === 'hosted') {
-    const [left, total, label] = q.plan === 'free' || q.usingFree ? [q.free, 50, '免費頁數'] : [q.monthLeft, q.monthLimit, '本月'];
+    const [left, total, label] = q.plan === 'free' ? [q.free, 50, '免費頁數'] : [q.monthLeft, q.monthLimit, '本月'];
     card = `<section class="proto-card" aria-label="內建翻譯">
       <div class="proto-card__head"><span class="proto-card__title">內建翻譯</span>${q.plan === 'free' ? badge('免費') : badge('訂閱中', 'ok')}</div>
       <div class="proto-meter"><span class="proto-meter__num">${left}</span><span class="proto-meter__of">/ ${total} 頁・${label}剩餘</span></div>
       <div class="proto-bar${q.low || q.usingFree ? ' proto-bar--warn' : ''}"><span style="width:${(left / total) * 100}%"></span></div>
-      ${q.plan === 'sub' && !q.usingFree ? `<p class="hint">${q.reset}重置・另有免費頁數 ${q.free} 頁</p>` : ''}
-      ${q.usingFree ? `<p class="hint">本月額度已用完，先扣免費頁數；${q.reset}重置</p>` : ''}
+      ${q.plan === 'sub' ? `<p class="hint">${q.reset}重置</p>` : ''}
       ${q.plan === 'free' ? `<div class="proto-row">${q.low ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : `<button type="button" class="proto-small-link" data-act="subscribe">訂閱：每月 800 頁</button>`}</div>` : ''}
     </section>`;
   } else if (q.hint && !S.hintDismissed)
@@ -314,14 +310,14 @@ function panelScreen() {
   return { A: panelA, B: panelB, C: panelC }[S.variant](q);
 }
 
-// ========================= 設定區：三個版本 =========================
+// ========================= 設定區：獨立一頁（定案 B 版的卡片版面），兩種刪除確認 =========================
 function account(state) {
   const base = { email: S.email };
   return {
     hostedFree: { ...base, mode: 'hosted', signedIn: true, plan: 'free', free: 37 },
-    hostedSub: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', free: 12, renew: '2027 年 10 月 15 日' },
-    hostedCanceling: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', free: 12, ends: '2027 年 10 月 15 日' },
-    hostedPastDue: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', free: 12, pastDue: true },
+    hostedSub: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', renew: '2027 年 10 月 15 日' },
+    hostedCanceling: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', ends: '2027 年 10 月 15 日' },
+    hostedPastDue: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', pastDue: true },
     hostedSignedOut: { mode: 'hosted', signedIn: false },
     ownKeyLoggedIn: { ...base, mode: 'ownKey', signedIn: true, plan: 'free', free: 37, key: 'a1b2' },
     ownKeyNoAccount: { mode: 'ownKey', signedIn: false, key: 'a1b2' },
@@ -336,8 +332,8 @@ function planBadge(a) {
 }
 function planDetail(a) {
   if (a.plan === 'free') return `免費頁數剩 ${a.free} / 50 頁`;
-  const lines = [`本月剩 ${a.monthLeft} / 800 頁，${a.reset}重置`, `另有免費頁數 ${a.free} 頁`];
-  if (a.ends) lines.push(`訂閱在 ${a.ends}結束，之後回到只剩免費頁數`);
+  const lines = [`本月剩 ${a.monthLeft} / 800 頁，${a.reset}重置`];
+  if (a.ends) lines.push(`訂閱在 ${a.ends}結束`);
   else if (a.pastDue) lines.push('Paddle 會再嘗試扣款，這段期間照常可以使用');
   else lines.push(`下次續訂：${a.renew}`);
   return lines.join('<br>');
@@ -346,73 +342,46 @@ function planDetail(a) {
 const ownKeyBlock = (a) => `<p>已設定 Claude API key（末四碼 ${a.key}）</p><div class="actions">${btn('測試連線')}${btn('刪除')}</div>
   <p class="hint">建議在 Anthropic Console 為這個外掛建立專用的 API key，並設定花費上限。key 只存在這台電腦。</p>`;
 
-function deleteConfirm(v) {
-  const consequences = `<ul class="proto-list"><li>剩下的頁數與用量紀錄都會刪除。</li><li>有訂閱的話會一起取消，不會再扣款；已付的費用不會自動退還。</li><li>之後用同一個 email 重新註冊，不會再拿到免費頁數。</li><li>這台電腦上的翻譯快取、Series Notes 不受影響。</li></ul>`;
-  if (v === 'A')
-    return callout(`<p><strong>確定要刪除帳號 ${S.email}？</strong></p>${consequences}<div class="proto-row">${btn('刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone' })}${btn('取消', { act: 'deleteCancel' })}</div>`, 'danger', 'role="alert" style="flex-direction:column;align-items:flex-start"');
-  if (v === 'B')
-    return `<div class="proto-modal-backdrop"><div class="proto-modal" role="dialog" aria-label="刪除帳號"><h3>刪除帳號？</h3><p>${S.email}</p>${consequences}<div class="proto-row proto-row--end">${btn('取消', { act: 'deleteCancel' })}${btn('刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone' })}</div></div></div>`;
-  const ok = S.deleteTyped.trim() === S.email;
-  return callout(`<p><strong>刪除帳號</strong></p>${consequences}<label class="proto-field">輸入你的 email（${S.email}）確認<input data-input="deleteTyped" value="${esc(S.deleteTyped)}" autocomplete="off"></label><div class="proto-row">${btn('永久刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone', attrs: ok ? '' : 'disabled' })}${btn('取消', { act: 'deleteCancel' })}</div>`, 'danger', 'style="flex-direction:column;align-items:flex-start"');
-}
+const deleteConsequences = `<ul class="proto-list"><li>剩下的頁數與用量紀錄都會刪除。</li><li>有訂閱的話會一起取消，不會再扣款；已付的費用不會自動退還。</li><li>之後用同一個 email 重新註冊，不會再有免費頁數。</li><li>這台電腦上的翻譯快取、Series Notes 不受影響。</li></ul>`;
 
 function accountActions(a) {
   return `<div class="actions">${a.plan === 'free' ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : ''}${btn('登出', { act: 'signOut' })}${btn('刪除帳號', { variant: 'ghost', act: 'deleteStart', extra: 'proto-text-danger' })}</div>`;
 }
 
-function settingsA(a) {
-  const modes = seg('翻譯方式', [
-    { value: 'hosted', label: '內建翻譯', description: '用帳號，Naruhodo 代為翻譯' },
-    { value: 'ownKey', label: '自備金鑰', description: '用你的 Anthropic API key' },
-  ], a.mode, 'lg', 'setMode');
-  let body = '';
-  if (a.mode === 'hosted')
-    body = a.signedIn
-      ? `<dl class="proto-dl"><dt>帳號</dt><dd>${a.email}</dd><dt>方案</dt><dd>${planBadge(a)}</dd><dt>剩餘</dt><dd>${planDetail(a)}</dd></dl>${S.deleting ? deleteConfirm('A') : accountActions(a)}`
-      : `<p>尚未登入。登入後就能使用內建翻譯。</p><div class="actions">${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}</div>`;
-  else
-    body = `${ownKeyBlock(a)}${a.signedIn ? `<p class="hint">帳號 ${a.email} 仍然登入著；切回內建翻譯就能接著用。</p>` : ''}`;
-  return `<section aria-label="翻譯方式與帳號" class="settings"><div class="section-head"><h2>翻譯方式與帳號</h2>${btn('關閉', { variant: 'ghost', act: 'goPanel' })}</div>
-    ${modes}<div class="proto-gap"></div>${body}
-    <div class="proto-divider"></div><div class="actions">${btn('撤回資料使用同意')}</div><div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></section>`;
+/** 設定頁與刪除確認頁共用的頂部：← 返回＋標題，取代整個 side panel 的內容。 */
+const pageHead = (title, back) => `<div class="panel-header">${btn('←', { variant: 'icon', act: back, attrs: 'aria-label="返回"' })}<h1 class="title">${title}</h1></div>`;
+
+function deletePage() {
+  return `<main>${pageHead('刪除帳號', 'deleteCancel')}
+    <p>確定要刪除 <strong>${S.email}</strong> 的帳號？</p>${deleteConsequences}
+    <div class="proto-row proto-gap-top">${btn('刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone' })}${btn('取消', { act: 'deleteCancel' })}</div></main>`;
 }
 
-function settingsB(a) {
+function settingsPage(a, inlineDelete) {
   const card = (mode, title, desc, inner) => `<label class="proto-radio-card${a.mode === mode ? ' proto-radio-card--on' : ''}">
       <span class="proto-radio-card__head"><input type="radio" name="mode" ${a.mode === mode ? 'checked' : ''} data-act="setMode" data-value="${mode}"><span><strong>${title}</strong><span class="proto-radio-card__desc">${desc}</span></span></span>
       ${a.mode === mode ? `<div class="proto-radio-card__body">${inner}</div>` : ''}</label>`;
+  const confirmInline = callout(`<p><strong>確定要刪除帳號？</strong></p>${deleteConsequences}<div class="proto-row">${btn('刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone' })}${btn('取消', { act: 'deleteCancel' })}</div>`, 'danger', 'role="alert" style="flex-direction:column;align-items:flex-start"');
   const hostedInner = a.signedIn
-    ? `<p>${a.email}　${planBadge(a)}</p><p class="hint">${planDetail(a)}</p>${accountActions(a)}`
+    ? `<p>${a.email}　${planBadge(a)}</p><p class="hint">${planDetail(a)}</p>${inlineDelete && S.deleting ? confirmInline : accountActions(a)}`
     : `<p>尚未登入。</p>${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}`;
-  const ownInner = `${ownKeyBlock(a)}${a.signedIn ? `<p class="hint">帳號 ${a.email} 仍然登入著。</p>` : ''}`;
-  return `<section aria-label="翻譯方式與帳號" class="settings"><div class="section-head"><h2>翻譯方式</h2>${btn('關閉', { variant: 'ghost', act: 'goPanel' })}</div>
+  const ownInner = `${ownKeyBlock(a)}${a.signedIn ? `<p class="hint">帳號 ${a.email} 仍然登入著；切回內建翻譯就能接著用。</p>` : ''}`;
+  return `<main>${pageHead('設定', 'goPanel')}
+    <h2 class="proto-h3">翻譯方式</h2>
     <div class="proto-radio-cards" role="radiogroup" aria-label="翻譯方式">
       ${card('hosted', '內建翻譯', '用 email 帳號，Naruhodo 代為翻譯，有頁數限制', hostedInner)}
       ${card('ownKey', '自備金鑰', '用你自己的 Anthropic API key，費用直接付給 Anthropic，沒有頁數限制', ownInner)}
     </div>
-    <div class="proto-divider"></div><div class="actions">${btn('撤回資料使用同意')}</div><div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></section>
-    ${S.deleting ? deleteConfirm('B') : ''}`;
-}
-
-function settingsC(a) {
-  const radio = (mode, label, desc) => `<label class="proto-radio"><input type="radio" name="modeC" ${a.mode === mode ? 'checked' : ''} data-act="setMode" data-value="${mode}"><span><strong>${label}</strong><span class="proto-radio-card__desc">${desc}</span></span></label>`;
-  const accountSection = a.signedIn
-    ? `<h3 class="proto-h3">帳號</h3><p>${a.email}</p><p>${planBadge(a)}</p><p class="hint">${planDetail(a)}</p>${S.deleting ? deleteConfirm('C') : accountActions(a)}`
-    : a.mode === 'hosted' ? `<h3 class="proto-h3">帳號</h3><p>尚未登入。</p>${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}` : '';
-  return `<section aria-label="設定" class="settings"><div class="section-head"><h2>設定</h2>${btn('關閉', { variant: 'ghost', act: 'goPanel' })}</div>
-    <h3 class="proto-h3">翻譯方式</h3>
-    ${radio('hosted', '內建翻譯', '用帳號翻譯，有頁數限制')}
-    ${radio('ownKey', '自備金鑰', '用你的 Anthropic API key，沒有限制')}
-    ${a.mode === 'ownKey' ? `<h3 class="proto-h3">API key</h3>${ownKeyBlock(a)}` : ''}
-    ${accountSection}
-    <h3 class="proto-h3">資料</h3><div class="actions">${btn('撤回資料使用同意')}</div><div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></section>`;
+    <h2 class="proto-h3">資料</h2>
+    <p class="hint">在兩台電腦之間搬 Series、Series Notes 與翻譯快取（不含 API key 與帳號）。</p>
+    <div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></main>`;
 }
 
 function settingsScreen() {
   const a = account(S.settingsState);
-  const section = { A: settingsA, B: settingsB, C: settingsC }[S.variant](a);
-  const q = a.mode === 'ownKey' ? quota('ownKey') : a.signedIn ? quota('free') : quota('signedOut');
-  return `<main>${header()}${pageModeSwitch()}${section}${levels()}${transcript(q.canTranslate, '')}</main>${footer('', '')}`;
+  // A：刪除確認是另一頁；B：在卡片裡原地展開
+  if (S.variant === 'A' && S.deleting) return deletePage();
+  return settingsPage(a, S.variant !== 'A');
 }
 
 // ========================= onboarding：步驟內容（三個版本共用文案） =========================
@@ -423,10 +392,9 @@ function stepIntro() {
   return `<h1 class="ob-h1">歡迎使用 Naruhodo</h1>
     <p class="ob-lead">在日文漫畫網站上，把對話框直接換成中文；也可以保留日文、滑過看讀音，拿來學日文。</p>
     <div class="ob-price">
-      <p class="ob-price__title">這是付費服務，先送你 50 頁</p>
       <ul class="proto-list">
-        <li>註冊帳號就有 <strong>50 頁免費頁數</strong>（大約兩話），不用輸入付款資料。</li>
-        <li>用完之後可以訂閱：${PRICE}。${TBD}</li>
+        <li>用 email 註冊之後，有 <strong>50 頁的免費翻譯額度</strong>（大約兩話），不用輸入付款資料。</li>
+        <li>試用滿意的話，可以訂閱：${PRICE}。${TBD}</li>
         <li>回頭看已經翻過的頁面不會扣頁數；翻譯失敗也不扣。</li>
       </ul>
     </div>`;
@@ -435,7 +403,7 @@ const introActions = () => btn('開始設定', { variant: 'primary', act: 'obNex
 
 const consentList = `<ul class="proto-list">
     <li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
-    <li>辨識出的日文文字、同一部作品前幾頁的原文與譯文、作品的譯名表，會送到 Naruhodo 的服務，再交給 Anthropic 翻譯。</li>
+    <li>辨識出的日文文字、同一部作品前幾頁的原文與譯文、作品的譯名表，會傳到 Naruhodo 的服務，再交給 Anthropic 翻譯。</li>
     <li>Naruhodo 的服務不保存這些文字，只記錄你的 email、訂閱狀態與每頁的用量。</li>
   </ul>
   <p class="hint">詳見 <a href="#">隱私權政策</a>、<a href="#">服務條款</a>。</p>`;
@@ -470,12 +438,12 @@ function stepPlan() {
       <p>付款頁已經在新分頁打開（由 Paddle 處理付款）。付款完成後，這裡會自動更新。</p>
       <div class="proto-row">${btn('重新打開付款頁')}${btn('改成先用免費頁數', { variant: 'ghost', act: 'useFree' })}<button type="button" class="proto-sim" data-act="paid">（prototype：模擬付款完成）</button></div>`;
   if (S.sub === 'paid')
-    return `<h2 class="ob-h2">訂閱完成</h2>${callout('<p>✓ 已訂閱：本月可翻 800 頁，每個月的今天重置。原本的 50 頁免費頁數也還在，當月額度用完後會接著用。</p>')}
+    return `<h2 class="ob-h2">訂閱完成</h2>${callout('<p>✓ 已訂閱：每月可翻 800 頁，每個月的今天重置。</p>')}
       ${btn('下一步', { variant: 'primary', act: 'obNext', extra: 'ob-big' })}`;
   return `<h2 class="ob-h2">選擇方案</h2><p>已登入 <strong>${S.email}</strong>。你可以現在訂閱，或先用免費頁數試試看。</p>
     <div class="ob-plans">
       <div class="ob-plan"><p class="ob-plan__name">先用免費頁數</p><p class="ob-plan__price">50 頁</p><p class="hint">大約兩話，不會過期。用完再決定要不要訂閱。</p>${btn('先用免費的 50 頁', { act: 'useFree' })}</div>
-      <div class="ob-plan ob-plan--hl"><p class="ob-plan__name">訂閱（年繳）${TBD}</p><p class="ob-plan__price">US$20 / 年</p><p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。免費頁數不會作廢。</p>${btn('訂閱', { variant: 'primary', act: 'subscribeOb' })}</div>
+      <div class="ob-plan ob-plan--hl"><p class="ob-plan__name">訂閱（年繳）${TBD}</p><p class="ob-plan__price">US$20 / 年</p><p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。</p>${btn('訂閱', { variant: 'primary', act: 'subscribeOb' })}</div>
     </div>`;
 }
 
@@ -493,7 +461,7 @@ function stepOwnKey() {
   return `<h2 class="ob-h2">使用自備金鑰</h2>
     <p>用你自己的 Anthropic API key 翻譯：不需要帳號，也沒有頁數限制，費用由 Anthropic 直接向你收取。</p>
     <ul class="proto-list"><li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
-      <li>辨識出的日文文字、前幾頁的原文與譯文、作品的譯名表，會用你的 API key 直接送到 Anthropic 翻譯，不經過 Naruhodo 的服務。</li>
+      <li>辨識出的日文文字、前幾頁的原文與譯文、作品的譯名表，會用你的 API key 直接傳到 Anthropic 翻譯，不經過 Naruhodo 的服務。</li>
       <li>API key 只存在這台電腦的外掛裡。</li></ul>
     <form class="ob-form"><label class="proto-field">Claude API key<input type="password" autocomplete="off"></label>${btn('同意並儲存', { variant: 'primary', act: 'ownKeySaved' })}</form>
     <p><button type="button" class="proto-small-link" data-act="obBackToLogin">回到內建翻譯</button></p>`;
@@ -590,6 +558,7 @@ const PROTO_CSS = `
   .proto-bar span { display: block; height: 100%; background: var(--naru-accent); }
   .proto-bar--warn span { background: var(--naru-warn); }
   .proto-gap { height: var(--naru-space-3); }
+  .proto-gap-top { margin-top: var(--naru-space-4); }
   .proto-divider { margin: var(--naru-space-3) 0; border-top: 1px solid var(--naru-line); }
   .proto-dl { display: grid; grid-template-columns: auto 1fr; gap: var(--naru-space-1) var(--naru-space-3); margin: 0 0 var(--naru-space-2); }
   .proto-dl dt { color: var(--naru-ink-3); font-size: var(--naru-text-small); }
@@ -708,6 +677,7 @@ function mount(kind) {
 
 let mounted;
 function render() {
+  if (!VARIANT_NAMES[S.screen][S.variant]) S.variant = 'A';
   syncUrl();
   if (mounted !== (S.screen === 'onboarding' ? 'onboarding' : 'panel')) {
     mounted = S.screen === 'onboarding' ? 'onboarding' : 'panel';
@@ -741,7 +711,7 @@ function renderBar() {
 document.getElementById('bar').addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b) return;
-  if (b.dataset.screen) { S.screen = b.dataset.screen; S.deleting = false; S.quotaOpen = false; }
+  if (b.dataset.screen) { S.screen = b.dataset.screen; S.deleting = false; S.quotaOpen = false; if (!VARIANT_NAMES[S.screen][S.variant]) S.variant = 'A'; }
   if (b.dataset.state) { S.panelState = b.dataset.state; S.hintDismissed = false; S.quotaOpen = false; }
   if (b.dataset.settings) { S.settingsState = b.dataset.settings; S.deleting = false; }
   if (b.dataset.ob) {
@@ -823,8 +793,8 @@ function onInput(e) {
 }
 
 function cycle(delta) {
-  const keys = ['A', 'B', 'C'];
-  S.variant = keys[(keys.indexOf(S.variant) + delta + keys.length) % keys.length];
+  const keys = Object.keys(VARIANT_NAMES[S.screen]);
+  S.variant = keys[(Math.max(0, keys.indexOf(S.variant)) + delta + keys.length) % keys.length];
   S.quotaOpen = false;
   render();
 }
