@@ -1,0 +1,89 @@
+/*
+ * 首頁互動展示（#109）的假 Chrome 外框。side panel 與漫畫頁上的覆蓋層是外掛的元件，各自在 shadow root 裡、
+ * 帶自己的樣式，這裡只排外框、漫畫頁與 side panel 的位置。Chrome 外框的灰色是模仿瀏覽器，不是網站的 token。
+ */
+.demo { margin-top: var(--naru-space-6); }
+.demo-caption { margin: 0 0 var(--naru-space-3); text-align: center; color: var(--naru-ink-2); font-size: var(--naru-text-label); }
+
+.demo-chrome {
+  overflow: hidden; text-align: left;
+  border-radius: var(--naru-radius-md); background: #DEE1E6;
+  box-shadow: 0 24px 60px rgba(31, 29, 26, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  font-family: system-ui, 'Segoe UI', sans-serif;
+}
+.demo-chrome__tabs { display: flex; align-items: flex-end; gap: 6px; height: 38px; padding: 0 10px; }
+.demo-chrome__dots { display: flex; gap: 7px; align-self: center; margin-right: 8px; }
+.demo-chrome__dots i { display: block; width: 11px; height: 11px; border-radius: 50%; background: #C4C7CC; }
+.demo-chrome__tab {
+  display: flex; align-items: center; gap: 8px; max-width: 240px; overflow: hidden; padding: 8px 14px;
+  border-radius: 9px 9px 0 0; background: #FFF; color: #333; font-size: 12px; white-space: nowrap;
+}
+.demo-chrome__favicon { flex: none; width: 14px; height: 14px; border-radius: 3px; background: #9AA0A6; }
+.demo-chrome__bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #FFF; border-bottom: 1px solid #E3E3E3; }
+.demo-chrome__nav { color: #888; font-size: 14px; letter-spacing: 8px; white-space: nowrap; }
+.demo-chrome__url {
+  flex: 1; min-width: 0; overflow: hidden; padding: 6px 14px; border-radius: 999px;
+  background: #F1F3F4; color: #444; font-size: 12px; white-space: nowrap; text-overflow: ellipsis;
+}
+.demo-chrome__ext {
+  position: relative; flex: none; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer;
+}
+.demo-chrome__ext:hover, .demo-chrome__ext[aria-pressed='true'] { background: #E8EAED; }
+.demo-chrome__ext:focus-visible { outline: 2px solid var(--naru-highlight); outline-offset: 1px; }
+/* 還沒點的時候：圖示外圈擴散，提示讀者點這裡 */
+.demo-chrome__ext.is-pulsing::after {
+  content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--naru-highlight);
+  animation: demo-ring 1.4s ease-out infinite;
+}
+@keyframes demo-ring { from { transform: scale(0.85); opacity: 1; } to { transform: scale(1.35); opacity: 0; } }
+.demo-chrome__hint {
+  position: absolute; top: 42px; right: -6px; z-index: 3; padding: 6px 10px; border-radius: 8px;
+  background: var(--naru-ink); color: #FFF; font-size: 12px; white-space: nowrap; pointer-events: none;
+}
+.demo-chrome__hint::before {
+  content: ''; position: absolute; top: -6px; right: 16px;
+  border: 6px solid transparent; border-top: 0; border-bottom-color: var(--naru-ink);
+}
+
+/* 漫畫頁可以上下捲動（像閱讀網站），side panel 從右邊滑出來、擠窄漫畫頁 */
+.demo-chrome__body { position: relative; display: flex; height: 520px; background: #2B2B2B; }
+/* isolation：覆蓋層的 z-index 只在漫畫頁裡比較，不會蓋到 side panel */
+.demo-chrome__page { flex: 1; min-width: 0; overflow-y: auto; isolation: isolate; }
+.demo-chrome__manga { position: relative; width: min(100%, 440px); margin: 0 auto; }
+.demo-chrome__manga img { display: block; width: 100%; height: auto; }
+/* 抽屜的寬度做動畫，裡面的 side panel 固定寬度：滑出來的途中內容不會一直重排 */
+.demo-chrome__drawer { flex: none; width: 0; overflow: hidden; transition: width 0.3s ease; }
+.demo-chrome.is-open .demo-chrome__drawer { width: 360px; }
+.demo-chrome__panel { box-sizing: border-box; width: 360px; height: 100%; border-left: 1px solid #D0D0D0; }
+
+/* 辨識中：對話框上的提示（展示自己的效果，外掛辨識時頁面上不畫東西） */
+.demo-scan {
+  position: absolute; box-sizing: border-box; border: 2px solid var(--naru-highlight); border-radius: 40%;
+  background: var(--naru-highlight-fill); pointer-events: none; animation: demo-scan 0.9s ease-in-out infinite alternate;
+}
+@keyframes demo-scan { from { opacity: 0.25; } to { opacity: 1; } }
+
+.demo-replay {
+  display: block; margin: 0 auto; padding: var(--naru-space-2) var(--naru-space-3); border: 0;
+  background: #FFF; color: var(--naru-accent); font: inherit; font-size: var(--naru-text-label); cursor: pointer;
+  width: 100%; border-top: 1px solid #E3E3E3;
+}
+
+/* 手機寬度：side panel 蓋在漫畫頁上面，不擠壓漫畫頁 */
+@media (max-width: 760px) {
+  .demo-chrome__body { height: 480px; }
+  .demo-chrome__drawer {
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 1; width: min(88%, 360px);
+    box-shadow: var(--naru-shadow-2); transform: translateX(100%); visibility: hidden;
+    transition: transform 0.3s ease, visibility 0.3s;
+  }
+  .demo-chrome.is-open .demo-chrome__drawer { width: min(88%, 360px); transform: none; visibility: visible; }
+  .demo-chrome__panel { width: 100%; }
+  .demo-chrome__nav { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-chrome__drawer { transition: none; }
+  .demo-chrome__ext.is-pulsing::after, .demo-scan { animation: none; }
+}
