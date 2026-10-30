@@ -16,11 +16,13 @@ import type {
   StatusResponse,
   TestConnectionResponse,
 } from '../shared/messages.ts';
-import { hostedSessionToken } from '../shared/hosted-session.ts';
+import { createHostedAuth } from '../shared/hosted-auth.ts';
+import { HOSTED_API_URL, loadHostedSession, saveHostedSession, type HostedSession } from '../shared/hosted-session.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
 import { saveTranslationMode, watchTranslationMode, type TranslationMode } from '../shared/translation-mode.ts';
 import { Button, SegmentedControl, Switch, type SegmentOption } from '../ui/components.tsx';
 import { SidePanel } from '../ui/side-panel.tsx';
+import { SignIn } from '../ui/sign-in.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 
 /**
@@ -35,6 +37,8 @@ function readTabId(): number | undefined {
 const send = <R,>(message: Message) => chrome.runtime.sendMessage<Message, R>(message);
 
 const apiKeys = indexedDbApiKeyStore();
+
+const hostedAuth = createHostedAuth({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
 
 /**
  * 匯出／匯入 JSON（#38）：全部 Series、網址模式、Series Notes、翻譯快取，給兩台電腦之間搬資料；不含 API key。
@@ -93,18 +97,42 @@ function useDataConsent(): boolean | undefined {
 }
 
 /**
+ * 內建翻譯的帳號（#91）：沒登入時是「同意並登入」，按「同意並寄送驗證碼」就記下資料使用同意；登入後顯示 email。
+ * 登出、刪除帳號與方案狀態在設定頁改版（#95）時加。
+ */
+function HostedAccount({ session, onSignedIn }: { session: HostedSession | null; onSignedIn: (session: HostedSession) => void }) {
+  if (session) return <p>已登入：{session.email}</p>;
+  return (
+    <SignIn
+      auth={hostedAuth}
+      onConsent={grantDataConsent}
+      onSignedIn={async (signedIn) => {
+        await saveHostedSession(signedIn);
+        void send({ type: 'session:changed' }).catch(() => {});
+        onSignedIn(signedIn);
+      }}
+    />
+  );
+}
+
+/**
  * 設定區（spec #27 第 5 節）：API key 存在外掛 origin 的 IndexedDB，只顯示末四碼。
  * side panel 自己讀寫 key；「測試連線」由 offscreen 讀 key 呼叫 API，訊息裡不帶 key。從 ⚙ 選單打開（#77）。
+ * 內建翻譯時改顯示帳號（HostedAccount）。
  */
 function Settings({
   consented,
   mode,
+  session,
   onKeyChanged,
+  onSignedIn,
   onClose,
 }: {
   consented: boolean | undefined;
   mode: TranslationMode;
+  session: HostedSession | null;
   onKeyChanged: (hasKey: boolean) => void;
+  onSignedIn: (session: HostedSession) => void;
   onClose: () => void;
 }) {
   /** undefined＝還在讀；''＝沒有 key */
@@ -148,7 +176,9 @@ function Settings({
         </Button>
       </div>
       <SegmentedControl label="翻譯方式" options={TRANSLATION_MODES} value={mode} onChange={(value) => void saveTranslationMode(value)} />
-      {mode === 'hosted' ? null : suffix === undefined ? null : suffix ? (
+      {mode === 'hosted' ? (
+        <HostedAccount session={session} onSignedIn={onSignedIn} />
+      ) : suffix === undefined ? null : suffix ? (
         <>
           <p>已設定 Claude API key（末四碼 {suffix}）</p>
           <div class="actions">
@@ -205,13 +235,22 @@ function useTranslationMode(): TranslationMode | undefined {
   return mode;
 }
 
-/** Hosted Translation 有沒有 session token（#90 只有 e2e 與 debug build 有開發用 token）。 */
-function useHostedSession(): boolean {
-  const [signedIn, setSignedIn] = useState(false);
+/**
+ * Hosted Translation 的 session（IndexedDB）；undefined＝還在讀，null＝沒登入。
+ * 別的 side panel 登入、或 SW 發現 token 失效而清掉時，收到 session:changed 重新讀；自己登入時用回傳的 setter 更新。
+ */
+function useHostedSession(): [HostedSession | null | undefined, (session: HostedSession) => void] {
+  const [session, setSession] = useState<HostedSession | null | undefined>(undefined);
   useEffect(() => {
-    void hostedSessionToken().then((token) => setSignedIn(Boolean(token)));
+    const refresh = () => void loadHostedSession().then((s) => setSession(s ?? null));
+    const onMessage = (message: Message) => {
+      if (message.type === 'session:changed') refresh();
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    refresh();
+    return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, []);
-  return signedIn;
+  return [session, setSession];
 }
 
 /** 目前的 Page Mode 與切換函式；別的 side panel 切了也跟著變。只在 App 訂閱一次，往下傳。 */
@@ -393,7 +432,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [hovered, setHovered] = useState<LineRef | undefined>(undefined);
   const consented = useDataConsent();
   const translationMode = useTranslationMode();
-  const signedIn = useHostedSession();
+  const [session, setSession] = useHostedSession();
 
   useEffect(() => {
     void apiKeys.get().then((key) => setHasKey(Boolean(key)));
@@ -415,7 +454,7 @@ function App({ tabId }: { tabId: number | undefined }) {
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, [tabId]);
 
-  if (active === undefined || translationMode === undefined) return null;
+  if (active === undefined || translationMode === undefined || session === undefined) return null;
   const running = active && tabId !== undefined;
   // 停止、擷取、翻譯、逐字稿 hover 只在 running（有 tabId）時出現，所以 tabId! 是安全的
   return (
@@ -423,7 +462,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       running={running}
       pages={pages}
       modelStatus={modelStatus}
-      hasKey={translationMode === 'hosted' ? signedIn : hasKey}
+      access={translationMode === 'hosted' ? { mode: 'hosted', signedIn: session !== null } : { mode: 'ownKey', hasKey }}
       consented={consented}
       pageMode={pageMode}
       hovered={hovered}
@@ -436,9 +475,12 @@ function App({ tabId }: { tabId: number | undefined }) {
         chrome.tabs.sendMessage(tabId!, { type: 'content:highlight', line } satisfies Message).catch(() => {});
       }}
       onAcceptConsent={() => void grantDataConsent()}
+      onUseOwnKey={() => void saveTranslationMode('ownKey')}
       autoTranslate={running && <AutoTranslateToggle tabId={tabId} />}
       series={running && <SeriesPicker tabId={tabId} />}
-      renderSettings={(close) => <Settings consented={consented} mode={translationMode} onKeyChanged={setHasKey} onClose={close} />}
+      renderSettings={(close) => (
+        <Settings consented={consented} mode={translationMode} session={session} onKeyChanged={setHasKey} onSignedIn={setSession} onClose={close} />
+      )}
       renderNotes={(close) => tabId !== undefined && <SeriesNotesSection tabId={tabId} onClose={close} />}
     />
   );

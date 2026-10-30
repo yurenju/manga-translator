@@ -2,7 +2,7 @@ import { CLAUDE_MODEL, PROMPT_VERSION } from '../shared/claude-request.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import { hasDataConsent } from '../shared/data-consent.ts';
 import { FAKE_VERSION } from '../shared/fake-translator.ts';
-import { HOSTED_API_URL, hostedSessionToken } from '../shared/hosted-session.ts';
+import { clearHostedSession, HOSTED_API_URL, hostedSessionToken } from '../shared/hosted-session.ts';
 import type {
   AnalyzeResponse,
   AutoTranslateResponse,
@@ -144,11 +144,15 @@ const offscreenTranslator: Translator = {
   },
 };
 
-/** Hosted Translation：SW 直接 fetch Worker；沒有 session token（還沒登入）就不能翻。 */
+/**
+ * Hosted Translation：SW 直接 fetch Worker；沒有 session token（還沒登入）就不能翻。
+ * Worker 說 token 已失效（撤銷或閒置太久）：清掉它，side panel 回到「尚未登入」。
+ */
 async function hostedTranslator(): Promise<Translator | undefined> {
   const token = await hostedSessionToken();
   if (!token) return undefined;
-  return createHostedTranslator({ apiUrl: HOSTED_API_URL, token, fetch: (url, init) => fetch(url, init), sleep, now: () => performance.now() });
+  const onSignedOut = () => void clearHostedSession().then(() => notifyPanel({ type: 'session:changed' }));
+  return createHostedTranslator({ apiUrl: HOSTED_API_URL, token, fetch: (url, init) => fetch(url, init), sleep, now: () => performance.now(), onSignedOut });
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

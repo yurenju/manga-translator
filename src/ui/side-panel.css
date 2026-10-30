@@ -82,6 +82,10 @@
 }
 :where(.naru-side-panel) .settings form, :where(.naru-side-panel) .settings .actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--naru-space-2); }
 :where(.naru-side-panel) .settings label { display: flex; flex-direction: column; gap: var(--naru-space-1); }
+:where(.naru-side-panel) .settings h3 { margin: var(--naru-space-3) 0 var(--naru-space-1); font-size: var(--naru-text-label); }
+:where(.naru-side-panel) .sign-in ul { margin: var(--naru-space-1) 0; padding-left: var(--naru-space-5); }
+:where(.naru-side-panel) .sign-in li { margin-bottom: var(--naru-space-1); }
+:where(.naru-side-panel) .sign-in__code { letter-spacing: 0.2em; }
 :where(.naru-side-panel) .notes { overflow-x: auto; }
 :where(.naru-side-panel) .notes table { border-collapse: collapse; width: 100%; font-size: var(--naru-text-small); }
 :where(.naru-side-panel) .notes td, :where(.naru-side-panel) .notes th { border-bottom: 1px solid var(--naru-line); padding: var(--naru-space-1); text-align: left; }

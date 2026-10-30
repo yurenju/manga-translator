@@ -68,7 +68,7 @@ globalThis.__testUi = {
         running
         pages={pages}
         modelStatus={{ state: 'idle' }}
-        hasKey
+        access={{ mode: 'ownKey', hasKey: true }}
         consented
         pageMode="read"
         hovered={hovered}
@@ -79,6 +79,7 @@ globalThis.__testUi = {
         onTranslate={noop}
         onLineHover={noop}
         onAcceptConsent={noop}
+        onUseOwnKey={noop}
       />,
       mount,
     );

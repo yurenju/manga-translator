@@ -17,6 +17,10 @@
 .naru-btn--ghost:hover:not(:disabled), .naru-btn--ghost[aria-expanded='true'] { background: var(--naru-surface-2); }
 .naru-btn--icon { width: 32px; padding: 0; background: var(--naru-surface-2); color: var(--naru-ink-2); }
 .naru-btn--icon:hover:not(:disabled) { background: var(--naru-line); }
+.naru-btn--link { min-height: 0; padding: 0; border: 0; font-size: var(--naru-text-caption); font-weight: 400; color: var(--naru-ink-2); text-decoration: underline; }
+
+/* 一排按鈕，窄的時候換行 */
+.naru-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--naru-space-2); }
 
 /* SegmentedControl */
 .naru-seg {
@@ -77,6 +81,8 @@
 .naru-callout > p { margin: 0; }
 .naru-callout--warn { background: var(--naru-warn-bg); color: var(--naru-warn); }
 .naru-callout--danger { background: var(--naru-danger-bg); color: var(--naru-danger); }
+/* 標題一行、按鈕一行，由上往下排 */
+.naru-callout--stack { flex-direction: column; align-items: flex-start; }
 
 /* RevealChip（淺色）：虛線框＋「譯」標籤；揭露後換成實線，區塊隨內容長大 */
 .naru-reveal {

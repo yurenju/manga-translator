@@ -96,3 +96,28 @@ export function sidePanelView(pages: PageView[]): SidePanelView {
     status: overallStatus(pages),
   };
 }
+
+/** 能不能翻譯取決於翻譯模式（spec #86）：內建翻譯看有沒有登入，自備金鑰看有沒有 key。 */
+export type TranslationAccess = { mode: 'hosted'; signedIn: boolean } | { mode: 'ownKey'; hasKey: boolean };
+
+/** 逐字稿上方的提示：signedOut＝「尚未登入」（內建翻譯），noKey＝「尚未設定 API key」（自備金鑰）。 */
+export type SetupNotice = 'signedOut' | 'noKey' | undefined;
+
+/**
+ * 翻譯前的設定提示（#91）。資料使用同意只在自備金鑰時用說明卡問；內建翻譯的同意在登入時取得（按「同意並寄送驗證碼」），
+ * 所以有 token 但同意被撤回時也算「尚未登入」。consented 還在讀（undefined）時什麼都不顯示。
+ */
+export function setupNotices({
+  access,
+  consented,
+  untranslated,
+}: {
+  access: TranslationAccess;
+  consented: boolean | undefined;
+  /** 有沒翻譯的頁（自備金鑰的提示只在這時出現）。 */
+  untranslated: boolean;
+}): { consentCard: boolean; notice: SetupNotice } {
+  if (consented === undefined) return { consentCard: false, notice: undefined };
+  if (access.mode === 'hosted') return { consentCard: false, notice: access.signedIn && consented ? undefined : 'signedOut' };
+  return { consentCard: !consented, notice: untranslated && !access.hasKey ? 'noKey' : undefined };
+}

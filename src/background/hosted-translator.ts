@@ -4,6 +4,7 @@
  * 在 SW 裡跑：不需要 offscreen document，token 也不經過任何訊息。
  *
  * 重試：429／503 是 Worker 本身忙，等一下再送；502 是 Anthropic 失敗，Worker 已經重試過，這裡不再重試。
+ * 401 是 token 已失效（撤銷或閒置太久）：呼叫 onSignedOut 讓外掛回到未登入。
  */
 import { NOTES_PATH, TRANSLATE_PATH, type HostedError } from '../shared/hosted-api.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
@@ -18,6 +19,8 @@ export interface HostedDeps {
   /** 重試前等待；signal 中止時應該 reject。 */
   sleep(ms: number, signal?: AbortSignal): Promise<void>;
   now(): number;
+  /** Worker 說這個 token 已經不能用（401）。 */
+  onSignedOut(): void;
 }
 
 export function createHostedTranslator(deps: HostedDeps): Translator {
@@ -32,6 +35,7 @@ export function createHostedTranslator(deps: HostedDeps): Translator {
         signal,
       });
       if (response.ok) return { ...((await response.json()) as T), latencyMs: deps.now() - started };
+      if (response.status === 401) deps.onSignedOut();
       const retryable = response.status === 429 || response.status === 503;
       if (!retryable || attempt >= MAX_RETRIES) throw new Error(`Hosted Translation ${response.status}：${await errorMessage(response)}`);
       const retryAfter = Number(response.headers.get('retry-after'));

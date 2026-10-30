@@ -112,7 +112,7 @@ export function Demo({ copy }: { copy: DemoCopy }) {
         running
         pages={view.pages}
         modelStatus={{ state: 'idle' }}
-        hasKey
+        access={{ mode: 'hosted', signedIn: true }}
         consented
         pageMode={pageMode}
         hovered={hovered}
@@ -123,6 +123,7 @@ export function Demo({ copy }: { copy: DemoCopy }) {
         onTranslate={noop}
         onLineHover={(line) => overlay.current?.highlight(line)}
         onAcceptConsent={noop}
+        onUseOwnKey={noop}
         // 剩餘頁數暫時放在底部列的系列那一行；#92 給 SidePanel 加上剩餘頁數後改用它
         series={
           <div class="series-row">
