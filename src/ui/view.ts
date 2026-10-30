@@ -1,4 +1,6 @@
+import type { Quota } from '../shared/hosted-api.ts';
 import type { PageView } from '../shared/messages.ts';
+import type { TranslationMode } from '../shared/translation-mode.ts';
 
 /** Page 在 Spread 裡的哪一邊；undefined＝不是 Spread。 */
 export type SpreadSide = 'right' | 'left';
@@ -60,18 +62,22 @@ function heading(side: SpreadSide | undefined, number: number): PageHeading {
   return side === 'right' ? { title: '右頁', order: '先讀' } : { title: '左頁', order: '後讀' };
 }
 
-/** 「已翻譯」或「快取」・模型・秒數・費用（spec #27 第 8 節）；快取時是當初翻譯的模型與數字。翻好、沒在重翻也沒失敗才顯示。 */
-function translationStatus({ transcript }: PageView): string | undefined {
+/**
+ * 「已翻譯」或「快取」・模型・秒數・費用（spec #27 第 8 節）；快取時是當初翻譯的模型與數字。翻好、沒在重翻也沒失敗才顯示。
+ * 內建翻譯不顯示模型與費用（#92 畫面定案），只有秒數。
+ */
+function translationStatus({ transcript }: PageView, mode: TranslationMode): string | undefined {
   if (transcript.state !== 'done' || !transcript.translation || transcript.translating || transcript.translateError) return undefined;
   const { source, model, latencyMs, usage } = transcript.translation;
   const label = source === 'cache' ? '快取' : '已翻譯';
+  if (mode === 'hosted') return `${label}・${seconds(latencyMs)}`;
   return `${label}・${model}・${seconds(latencyMs)}・$${usage.costUsd.toFixed(4)}`;
 }
 
 const dollars = (usd: number) => (Number.isNaN(usd) ? '費用未知' : `$${usd.toFixed(5)}`);
 
-/** 底部狀態列（spec #27 第 8 節）：已翻譯・模型・秒數・費用。多個 Page 時加總。 */
-function overallStatus(pages: PageView[]): OverallStatus {
+/** 底部狀態列（spec #27 第 8 節）：已翻譯・模型・秒數・費用。多個 Page 時加總。內建翻譯不顯示模型與費用。 */
+function overallStatus(pages: PageView[], mode: TranslationMode): OverallStatus {
   const done = pages.flatMap((p) => (p.transcript.state === 'done' ? [p.transcript] : []));
   if (done.some((t) => t.translating)) return { kind: 'translating' };
   const infos = done.flatMap((t) => (t.translated && t.translation ? [t.translation] : []));
@@ -81,19 +87,20 @@ function overallStatus(pages: PageView[]): OverallStatus {
   const models = [...new Set(infos.map((i) => i.model))].join('、');
   const latency = infos.reduce((sum, i) => sum + i.latencyMs, 0);
   const cost = infos.reduce((sum, i) => sum + i.usage.costUsd, 0);
-  const text = `${notesUpdated ? 'Series Notes 已更新 · ' : ''}已翻譯 ${infos.length} 頁 · ${models} · ${seconds(latency)} · ${dollars(cost)}`;
+  const prefix = `${notesUpdated ? 'Series Notes 已更新 · ' : ''}已翻譯 ${infos.length} 頁`;
+  const text = mode === 'hosted' ? `${prefix} · ${seconds(latency)}` : `${prefix} · ${models} · ${seconds(latency)} · ${dollars(cost)}`;
   return { kind: 'summary', text };
 }
 
-export function sidePanelView(pages: PageView[]): SidePanelView {
+export function sidePanelView(pages: PageView[], mode: TranslationMode): SidePanelView {
   return {
     pages: readingOrder(pages).map(({ page, side }, i) => ({
       page,
       side,
       heading: heading(side, i + 1),
-      translationStatus: translationStatus(page),
+      translationStatus: translationStatus(page, mode),
     })),
-    status: overallStatus(pages),
+    status: overallStatus(pages, mode),
   };
 }
 
@@ -120,4 +127,33 @@ export function setupNotices({
   if (consented === undefined) return { consentCard: false, notice: undefined };
   if (access.mode === 'hosted') return { consentCard: false, notice: access.signedIn && consented ? undefined : 'signedOut' };
   return { consentCard: !consented, notice: untranslated && !access.hasKey ? 'noKey' : undefined };
+}
+
+/** 剩這麼多頁以下，底部那一行改用警告色（不另外跳 Callout）。 */
+const LOW_QUOTA = 5;
+
+/** 內建翻譯的額度在 side panel 上怎麼顯示（#92 畫面定案）。 */
+export interface QuotaView {
+  /** 底部狀態列（系列與翻譯狀態之間）多的那一行；subscribeLink＝右邊的「訂閱」小字連結。undefined＝不顯示。 */
+  line: { text: string; warn: boolean; subscribeLink: boolean } | undefined;
+  /** 額度用完的原因：逐字稿上方顯示用完的 Callout（訂閱＋使用自備金鑰）。undefined＝還能翻。 */
+  exhausted: 'freePagesExhausted' | undefined;
+  /** 底部的「翻譯此頁／重新翻譯」換成 primary「訂閱」。 */
+  subscribeButton: boolean;
+}
+
+/**
+ * 依翻譯模式、登入與 Worker 回傳的額度（GET /v1/account）算出要顯示什麼。只有內建翻譯、已登入、讀到額度時才有東西；
+ * 數字一律是 Worker 給的，這裡不自己扣。
+ */
+export function quotaView(access: TranslationAccess, quota: Quota | undefined): QuotaView {
+  if (access.mode !== 'hosted' || !access.signedIn || !quota) return { line: undefined, exhausted: undefined, subscribeButton: false };
+  // 沒有訂閱、免費額度是 0（包含訂閱結束後也用完的讀者）就是用完；#94 加上本月額度用完
+  if (quota.remaining === 0)
+    return { line: { text: '免費額度已用完', warn: true, subscribeLink: false }, exhausted: 'freePagesExhausted', subscribeButton: true };
+  return {
+    line: { text: `免費額度剩 ${quota.remaining} 頁`, warn: quota.remaining <= LOW_QUOTA, subscribeLink: true },
+    exhausted: undefined,
+    subscribeButton: false,
+  };
 }

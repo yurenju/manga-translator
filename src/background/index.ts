@@ -147,12 +147,22 @@ const offscreenTranslator: Translator = {
 /**
  * Hosted Translation：SW 直接 fetch Worker；沒有 session token（還沒登入）就不能翻。
  * Worker 說 token 已失效（撤銷或閒置太久）：清掉它，side panel 回到「尚未登入」。
+ * 翻譯扣了一頁、或 Worker 說額度用完：通知 side panel 重新讀剩餘頁數。
  */
 async function hostedTranslator(): Promise<Translator | undefined> {
   const token = await hostedSessionToken();
   if (!token) return undefined;
   const onSignedOut = () => void clearHostedSession().then(() => notifyPanel({ type: 'session:changed' }));
-  return createHostedTranslator({ apiUrl: HOSTED_API_URL, token, fetch: (url, init) => fetch(url, init), sleep, now: () => performance.now(), onSignedOut });
+  const onQuotaChanged = () => notifyPanel({ type: 'quota:changed' });
+  return createHostedTranslator({
+    apiUrl: HOSTED_API_URL,
+    token,
+    fetch: (url, init) => fetch(url, init),
+    sleep,
+    now: () => performance.now(),
+    onSignedOut,
+    onQuotaChanged,
+  });
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {

@@ -114,6 +114,9 @@
 :where(.naru-side-panel) .status-row > span { flex: 1 1 auto; min-width: 0; }
 :where(.naru-side-panel) .status-row > .naru-progress { margin: 0; }
 :where(.naru-side-panel) .status-row > .naru-btn { flex: none; }
+/* 內建翻譯的剩餘頁數（#92）；剩 5 頁以下用警告色 */
+:where(.naru-side-panel) .quota-row { font-size: var(--naru-text-small); color: var(--naru-ink-2); }
+:where(.naru-side-panel) .quota-row--warn { color: var(--naru-warn); }
 /* 點鉛筆才出現的編輯區 */
 :where(.naru-side-panel) .series-editor { display: flex; flex-direction: column; gap: var(--naru-space-2); padding: var(--naru-space-2) 0; }
 :where(.naru-side-panel) .series-editor form { display: flex; flex-wrap: wrap; gap: var(--naru-space-1); align-items: center; }

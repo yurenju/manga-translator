@@ -32,6 +32,8 @@ export type Message =
   | { type: 'models:status'; status: ModelStatus }
   /** 登入、或 Worker 說 token 已失效（SW 清掉）→ 全部：Hosted Translation 的 session 變了，重新讀（shared/hosted-session.ts）。 */
   | { type: 'session:changed' }
+  /** SW → side panel：內建翻譯的剩餘額度可能變了（翻譯扣了一頁、Worker 說用完了），重新向 Worker 讀。 */
+  | { type: 'quota:changed' }
   /** side panel → SW：目前的模型狀態。回應 ModelStatusResponse。 */
   | { type: 'panel:getModelStatus' }
   /**

@@ -18,7 +18,7 @@ import SIDE_PANEL from '../../../src/ui/side-panel.css';
 import { SidePanel } from '../../../src/ui/index.ts';
 import pageSrc from '../../../testdata/synthetic/out/p01-basic.png?url';
 import { demoPage } from './demo-page.ts';
-import { DEMO_PAGE_HASH, FREE_PAGES, demoView, nextPhase, type DemoPhase } from './demo-state.ts';
+import { DEMO_PAGE_HASH, demoView, nextPhase, type DemoPhase } from './demo-state.ts';
 
 /** 外掛打包的覆蓋層字型（Noto Sans TC 700 的子集）；網站自己帶一份，只下載譯文用得到的子集。 */
 const FONT_FILES = import.meta.glob('../../../node_modules/@fontsource/noto-sans-tc/files/*-700-normal.woff2', {
@@ -124,14 +124,7 @@ export function Demo({ copy }: { copy: DemoCopy }) {
         onLineHover={(line) => overlay.current?.highlight(line)}
         onAcceptConsent={noop}
         onUseOwnKey={noop}
-        // 剩餘頁數暫時放在底部列的系列那一行；#92 給 SidePanel 加上剩餘頁數後改用它
-        series={
-          <div class="series-row">
-            <span>
-              免費額度剩 {view.remaining} / {FREE_PAGES} 頁
-            </span>
-          </div>
-        }
+        quota={{ plan: 'free', remaining: view.remaining }}
       />,
       mount,
     );

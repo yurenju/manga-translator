@@ -7,7 +7,7 @@ import type { Usage } from '../../src/shared/translator.ts';
 import { sha256 } from './hash.ts';
 
 /** 新 Account 一次性的免費頁數。 */
-export const FREE_PAGES = 50;
+const FREE_PAGES = 50;
 
 /** 新 Account 的 Free Pages：這個 email 沒領過才給 FREE_PAGES 頁，領過（刪除帳號後重新註冊）就是 0。 */
 export async function grantFreePages(db: D1Database, accountId: string, email: string, now: number): Promise<void> {

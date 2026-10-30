@@ -10,6 +10,7 @@ import { pageLines, type PageText, type PageTranslation } from '../shared/page-t
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesChanges, NotesEntry, PriorPage, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
+import { QuotaExhaustedError } from './hosted-translator.ts';
 import type { NotesLedger, SnapshotGroup } from './notes-ledger.ts';
 
 export interface PageCache {
@@ -102,9 +103,11 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
       output = await translator.translatePage(toTranslateInput(text, seriesNotes, priorPages));
       trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage, priorPages: priorPages.length });
     } catch (e) {
+      trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });
+      // 額度用完不是失敗：跟沒有 Translator 一樣只顯示原文與讀音，用完的提示在 side panel 頂端
+      if (e instanceof QuotaExhaustedError) return { state: 'done', text, translated: false };
       // 429／5xx 的重試在 Translator 裡（claude-translator.ts）；這裡是重試後仍失敗
       console.warn('translate failed', e);
-      trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });
       return { state: 'done', text, translated: false, translateError: e instanceof Error ? e.message : String(e) };
     }
     const translated = applyTranslation(text, output);
