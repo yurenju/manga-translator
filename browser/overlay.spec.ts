@@ -114,7 +114,8 @@ test('譯文蓋在 Balloon 上；捲動、祖先 transform 縮放後仍對齊；
   await expect(pageMode(panel, '閱讀')).toHaveAttribute('aria-pressed', 'false');
   await expect(shownTranslations(page)).toHaveCount(0);
   await expect(shownErasers(page)).toHaveCount(0);
-  expect(await hostVisibility(page)).toEqual(['visible', 'visible']);
+  // 截圖前 host 會暫時藏起來（content:prepareCapture），剛好碰上擷取就要等它結束
+  await expect.poll(() => hostVisibility(page)).toEqual(['visible', 'visible']);
   await pageMode(panel, '閱讀').click();
   await expect(shownTranslations(page)).not.toHaveCount(0);
   await expectAligned(page, '切回閱讀後');
