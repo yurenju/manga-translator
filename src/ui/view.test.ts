@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { Quota } from '../shared/hosted-api.ts';
 import type { PageView } from '../shared/messages.ts';
 import type { RatioRect } from '../shared/page-text.ts';
 import type { TranslationMode } from '../shared/translation-mode.ts';
-import { quotaView, setupNotices, sidePanelScreen, sidePanelView } from './view.ts';
+import { accountPlanView, quotaView, setupNotices, sidePanelScreen, sidePanelView } from './view.ts';
 
 type Transcript = PageView['transcript'];
 type Done = Extract<Transcript, { state: 'done' }>;
@@ -228,19 +229,93 @@ describe('內建翻譯的額度（底部那一行）', () => {
 });
 
 describe('內建翻譯的免費額度用完', () => {
-  it('底部那一行改成「免費額度已用完」（警告色、沒有「訂閱」小字），逐字稿上方顯示用完的 Callout，底部按鈕換成「訂閱」', () => {
+  it('底部那一行改成「免費額度已用完」（警告色、沒有「訂閱」小字），逐字稿上方顯示用完的 Callout（有訂閱），底部按鈕換成「訂閱」', () => {
     expect(quotaView(signedIn, free(0))).toEqual({
       line: { text: '免費額度已用完', warn: true, subscribeLink: false },
-      exhausted: 'freePagesExhausted',
-      subscribeButton: true,
+      exhausted: {
+        title: '免費額度已用完',
+        body: '已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音。訂閱後每月可翻 800 頁。',
+        subscribe: true,
+      },
+      footerButton: 'subscribe',
     });
   });
 
   it('還有額度時沒有 Callout，底部照常是翻譯按鈕', () => {
-    expect(quotaView(signedIn, free(3))).toMatchObject({ exhausted: undefined, subscribeButton: false });
+    expect(quotaView(signedIn, free(3))).toMatchObject({ exhausted: undefined, footerButton: 'translate' });
   });
 
   it('自備金鑰時不看額度', () => {
-    expect(quotaView({ mode: 'ownKey', hasKey: true }, free(0))).toEqual({ line: undefined, exhausted: undefined, subscribeButton: false });
+    expect(quotaView({ mode: 'ownKey', hasKey: true }, free(0))).toEqual({ line: undefined, exhausted: undefined, footerButton: 'translate' });
+  });
+});
+
+/** 本機時區的 2026 年 11 月 15 日上午（重置日期依讀者的時區顯示）。 */
+const nov15 = new Date(2026, 10, 15, 11, 0).getTime();
+const oct15NextYear = new Date(2027, 9, 15, 11, 0).getTime();
+
+const subscribed = (fields: Partial<Extract<Quota, { plan: 'subscribed' }>> = {}): Quota => ({
+  plan: 'subscribed',
+  remaining: 612,
+  limit: 800,
+  resetsAt: nov15,
+  status: 'active',
+  cancelScheduled: false,
+  periodEndsAt: oct15NextYear,
+  ...fields,
+});
+
+describe('訂閱者的本月額度（#94 畫面定案）', () => {
+  it('底部那一行是「本月剩 612 頁・11 月 15 日重置」，沒有「訂閱」連結，不顯示免費額度', () => {
+    expect(quotaView(signedIn, subscribed())).toEqual({
+      line: { text: '本月剩 612 頁・11 月 15 日重置', warn: false, subscribeLink: false },
+      exhausted: undefined,
+      footerButton: 'translate',
+    });
+  });
+
+  it('扣款失敗、排定取消：side panel 照常，不顯示任何提示', () => {
+    expect(quotaView(signedIn, subscribed({ status: 'pastDue' }))).toEqual(quotaView(signedIn, subscribed()));
+    expect(quotaView(signedIn, subscribed({ cancelScheduled: true }))).toEqual(quotaView(signedIn, subscribed()));
+  });
+
+  it('本月額度用完：Callout 只有「使用自備金鑰」（沒有訂閱），底部那一行同樣文字，底部不放按鈕', () => {
+    expect(quotaView(signedIn, subscribed({ remaining: 0 }))).toEqual({
+      line: { text: '本月額度已用完，11 月 15 日重置', warn: true, subscribeLink: false },
+      exhausted: {
+        title: '本月額度已用完，11 月 15 日重置',
+        body: '已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音，重置後就能繼續翻。',
+        subscribe: false,
+      },
+      footerButton: 'none',
+    });
+  });
+});
+
+describe('設定頁的方案（#94 畫面定案）', () => {
+  it('免費：「免費」Badge、免費額度剩 N / 50 頁、可以訂閱', () => {
+    expect(accountPlanView(free(37))).toEqual({ badge: { text: '免費', tone: 'neutral' }, lines: ['免費額度剩 37 / 50 頁'], subscribed: false });
+  });
+
+  it('訂閱中：ok「訂閱中」、本月剩餘與重置日、下次續訂日', () => {
+    expect(accountPlanView(subscribed())).toEqual({
+      badge: { text: '訂閱中', tone: 'ok' },
+      lines: ['本月剩 612 / 800 頁，11 月 15 日重置', '下次續訂：2027 年 10 月 15 日'],
+      subscribed: true,
+    });
+  });
+
+  it('排定取消：warn「訂閱中・不會續訂」、訂閱結束日', () => {
+    expect(accountPlanView(subscribed({ cancelScheduled: true }))).toMatchObject({
+      badge: { text: '訂閱中・不會續訂', tone: 'warn' },
+      lines: ['本月剩 612 / 800 頁，11 月 15 日重置', '訂閱在 2027 年 10 月 15 日結束'],
+    });
+  });
+
+  it('past_due：warn「扣款失敗，重試中」、請到管理訂閱更新付款方式', () => {
+    expect(accountPlanView(subscribed({ status: 'pastDue' }))).toMatchObject({
+      badge: { text: '扣款失敗，重試中', tone: 'warn' },
+      lines: ['本月剩 612 / 800 頁，11 月 15 日重置', 'Paddle 會再嘗試扣款，這段期間照常可以使用；請到「管理訂閱」更新付款方式'],
+    });
   });
 });

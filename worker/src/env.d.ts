@@ -1,5 +1,7 @@
 /** wrangler.jsonc 的 define：env.test 是 true，Anthropic 換成 FakeTranslator；其他是 false，整段不會打包。 */
 declare const __FAKE_ANTHROPIC__: boolean;
+/** 同上：env.test 是 true，Paddle API 換成 paddle.ts 的假實作。 */
+declare const __FAKE_PADDLE__: boolean;
 
 declare namespace Cloudflare {
   interface Env {
@@ -16,6 +18,16 @@ declare namespace Cloudflare {
     MAIL_FROM?: string;
     /** 呼叫 Anthropic 的 key：production 用 wrangler secret，本機放 worker/.dev.vars。 */
     CLAUDE_API_KEY?: string;
+    /** 訂閱者每月可翻的頁數（wrangler.jsonc 的 vars，起始 800）；調整不用發新版外掛。 */
+    MONTHLY_PAGE_LIMIT: string;
+    /** checkout 頁所在的產品網站 origin（Worker 組 `<origin>/<locale>/checkout?_ptxn=…`）；production 在 #97 設定。 */
+    SITE_ORIGIN?: string;
+    /** Paddle API：網址是 vars；key、年繳 price 與 webhook secret 用 wrangler secret，本機放 worker/.dev.vars。 */
+    PADDLE_API_BASE_URL: string;
+    PADDLE_API_KEY?: string;
+    PADDLE_PRICE_ID?: string;
+    /** webhook 的 HMAC key（`pdl_ntfset_…`，原樣使用）。 */
+    PADDLE_WEBHOOK_SECRET?: string;
   }
 
   /** 讓測試的 `exports.default`（cloudflare:workers）有 Worker 入口的型別。 */

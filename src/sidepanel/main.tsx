@@ -1,4 +1,4 @@
-import { render } from 'preact';
+import { Fragment, render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
 import { grantDataConsent, watchDataConsent, type DataConsent } from '../shared/data-consent.ts';
@@ -17,13 +17,14 @@ import type {
   TestConnectionResponse,
 } from '../shared/messages.ts';
 import { createHostedAuth } from '../shared/hosted-auth.ts';
-import { FREE_PAGES, type Quota } from '../shared/hosted-api.ts';
+import type { Quota } from '../shared/hosted-api.ts';
 import { HOSTED_API_URL, loadHostedSession, type HostedSession } from '../shared/hosted-session.ts';
 import { dismissHostedHint, onboardingUrl, watchHostedHint, watchOnboarding, type OnboardingProgress } from '../shared/onboarding.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
 import { saveTranslationMode, watchTranslationMode, type TranslationMode } from '../shared/translation-mode.ts';
 import { Badge, Button, RadioCard, Switch } from '../ui/components.tsx';
 import { SidePanel } from '../ui/side-panel.tsx';
+import { accountPlanView } from '../ui/view.ts';
 import { SeriesNotesSection } from './series-notes.tsx';
 
 /**
@@ -114,8 +115,23 @@ function useHostedHint(): boolean {
 /** 用新分頁打開 onboarding（#93）；signIn＝從第 2 步開始。 */
 const openOnboarding = (step?: 'signIn') => void chrome.tabs.create({ url: onboardingUrl(step) });
 
+/** 「訂閱」：向 Worker 建立 checkout，用新分頁打開產品網站的 checkout 頁（#94）。已經訂閱中就重讀額度。 */
+async function subscribe(session: HostedSession): Promise<void> {
+  const result = await hostedAuth.checkout(session.token, 'zh-tw');
+  if (result.ok) void chrome.tabs.create({ url: result.url });
+  else if (result.reason === 'alreadySubscribed') void chrome.runtime.sendMessage({ type: 'quota:changed' } satisfies Message).catch(() => {});
+  else console.error('建立 checkout 失敗', result.message);
+}
+
+/** 「管理訂閱」：向 Worker 建立 Paddle customer portal session，用新分頁打開（取消訂閱、更新付款方式、收據）。 */
+async function managePlan(session: HostedSession): Promise<void> {
+  const result = await hostedAuth.portal(session.token);
+  if (result.ok) void chrome.tabs.create({ url: result.url });
+  else console.error('打開 customer portal 失敗', result.message);
+}
+
 /**
- * 設定頁「內建翻譯」卡片展開的內容（#93 畫面定案）：已登入時是 email＋方案、剩餘頁數與「訂閱」（#94 接上）；
+ * 設定頁「內建翻譯」卡片展開的內容（#93、#94 畫面定案）：已登入時是 email＋方案 Badge、剩餘說明，免費是「訂閱」、訂閱者是「管理訂閱」；
  * 沒登入時是「登入」，打開 onboarding 的第 2 步。登出與刪除帳號在 #95 加。
  */
 function HostedAccount({ session, quota }: { session: HostedSession | null; quota: Quota | undefined }) {
@@ -128,21 +144,31 @@ function HostedAccount({ session, quota }: { session: HostedSession | null; quot
         </Button>
       </>
     );
+  const plan = quota && accountPlanView(quota);
   return (
     <>
       <p class="naru-row">
         {session.email}
-        <Badge>免費</Badge>
+        {plan && <Badge tone={plan.badge.tone}>{plan.badge.text}</Badge>}
       </p>
-      {quota && (
+      {plan && (
         <p class="hint">
-          免費額度剩 {quota.remaining} / {FREE_PAGES} 頁
+          {plan.lines.map((line, i) => (
+            <Fragment key={line}>
+              {i > 0 && <br />}
+              {line}
+            </Fragment>
+          ))}
         </p>
       )}
       <div class="actions">
-        <Button variant="primary" disabled>
-          訂閱
-        </Button>
+        {plan?.subscribed ? (
+          <Button onClick={() => void managePlan(session)}>管理訂閱</Button>
+        ) : (
+          <Button variant="primary" disabled={!plan} onClick={() => void subscribe(session)}>
+            訂閱
+          </Button>
+        )}
       </div>
     </>
   );
@@ -298,6 +324,8 @@ function useHostedSession(): HostedSession | null | undefined {
 
 /**
  * 內建翻譯的剩餘額度（#92）：登入後向 Worker 讀；SW 說額度變了（翻譯扣了一頁、Worker 說用完）就重新讀。
+ * side panel 重新取得焦點、或重新變成可見時也重讀（#94）：在新分頁付完款回來，就看到已訂閱。side panel 跟著漫畫分頁，
+ * 切到付款分頁時它被隱藏，切回來時不一定有 focus 事件，所以兩個都聽。
  * 沒登入或讀不到時是 undefined（token 失效由 SW 的 Hosted Translator 處理，這裡不管）。
  */
 function useHostedQuota(session: HostedSession | null | undefined): Quota | undefined {
@@ -315,10 +343,17 @@ function useHostedQuota(session: HostedSession | null | undefined): Quota | unde
       if (message.type === 'quota:changed') refresh();
     };
     chrome.runtime.onMessage.addListener(onMessage);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisible);
     refresh();
     return () => {
       current = false;
       chrome.runtime.onMessage.removeListener(onMessage);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [token]);
   return quota;
@@ -558,6 +593,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       hostedHint={hostedHint}
       onDismissHostedHint={() => void dismissHostedHint()}
       quota={translationMode === 'hosted' ? quota : undefined}
+      onSubscribe={session ? () => void subscribe(session) : undefined}
       autoTranslate={running && <AutoTranslateToggle tabId={tabId} />}
       series={running && <SeriesPicker tabId={tabId} />}
       renderSettings={() => <Settings mode={translationMode} session={session} quota={quota} onKeyChanged={setHasKey} />}

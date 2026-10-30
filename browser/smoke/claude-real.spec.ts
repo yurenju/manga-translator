@@ -4,7 +4,7 @@
  *   （#15 只用 curl 模擬過 chrome-extension:// origin）。
  * - e2e build：仿 Jump+ 的 p01 經過本機 OCR 後送給 Haiku 5.5，逐字稿出現譯文，狀態列顯示模型・秒數・費用。
  *   自備 API key 直接打 Anthropic 一次；內建翻譯經過本機 Worker（wrangler dev --env dev，用同一把 key）一次（#90），
- *   先用 email 驗證碼登入（env.dev 的寄信是假的實作，#91）。
+ *   先用 email 驗證碼登入（env.dev 的寄信是假的實作，#91）。內建翻譯的狀態列不顯示模型與費用（#92），只有頁數與秒數。
  * 沒有 key 時跳過並印出「已跳過」。key 只在這個測試程序裡讀，不印出。
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { build } from '../../scripts/build.ts';
+import type { TranslationMode } from '../../src/shared/translation-mode.ts';
 import { readTestApiKey, TEST_API_KEY_FILE } from '../../src/testing/test-api-key.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, launchWithExtension, openSidePanel, test } from '../fixtures.ts';
 import { onboardingPage, signInFromPanel } from '../sign-in.ts';
@@ -62,7 +63,7 @@ test.describe('e2e build', () => {
     const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, beforeActivate: saveKey });
     await acceptConsent(panel);
 
-    await expectTranslatedP01(panel);
+    await expectTranslatedP01(panel, 'ownKey');
   });
 
   test('Hosted Translation：本機 OCR → 本機 Worker（wrangler dev --env dev）→ Haiku 5.5', async ({ context, sw, extensionId, mockSite }) => {
@@ -87,7 +88,7 @@ test.describe('e2e build', () => {
         },
       });
 
-      await expectTranslatedP01(panel);
+      await expectTranslatedP01(panel, 'hosted');
     } finally {
       await stopWorker();
       await rm(dir, { recursive: true, force: true });
@@ -100,14 +101,20 @@ async function acceptConsent(panel: Page): Promise<void> {
   await panel.getByRole('region', { name: '資料使用說明' }).getByRole('button', { name: '同意並啟用翻譯' }).click();
 }
 
-/** 狀態列顯示模型・秒數・費用，p01 的逐字稿出現譯文。 */
-async function expectTranslatedP01(panel: Page): Promise<void> {
+/** 狀態列顯示秒數（自備金鑰另外有模型與費用，內建翻譯沒有），p01 的逐字稿出現譯文。 */
+async function expectTranslatedP01(panel: Page, mode: TranslationMode): Promise<void> {
   const status = panel.getByRole('contentinfo', { name: '狀態列' });
-  await expect(status).toContainText('claude-haiku-5-5', { timeout: 100_000 });
+  await expect(status).toContainText(/已翻譯 \d+ 頁/, { timeout: 100_000 });
   const text = await status.innerText();
   console.log('狀態列', text);
   expect(text).toMatch(/\d+\.\d 秒/);
-  expect(text).toMatch(/\$0\.\d{5}/);
+  if (mode === 'ownKey') {
+    expect(text).toContain('claude-haiku-5-5');
+    expect(text).toMatch(/\$0\.\d{5}/);
+  } else {
+    expect(text).not.toContain('claude-');
+    expect(text).not.toContain('$');
+  }
   const first = panel.getByRole('list', { name: 'Page' }).getByRole('listitem', { name: '第 1 頁' });
   const lines = await first.getByRole('list', { name: '逐字稿' }).getByRole('listitem').allInnerTexts();
   console.log('p01 逐字稿\n' + lines.map((l) => l.replace(/\n/g, ' / ')).join('\n'));

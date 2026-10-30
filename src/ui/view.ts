@@ -1,6 +1,7 @@
-import type { Quota } from '../shared/hosted-api.ts';
+import { FREE_PAGES, type Quota } from '../shared/hosted-api.ts';
 import type { PageView } from '../shared/messages.ts';
 import type { TranslationMode } from '../shared/translation-mode.ts';
+import type { BadgeTone } from './components.tsx';
 
 /** Page 在 Spread 裡的哪一邊；undefined＝不是 Spread。 */
 export type SpreadSide = 'right' | 'left';
@@ -149,28 +150,79 @@ export function sidePanelScreen({ setupComplete, page }: { setupComplete: boolea
 /** 剩這麼多頁以下，底部那一行改用警告色（不另外跳 Callout）。 */
 const LOW_QUOTA = 5;
 
-/** 內建翻譯的額度在 side panel 上怎麼顯示（#92 畫面定案）。 */
+/** 「11 月 15 日」：重置日期，依讀者的時區。 */
+const monthDay = (ms: number) => {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+};
+
+/** 「2027 年 10 月 15 日」：續訂日與訂閱結束日。 */
+const fullDate = (ms: number) => `${new Date(ms).getFullYear()} 年 ${monthDay(ms)}`;
+
+/** 內建翻譯的額度在 side panel 上怎麼顯示（#92、#94 畫面定案）。 */
 export interface QuotaView {
   /** 底部狀態列（系列與翻譯狀態之間）多的那一行；subscribeLink＝右邊的「訂閱」小字連結。undefined＝不顯示。 */
   line: { text: string; warn: boolean; subscribeLink: boolean } | undefined;
-  /** 額度用完的原因：逐字稿上方顯示用完的 Callout（訂閱＋使用自備金鑰）。undefined＝還能翻。 */
-  exhausted: 'freePagesExhausted' | undefined;
-  /** 底部的「翻譯此頁／重新翻譯」換成 primary「訂閱」。 */
-  subscribeButton: boolean;
+  /** 額度用完：逐字稿上方的 warn Callout（粗體標題、說明、subscribe＝有沒有「訂閱」，「使用自備金鑰」一定有）。undefined＝還能翻。 */
+  exhausted: { title: string; body: string; subscribe: boolean } | undefined;
+  /** 底部狀態列右邊的按鈕：translate＝「翻譯此頁／重新翻譯」，subscribe＝primary「訂閱」，none＝不放（本月額度用完，等重置）。 */
+  footerButton: 'translate' | 'subscribe' | 'none';
 }
 
 /**
  * 依翻譯模式、登入與 Worker 回傳的額度（GET /v1/account）算出要顯示什麼。只有內建翻譯、已登入、讀到額度時才有東西；
- * 數字一律是 Worker 給的，這裡不自己扣。
+ * 數字一律是 Worker 給的，這裡不自己扣。訂閱者不顯示免費額度；扣款失敗、排定取消照常可以翻，side panel 不提示。
  */
 export function quotaView(access: TranslationAccess, quota: Quota | undefined): QuotaView {
-  if (access.mode !== 'hosted' || !access.signedIn || !quota) return { line: undefined, exhausted: undefined, subscribeButton: false };
-  // 沒有訂閱、免費額度是 0（包含訂閱結束後也用完的讀者）就是用完；#94 加上本月額度用完
+  if (access.mode !== 'hosted' || !access.signedIn || !quota) return { line: undefined, exhausted: undefined, footerButton: 'translate' };
+  if (quota.plan === 'subscribed') {
+    const reset = monthDay(quota.resetsAt);
+    if (quota.remaining === 0) {
+      const title = `本月額度已用完，${reset}重置`;
+      return {
+        line: { text: title, warn: true, subscribeLink: false },
+        exhausted: { title, body: '已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音，重置後就能繼續翻。', subscribe: false },
+        footerButton: 'none',
+      };
+    }
+    return {
+      line: { text: `本月剩 ${quota.remaining} 頁・${reset}重置`, warn: quota.remaining <= LOW_QUOTA, subscribeLink: false },
+      exhausted: undefined,
+      footerButton: 'translate',
+    };
+  }
+  // 沒有訂閱、免費額度是 0（包含訂閱結束後也用完的讀者）就是用完
   if (quota.remaining === 0)
-    return { line: { text: '免費額度已用完', warn: true, subscribeLink: false }, exhausted: 'freePagesExhausted', subscribeButton: true };
+    return {
+      line: { text: '免費額度已用完', warn: true, subscribeLink: false },
+      exhausted: { title: '免費額度已用完', body: '已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音。訂閱後每月可翻 800 頁。', subscribe: true },
+      footerButton: 'subscribe',
+    };
   return {
     line: { text: `免費額度剩 ${quota.remaining} 頁`, warn: quota.remaining <= LOW_QUOTA, subscribeLink: true },
     exhausted: undefined,
-    subscribeButton: false,
+    footerButton: 'translate',
   };
+}
+
+/** 設定頁「內建翻譯」卡片裡的方案：email 旁的 Badge、剩餘說明（一行一個），subscribed＝動作是「管理訂閱」而不是「訂閱」。 */
+export interface AccountPlanView {
+  badge: { text: string; tone: BadgeTone };
+  lines: string[];
+  subscribed: boolean;
+}
+
+/** 設定頁的方案（#94 畫面定案）：免費、訂閱中、排定取消、扣款失敗重試中。 */
+export function accountPlanView(quota: Quota): AccountPlanView {
+  if (quota.plan === 'free') return { badge: { text: '免費', tone: 'neutral' }, lines: [`免費額度剩 ${quota.remaining} / ${FREE_PAGES} 頁`], subscribed: false };
+  const month = `本月剩 ${quota.remaining} / ${quota.limit} 頁，${monthDay(quota.resetsAt)}重置`;
+  if (quota.status === 'pastDue')
+    return {
+      badge: { text: '扣款失敗，重試中', tone: 'warn' },
+      lines: [month, 'Paddle 會再嘗試扣款，這段期間照常可以使用；請到「管理訂閱」更新付款方式'],
+      subscribed: true,
+    };
+  if (quota.cancelScheduled)
+    return { badge: { text: '訂閱中・不會續訂', tone: 'warn' }, lines: [month, `訂閱在 ${fullDate(quota.periodEndsAt)}結束`], subscribed: true };
+  return { badge: { text: '訂閱中', tone: 'ok' }, lines: [month, `下次續訂：${fullDate(quota.periodEndsAt)}`], subscribed: true };
 }

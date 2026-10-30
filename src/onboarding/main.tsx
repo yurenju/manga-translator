@@ -16,7 +16,7 @@ import { HOSTED_API_URL, loadHostedSession, saveHostedSession, type HostedSessio
 import type { Message } from '../shared/messages.ts';
 import { loadOnboarding, saveOnboarding, startStep, type OnboardingProgress, type OnboardingStep } from '../shared/onboarding.ts';
 import { saveTranslationMode } from '../shared/translation-mode.ts';
-import { Button } from '../ui/components.tsx';
+import { Button, Callout } from '../ui/components.tsx';
 import { OwnKeyDataFlow, PolicyLinks } from '../ui/data-flow.tsx';
 import { SignIn } from '../ui/sign-in.tsx';
 
@@ -70,13 +70,82 @@ function Intro({ onNext }: { onNext: () => void }) {
   );
 }
 
-/** 第 3 步：選擇方案。「訂閱」在 #94 接上 Paddle checkout 之前停用。 */
-function Plan({ email, onFree }: { email: string; onFree: () => void }) {
+/** 第 3 步的子畫面：選方案 → 付款頁開在新分頁、等付款完成 → 訂閱完成。 */
+type PlanState = { kind: 'choose' } | { kind: 'waitingPayment'; url: string } | { kind: 'subscribed' };
+
+/** 等付款完成時，每隔這麼久向 Worker 查一次方案（webhook 通常幾秒內就到）。 */
+const PAYMENT_POLL_MS = 3000;
+
+/**
+ * 第 3 步：選擇方案（#93、#94 畫面定案）。「訂閱」向 Worker 建立 checkout，用新分頁打開產品網站的 checkout 頁（Paddle 處理付款）；
+ * 這裡每隔幾秒查一次方案，變成訂閱中就換成「訂閱完成」並呼叫 onSubscribed（設定完成），「下一步」才到第 4 步。
+ */
+function Plan({ session, onFree, onSubscribed, onNext }: { session: HostedSession; onFree: () => void; onSubscribed: () => void; onNext: () => void }) {
+  const [state, setState] = useState<PlanState>({ kind: 'choose' });
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+
+  const subscribed = () => {
+    setState({ kind: 'subscribed' });
+    onSubscribed();
+  };
+
+  async function subscribe() {
+    setFailure(undefined);
+    const result = await hostedAuth.checkout(session.token, 'zh-tw');
+    if (!result.ok) {
+      if (result.reason === 'alreadySubscribed') subscribed();
+      else setFailure(`付款頁沒有打開：${result.message}`);
+      return;
+    }
+    void chrome.tabs.create({ url: result.url });
+    setState({ kind: 'waitingPayment', url: result.url });
+  }
+
+  useEffect(() => {
+    if (state.kind !== 'waitingPayment') return;
+    let current = true;
+    const timer = setInterval(() => {
+      void hostedAuth.account(session.token).then((r) => {
+        if (current && r.ok && r.account.quota.plan === 'subscribed') subscribed();
+      });
+    }, PAYMENT_POLL_MS);
+    return () => {
+      current = false;
+      clearInterval(timer);
+    };
+  }, [state.kind]);
+
+  if (state.kind === 'waitingPayment')
+    return (
+      <>
+        <h2 class="ob-h2">在新分頁完成付款</h2>
+        <p>付款頁已經在新分頁打開（由 Paddle 處理付款）。付款完成後，這裡會自動更新。</p>
+        <div class="naru-row">
+          <Button onClick={() => void chrome.tabs.create({ url: state.url })}>重新打開付款頁</Button>
+          <Button variant="ghost" onClick={onFree}>
+            改成先用免費額度
+          </Button>
+        </div>
+      </>
+    );
+  if (state.kind === 'subscribed')
+    return (
+      <>
+        <h2 class="ob-h2">訂閱完成</h2>
+        {/* 價格與上限依最終定價 */}
+        <Callout tone="info">
+          <p>✓ 已訂閱：每月可翻 800 頁，每個月的今天重置。</p>
+        </Callout>
+        <Button variant="primary" class="ob-big" onClick={onNext}>
+          下一步
+        </Button>
+      </>
+    );
   return (
     <>
       <h2 class="ob-h2">選擇方案</h2>
       <p>
-        已登入 <strong>{email}</strong>。你可以現在訂閱，或先用免費額度試試看。
+        已登入 <strong>{session.email}</strong>。你可以現在訂閱，或先用免費額度試試看。
       </p>
       <div class="ob-plans">
         <section class="ob-plan" aria-label="先用免費額度">
@@ -89,11 +158,16 @@ function Plan({ email, onFree }: { email: string; onFree: () => void }) {
           <p class="ob-plan__name">訂閱（年繳）</p>
           <p class="ob-plan__price">US$20 / 年</p>
           <p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。</p>
-          <Button variant="primary" disabled>
+          <Button variant="primary" onClick={() => void subscribe()}>
             訂閱
           </Button>
         </section>
       </div>
+      {failure && (
+        <Callout tone="danger" role="alert">
+          <p>{failure}</p>
+        </Callout>
+      )}
     </>
   );
 }
@@ -182,9 +256,14 @@ function Onboarding({ requested }: { requested: 'signIn' | undefined }) {
     }
   }
 
-  async function finish() {
+  /** 設定完成：side panel 不再顯示「完成設定」。 */
+  async function complete() {
     setProgress('done');
     await saveOnboarding('done');
+  }
+
+  async function finish() {
+    await complete();
     setStep('tutorial');
   }
 
@@ -222,8 +301,11 @@ function Onboarding({ requested }: { requested: 'signIn' | undefined }) {
         {step === 'plan' && session && (
           <>
             <Plan
-              email={session.email}
+              session={session}
               onFree={() => void saveTranslationMode('hosted').then(finish)}
+              // 付款完成就算設定完成，就算沒按「下一步」就關掉分頁也一樣
+              onSubscribed={() => void saveTranslationMode('hosted').then(complete)}
+              onNext={() => setStep('tutorial')}
             />
             {back('signIn')}
           </>
