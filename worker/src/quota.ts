@@ -8,7 +8,7 @@ import { sha256 } from './hash.ts';
 import { activeSubscription, monthlyCycle } from './subscription.ts';
 
 /** 算額度要的：現在時間與 Monthly Page Limit（Worker 的設定值）。 */
-export interface QuotaClock {
+export interface QuotaContext {
   now: number;
   limit: number;
 }
@@ -22,7 +22,7 @@ export async function grantFreePages(db: D1Database, accountId: string, email: s
   await db.prepare('INSERT INTO quotas (account_id, free_pages) VALUES (?, ?)').bind(accountId, grant.meta.changes === 1 ? FREE_PAGES : 0).run();
 }
 
-export async function quota(db: D1Database, accountId: string, { now, limit }: QuotaClock): Promise<Quota> {
+export async function quota(db: D1Database, accountId: string, { now, limit }: QuotaContext): Promise<Quota> {
   const [row, subscription] = await Promise.all([
     db.prepare('SELECT free_pages, cycle_start, cycle_used FROM quotas WHERE account_id = ?').bind(accountId).first<{ free_pages: number; cycle_start: number | null; cycle_used: number }>(),
     activeSubscription(db, accountId),
@@ -46,7 +46,7 @@ export async function quota(db: D1Database, accountId: string, { now, limit }: Q
  * 扣一個 Translated Page：訂閱中扣本月額度，否則扣 Free Pages。條件式 UPDATE 一次做完「還有沒有、扣掉」，不先讀再寫；
  * false＝已經沒有了。本月額度那一句同時處理重置：存的週期起點不是現在的週期，就從 1 重新算。
  */
-export async function deductPage(db: D1Database, accountId: string, { now, limit }: QuotaClock): Promise<boolean> {
+export async function deductPage(db: D1Database, accountId: string, { now, limit }: QuotaContext): Promise<boolean> {
   const subscription = await activeSubscription(db, accountId);
   const result = subscription
     ? await db

@@ -29,7 +29,7 @@ import {
 } from '../../src/shared/hosted-api.ts';
 import type { CallInfo, Translator } from '../../src/shared/translator.ts';
 import { accountEmail, authenticate, deleteAccount, revokeSession, sendCode, verifyCode } from './auth.ts';
-import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaClock, type UsageKind } from './quota.ts';
+import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaContext, type UsageKind } from './quota.ts';
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
 import { paddle, PaddleError, verifyWebhook } from './paddle.ts';
@@ -88,7 +88,7 @@ const authed =
 const exhausted = (plan: Quota['plan']) =>
   plan === 'free' ? error(402, '免費額度已用完', 'freePagesExhausted') : error(402, '本月額度已用完', 'monthlyLimitReached');
 
-const clock = (env: Env, now: number): QuotaClock => ({ now, limit: monthlyLimit(env) });
+const quotaContext = (env: Env, now: number): QuotaContext => ({ now, limit: monthlyLimit(env) });
 
 /**
  * 翻譯與 Notes：先把 body 整理成只含已知欄位的輸入（client 送的 model、max_tokens、system 之類一律不看），
@@ -109,7 +109,7 @@ const llm =
     if (input === undefined) return invalid();
     const charged = kind === 'translate';
     if (charged) {
-      const before = await quota(env.DB, accountId, clock(env, now));
+      const before = await quota(env.DB, accountId, quotaContext(env, now));
       if (before.remaining === 0) return exhausted(before.plan);
     }
     let output: CallInfo;
@@ -120,7 +120,7 @@ const llm =
       return error(502, e instanceof Error ? e.message : String(e));
     }
     const usageRecordId = await recordUsage(env.DB, accountId, kind, output.usage, now, pageRecord(input));
-    if (charged && !(await deductPage(env.DB, accountId, clock(env, now)))) return exhausted((await quota(env.DB, accountId, clock(env, now))).plan);
+    if (charged && !(await deductPage(env.DB, accountId, quotaContext(env, now)))) return exhausted((await quota(env.DB, accountId, quotaContext(env, now))).plan);
     // 翻譯回應帶回用量紀錄 id：同一頁的 Notes 請求帶回來，Notes 的成本才歸得到這一頁
     return Response.json(charged ? { ...output, usageRecordId } : output);
   };
@@ -177,7 +177,7 @@ const ROUTES: Record<string, Handler> = {
   }),
   [`GET ${ACCOUNT_PATH}`]: authed(async ({ env, now }, accountId) => {
     const email = await accountEmail(env.DB, accountId);
-    return email ? Response.json({ email, quota: await quota(env.DB, accountId, clock(env, now)) } satisfies AccountResponse) : signedOut();
+    return email ? Response.json({ email, quota: await quota(env.DB, accountId, quotaContext(env, now)) } satisfies AccountResponse) : signedOut();
   }),
   // 刪除帳號：先取消 Paddle 訂閱，失敗就 502、什麼都不刪（帳號刪了訂閱卻還在扣款就沒有人能取消了）。
   // 要不要送、何時生效見 cancellationOnDelete；刪除後 Paddle 送來的事件找不到 Account，applyPaddleEvent 會忽略
