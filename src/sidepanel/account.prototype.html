@@ -1,0 +1,843 @@
+<!doctype html>
+<!--
+  PROTOTYPE（spec #86 的外掛帳號畫面，用完即丟，不合回 main）。
+  問題：#91–#95 在外掛新增的畫面「長什麼樣」——全頁 onboarding、side panel 的額度狀態、設定區的翻譯方式與帳號。
+  每個畫面有三個結構不同的版本，用 ?variant=A|B|C（或底部的切換列、← → 鍵）切換；?screen= 選畫面，?state= 選狀態。
+  side panel 與設定區直接載入真正的 tokens.css、components.css、sidepanel.css，放在 shadow DOM 裡，跟現有版面一起比較。
+  直接用瀏覽器打開這個檔案即可，不需要建置。沒有任何網路請求：寄信、付款都是假的（驗證碼輸入 123456 會成功，000000 會過期）。
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naruhodo 帳號畫面 — prototype</title>
+<link rel="stylesheet" href="../shared/tokens.css">
+<style>
+  /* prototype 自己的外框（控制列、假瀏覽器、切換列）：刻意用深色，跟被評估的設計分開 */
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--naru-font-sans); background: #3b3a37; color: #eee; }
+  .pt-bar { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 16px; background: #1d1c1a; font-size: 13px; }
+  .pt-bar strong { color: #fff; }
+  .pt-tabs { display: inline-flex; gap: 4px; }
+  .pt-tabs button, .pt-states button { border: 1px solid #555; background: #2a2926; color: #ddd; border-radius: 999px; padding: 3px 10px; font: inherit; cursor: pointer; }
+  .pt-tabs button[aria-pressed='true'], .pt-states button[aria-pressed='true'] { background: #f2c94c; color: #1d1c1a; border-color: #f2c94c; font-weight: 700; }
+  .pt-states { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 16px; background: #26251f; font-size: 12px; }
+  .pt-states span { color: #aaa; align-self: center; margin-right: 4px; }
+  .pt-dump { margin-left: auto; font-family: var(--naru-font-mono); font-size: 11px; color: #9c9; }
+  .pt-note { padding: 6px 16px; font-size: 12px; color: #f2c94c; background: #2a2926; }
+  .pt-stage { display: flex; justify-content: center; padding: 20px 16px 96px; }
+  /* 假瀏覽器：左邊是漫畫頁（截圖），右邊是 side panel */
+  .pt-window { display: flex; width: min(1180px, 100%); height: 680px; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+  .pt-page { flex: 1 1 auto; background: #f0efec url('../../docs/images/overview.webp') left -8px top -84px / auto 780px no-repeat; }
+  .pt-sidepanel { flex: none; width: 380px; display: flex; flex-direction: column; border-left: 1px solid #ccc; background: #fff; }
+  .pt-sidepanel__chrome { flex: none; display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px; background: #dfe3ea; color: #333; font-size: 13px; }
+  .pt-sidepanel__body { flex: 1 1 auto; overflow: auto; position: relative; }
+  /* onboarding：一個全頁分頁 */
+  .pt-tab { width: min(1180px, 100%); background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+  .pt-tab__chrome { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; background: #dfe3ea; color: #333; font-size: 13px; }
+  .pt-tab__url { flex: 1; background: #fff; border-radius: 999px; padding: 3px 12px; color: #555; font-family: var(--naru-font-mono); font-size: 12px; }
+  .pt-tab__body { min-height: 640px; }
+  /* 底部的版本切換列 */
+  .pt-switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 4px; padding: 6px; background: #111; color: #fff; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 14px; }
+  .pt-switcher button { width: 36px; height: 36px; border: 0; border-radius: 999px; background: #333; color: #fff; font-size: 18px; cursor: pointer; }
+  .pt-switcher button:hover { background: #555; }
+  .pt-switcher span { min-width: 220px; text-align: center; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="bar"></div>
+<div class="pt-stage" id="stage"></div>
+<div class="pt-switcher" role="group" aria-label="切換版本">
+  <button type="button" id="prev" aria-label="上一個版本">←</button>
+  <span id="variant-label"></span>
+  <button type="button" id="next" aria-label="下一個版本">→</button>
+</div>
+
+<script>
+// ========================= 狀態 =========================
+const params = new URLSearchParams(location.search);
+const S = {
+  screen: params.get('screen') ?? 'onboarding',
+  variant: params.get('variant') ?? 'A',
+  // side panel 的額度狀態
+  panelState: params.get('state') ?? 'free',
+  // 設定區的狀態
+  settingsState: params.get('settings') ?? 'hostedFree',
+  // onboarding：step 1–4，sub 是步驟裡的子狀態；ownkey＝頁尾「使用自備金鑰」的分支
+  step: Number(params.get('step') ?? 1),
+  sub: params.get('sub') ?? '',
+  email: 'reader@example.com',
+  code: '',
+  wrongTries: 0,
+  resendIn: 0,
+  hintDismissed: false,
+  quotaOpen: false,
+  deleting: false,
+  deleteTyped: '',
+  done: false,
+};
+
+const VARIANT_NAMES = {
+  onboarding: { A: '單欄步驟精靈', B: '左側步驟清單＋右側內容', C: '一頁長捲、逐段解鎖' },
+  panel: { A: '額度放在底部狀態列', B: '額度是頂部的徽章', C: '額度是一張帳號卡' },
+  settings: { A: '分段切換＋下方跟著模式', B: '兩張可選的卡片', C: '分成翻譯方式／帳號／資料三段' },
+};
+
+const PANEL_STATES = {
+  setup: '沒做完 onboarding',
+  signedOut: '未登入（登出、刪帳號後）',
+  free: '免費，剩 37 頁',
+  freeLow: '免費，剩 3 頁',
+  sub: '訂閱中，本月剩 612 頁',
+  subUsingFree: '訂閱：本月用完，改扣免費頁數',
+  exFree: '免費頁數用完',
+  exMonthly: '本月額度用完',
+  ownKeyHint: '自備金鑰＋內建翻譯提示（一次）',
+  ownKey: '自備金鑰（提示關掉後）',
+};
+
+const SETTINGS_STATES = {
+  hostedFree: '內建翻譯・免費',
+  hostedSub: '內建翻譯・訂閱中',
+  hostedCanceling: '內建翻譯・訂閱排定取消',
+  hostedPastDue: '內建翻譯・扣款失敗重試中',
+  hostedSignedOut: '內建翻譯・未登入',
+  ownKeyLoggedIn: '自備金鑰（帳號仍登入）',
+  ownKeyNoAccount: '自備金鑰（沒有帳號）',
+};
+
+const ONBOARDING_STATES = {
+  '1:': '1 說明',
+  '2:email': '2 輸入 email',
+  '2:rateLimited': '2 寄太頻繁',
+  '2:code': '2 輸入驗證碼',
+  '2:codeWrong': '2 驗證碼錯誤',
+  '2:codeExpired': '2 驗證碼過期',
+  '2:tooMany': '2 嘗試太多次',
+  '3:choose': '3 選方案',
+  '3:waitingPayment': '3 等待付款',
+  '3:paid': '3 付款完成',
+  '4:': '4 教學',
+  '0:ownkey': '頁尾：使用自備金鑰',
+  '5:done': '完成',
+};
+
+function syncUrl() {
+  const p = new URLSearchParams({ screen: S.screen, variant: S.variant });
+  if (S.screen === 'panel') p.set('state', S.panelState);
+  if (S.screen === 'settings') p.set('settings', S.settingsState);
+  if (S.screen === 'onboarding') { p.set('step', S.step); if (S.sub) p.set('sub', S.sub); }
+  history.replaceState(null, '', `?${p}`);
+}
+
+// ========================= 共用片段（現有元件的 HTML 形狀） =========================
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const btn = (label, { variant = 'secondary', act = '', extra = '', attrs = '' } = {}) =>
+  `<button type="button" class="naru-btn naru-btn--${variant} ${extra}" ${act ? `data-act="${act}"` : ''} ${attrs}>${label}</button>`;
+const badge = (label, tone = 'neutral') =>
+  `<span class="naru-badge naru-badge--${tone}">${tone === 'ok' ? '<span class="naru-badge__dot" aria-hidden="true"></span>' : ''}${label}</span>`;
+const callout = (inner, tone = 'info', attrs = '') => `<div class="naru-callout naru-callout--${tone}" ${attrs}>${inner}</div>`;
+const seg = (label, options, value, size = 'sm', act = '') =>
+  `<div role="group" aria-label="${label}" class="naru-seg naru-seg--${size}" style="grid-template-columns: repeat(${options.length}, minmax(0, 1fr))">${options
+    .map((o) => `<button type="button" aria-pressed="${o.value === value}" ${act ? `data-act="${act}" data-value="${o.value}"` : ''}><span class="naru-seg__label">${o.label}</span>${size === 'lg' && o.description ? `<span class="naru-seg__desc">${o.description}</span>` : ''}</button>`)
+    .join('')}</div>`;
+const r = (base, rt) => `<ruby>${base}<rt>${rt}</rt></ruby>`;
+const GEAR = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+const PENCIL = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`;
+const PAGE_ICON = `<svg class="naru-page-header__icon" viewBox="0 0 19 14" width="19" height="14" aria-hidden="true"><rect x="1.5" y="0.5" width="7" height="13" rx="1.5"/><rect class="lit" x="10.5" y="0.5" width="7" height="13" rx="1.5"/></svg>`;
+const LOGO = `<img src="../icons/naruhodo.svg" alt="" width="24" height="24">`;
+
+const LINES = [
+  { ja: `${r('突如', 'とつじょ')}${r('現', 'あらわ')}れた${r('巨大', 'きょだい')}な${r('影', 'かげ')}——`, zh: '突然出現的巨大黑影——', guess: true },
+  { ja: 'ガガガガ…', zh: '轟轟轟轟…', loose: true },
+  { ja: `${r('街', 'まち')}が…${r('崩壊', 'ほうかい')}していく…！`, zh: '城鎮……正在崩毀……！', guess: true },
+  { ja: `${r('逃', 'に')}げるんだ、${r('勝', 'か')}てるわけがない！`, zh: '快逃！根本不可能贏的！', guess: true },
+];
+
+/** 逐字稿：translated=false 時只有原文、讀音與「未翻譯」，就像額度用完、未登入時。 */
+function transcript(translated, status) {
+  const lines = LINES.map((l) => `<li>
+      <span lang="ja" class="original with-ruby">${l.ja}</span>
+      ${l.loose || l.guess ? `<span class="badges">${l.loose ? badge('框外文字', 'loose') : ''}${l.guess ? badge('讀音為推測', 'warn') : ''}</span>` : ''}
+      ${translated ? `<span lang="zh-Hant" class="translation">${l.zh}</span>` : '<span class="untranslated">未翻譯</span>'}
+    </li>`).join('');
+  return `<ul aria-label="Page"><li>
+    <div class="naru-page-header">${PAGE_ICON}<h2 class="naru-page-header__title">右頁<span class="naru-page-header__order"> · 先讀</span></h2>
+      ${status ? `<div class="naru-page-header__status"><p class="translation-status">${status}</p></div>` : ''}</div>
+    <ol aria-label="逐字稿">${lines}</ol></li></ul>`;
+}
+
+const pageModeSwitch = () => seg('頁面模式', [
+  { value: 'read', label: '閱讀', description: '頁面直接顯示中文' },
+  { value: 'learn', label: '學習', description: '保留日文，滑過看讀音' },
+], 'read', 'lg');
+
+const levels = () => `<div class="levels">${seg('顯示層級', ['只看譯文', '原文＋譯文', '加振り仮名'].map((l) => ({ value: l, label: l })), '加振り仮名')}</div>`;
+
+function header(extra = '') {
+  return `<div class="panel-header"><h1 class="title">${LOGO}Naruhodo</h1>${badge('已啟動', 'ok')}${extra}<span class="panel-header__spacer"></span>${btn('停止', { variant: 'ghost' })}<div class="panel-menu">${btn(GEAR, { variant: 'icon', act: 'goSettings', attrs: 'aria-label="設定"' })}</div></div>`;
+}
+
+function footer(statusText, button, extraRow = '') {
+  return `<footer aria-label="狀態列">
+    <div role="group" aria-label="系列" class="series-row"><span class="series-row__label">系列</span><span class="series-row__name">未歸類（未命名・shonenjumpplus.com・10/30）</span>${btn(PENCIL, { variant: 'icon', attrs: 'aria-label="改系列名稱"' })}</div>
+    ${extraRow}
+    <div class="status-row"><span>${statusText}</span>${button}</div>
+  </footer>`;
+}
+
+// ========================= 額度資料 =========================
+/** 每個 side panel 狀態對應的資料；mode：hosted／ownKey／setup。 */
+function quota(state) {
+  return {
+    setup: { mode: 'setup' },
+    signedOut: { mode: 'hosted', signedIn: false, canTranslate: false },
+    free: { mode: 'hosted', signedIn: true, plan: 'free', free: 37, canTranslate: true },
+    freeLow: { mode: 'hosted', signedIn: true, plan: 'free', free: 3, canTranslate: true, low: true },
+    sub: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, monthLimit: 800, reset: '11 月 15 日', free: 12, canTranslate: true },
+    subUsingFree: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 0, monthLimit: 800, reset: '11 月 15 日', free: 12, canTranslate: true, usingFree: true },
+    exFree: { mode: 'hosted', signedIn: true, plan: 'free', free: 0, canTranslate: false, reason: 'free' },
+    exMonthly: { mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 0, monthLimit: 800, reset: '11 月 15 日', free: 0, canTranslate: false, reason: 'monthly' },
+    ownKeyHint: { mode: 'ownKey', hint: true, canTranslate: true },
+    ownKey: { mode: 'ownKey', hint: false, canTranslate: true },
+  }[state];
+}
+
+/** 一行文字的剩餘頁數（A、B 版共用的文案）。 */
+function remainingText(q) {
+  if (q.plan === 'free') return `免費頁數剩 ${q.free} 頁`;
+  if (q.usingFree) return `本月額度已用完，改用免費頁數（剩 ${q.free} 頁）`;
+  return `本月剩 ${q.monthLeft} 頁・${q.reset}重置`;
+}
+
+/** 額度用完的原因（三個版本共用的文案）。 */
+function exhaustedTitle(q) {
+  return q.reason === 'free' ? '免費頁數已用完' : `本月額度已用完，${q.reset}重置`;
+}
+function exhaustedBody(q) {
+  return q.reason === 'free'
+    ? '已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音。訂閱後每月可翻 800 頁。'
+    : '已翻過的頁面照常顯示譯文；新的頁面先顯示原文與讀音，重置後就能繼續翻。';
+}
+const ownKeyLink = (cls = 'proto-small-link') => `<button type="button" class="${cls}" data-act="useOwnKey">使用自備金鑰</button>`;
+
+// ========================= side panel：三個版本 =========================
+function setupScreen(v) {
+  if (v === 'A')
+    return `<div class="panel-header"><h1 class="title">${LOGO}Naruhodo</h1><span class="panel-header__spacer"></span></div>
+      ${callout(`<p><strong>還差一步就能開始翻譯</strong></p><p>設定還沒完成：登入帳號，或改用自備金鑰。</p>${btn('完成設定', { variant: 'primary', act: 'goOnboarding' })}`, 'info', 'style="flex-direction:column;align-items:flex-start"')}`;
+  if (v === 'B')
+    return `<div class="proto-empty">${LOGO.replace('24', '48').replace('24', '48')}<h2>Naruhodo</h2><p>設定還沒完成</p>${btn('完成設定', { variant: 'primary', act: 'goOnboarding' })}</div>`;
+  return `<div class="proto-empty">${LOGO.replace('24', '48').replace('24', '48')}<h2>還差一步</h2>
+    <ol class="proto-mini-steps"><li class="done">說明</li><li class="done">登入</li><li class="cur">選擇方案</li><li>開始翻譯</li></ol>
+    ${btn('完成設定', { variant: 'primary', act: 'goOnboarding' })}<p class="hint">會回到剛才停下來的那一步</p></div>`;
+}
+
+const ownKeyHintText = '現在也可以改用內建翻譯：用 email 登入就能翻，不用自備 API key。新帳號有 50 頁免費頁數。';
+
+function panelA(q) {
+  // 額度一行放在底部狀態列；用完、未登入、提示都是逐字稿上方的 Callout
+  let top = '';
+  if (q.mode === 'hosted' && !q.signedIn)
+    top = callout(`<p><strong>尚未登入</strong>：只顯示原文與讀音。</p><div class="proto-row">${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}${ownKeyLink()}</div>`, 'warn', 'style="flex-direction:column;align-items:flex-start"');
+  if (q.reason)
+    top = callout(`<p><strong>${exhaustedTitle(q)}</strong></p><p>${exhaustedBody(q)}</p><div class="proto-row">${q.reason === 'free' ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : ''}${ownKeyLink()}</div>`, 'warn', 'style="flex-direction:column;align-items:flex-start"');
+  if (q.mode === 'ownKey' && q.hint && !S.hintDismissed)
+    top = callout(`<p>${ownKeyHintText}</p><div class="proto-row">${btn('改用內建翻譯', { act: 'goOnboardingLogin' })}${btn('不用了', { variant: 'ghost', act: 'dismissHint' })}</div>`, 'info', 'style="flex-direction:column;align-items:flex-start"');
+  const translated = q.canTranslate;
+  const quotaRow = q.mode === 'hosted' && q.signedIn
+    ? `<div class="status-row proto-quota-row${q.low || q.usingFree ? ' proto-quota-row--warn' : ''}"><span>${q.reason ? exhaustedTitle(q) : remainingText(q)}</span>${q.plan === 'free' && !q.reason ? `<button type="button" class="proto-small-link" data-act="subscribe">訂閱</button>` : ''}</div>`
+    : '';
+  const button = q.reason ? btn('訂閱', { variant: 'primary', act: 'subscribe', attrs: q.reason === 'monthly' ? 'disabled' : '' }) : btn(translated ? '重新翻譯' : '翻譯此頁', { variant: translated ? 'secondary' : 'primary' });
+  const statusText = translated ? (q.mode === 'ownKey' ? '已翻譯 2 頁 · claude-haiku-5-5 · 7.7 秒 · $0.00045' : '已翻譯 2 頁 · 7.7 秒') : '';
+  return `<main>${header()}${pageModeSwitch()}${top}${levels()}${transcript(translated, translated ? '已翻譯' : '')}</main>
+    ${footer(statusText, q.reason === 'monthly' ? '' : button, quotaRow)}`;
+}
+
+function panelB(q) {
+  // 頂部徽章：一眼看到剩多少；點了展開細節。用完、未登入、提示是緊貼頂部的一條橫幅
+  let chip = '';
+  if (q.mode === 'hosted' && q.signedIn) {
+    const label = q.reason ? '額度用完' : q.plan === 'free' ? `剩 ${q.free} 頁` : q.usingFree ? `免費剩 ${q.free}` : `本月剩 ${q.monthLeft}`;
+    const tone = q.reason ? 'danger' : q.low || q.usingFree ? 'warn' : 'neutral';
+    chip = `<button type="button" class="proto-chip proto-chip--${tone}" data-act="toggleQuota" aria-expanded="${S.quotaOpen}">${label} ▾</button>`;
+  }
+  if (q.mode === 'hosted' && !q.signedIn) chip = `<span class="naru-badge naru-badge--warn">未登入</span>`;
+  const pop = S.quotaOpen && q.signedIn ? `<div class="panel-menu__popover proto-quota-pop">
+      <p class="proto-k">方案</p><p>${q.plan === 'free' ? '免費' : '訂閱（年繳）'}</p>
+      ${q.plan === 'sub' ? `<p class="proto-k">本月</p><p>剩 ${q.monthLeft} / ${q.monthLimit} 頁・${q.reset}重置</p>` : ''}
+      <p class="proto-k">免費頁數</p><p>剩 ${q.free} / 50 頁</p>
+      ${q.plan === 'free' ? btn('訂閱：每月 800 頁', { variant: 'primary', act: 'subscribe' }) : ''}
+      <button type="button" class="proto-small-link" data-act="goSettings">帳號設定</button>
+    </div>` : '';
+  let banner = '';
+  if (q.mode === 'hosted' && !q.signedIn)
+    banner = `<div class="proto-banner proto-banner--warn"><span>尚未登入，只顯示原文與讀音</span>${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}</div><p class="proto-under-banner">${ownKeyLink()}</p>`;
+  if (q.reason)
+    banner = `<div class="proto-banner proto-banner--warn"><span><strong>${exhaustedTitle(q)}</strong></span>${q.reason === 'free' ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : ''}</div><p class="proto-under-banner">先顯示原文與讀音・${ownKeyLink()}</p>`;
+  if (q.mode === 'ownKey' && q.hint && !S.hintDismissed)
+    banner = `<div class="proto-banner"><span>${ownKeyHintText}</span><span class="proto-row">${btn('改用', { act: 'goOnboardingLogin' })}<button type="button" class="proto-x" data-act="dismissHint" aria-label="關閉提示">×</button></span></div>`;
+  const translated = q.canTranslate;
+  const statusText = translated ? (q.mode === 'ownKey' ? '已翻譯 2 頁 · claude-haiku-5-5 · 7.7 秒 · $0.00045' : '已翻譯 2 頁 · 7.7 秒') : '';
+  return `<main><div class="proto-header-wrap">${header(chip)}${pop}</div>${banner}${pageModeSwitch()}${levels()}${transcript(translated, translated ? '已翻譯' : '')}</main>
+    ${footer(statusText, translated ? btn('重新翻譯') : '')}`;
+}
+
+function panelC(q) {
+  // 帳號卡：Page Mode 下面一張卡片，有數字和進度條；用完時整張卡變成說明＋訂閱
+  let card = '';
+  if (q.mode === 'hosted' && !q.signedIn)
+    card = `<section class="proto-card proto-card--warn" aria-label="內建翻譯"><p class="proto-card__title">內建翻譯・尚未登入</p><p>登入後就能翻譯；現在只顯示原文與讀音。</p><div class="proto-row">${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}${ownKeyLink()}</div></section>`;
+  else if (q.mode === 'hosted' && q.reason)
+    card = `<section class="proto-card proto-card--warn" aria-label="內建翻譯"><p class="proto-card__title">${exhaustedTitle(q)}</p><p>${exhaustedBody(q)}</p><div class="proto-row">${q.reason === 'free' ? btn('訂閱：每月 800 頁', { variant: 'primary', act: 'subscribe' }) : ''}${ownKeyLink()}</div></section>`;
+  else if (q.mode === 'hosted') {
+    const [left, total, label] = q.plan === 'free' || q.usingFree ? [q.free, 50, '免費頁數'] : [q.monthLeft, q.monthLimit, '本月'];
+    card = `<section class="proto-card" aria-label="內建翻譯">
+      <div class="proto-card__head"><span class="proto-card__title">內建翻譯</span>${q.plan === 'free' ? badge('免費') : badge('訂閱中', 'ok')}</div>
+      <div class="proto-meter"><span class="proto-meter__num">${left}</span><span class="proto-meter__of">/ ${total} 頁・${label}剩餘</span></div>
+      <div class="proto-bar${q.low || q.usingFree ? ' proto-bar--warn' : ''}"><span style="width:${(left / total) * 100}%"></span></div>
+      ${q.plan === 'sub' && !q.usingFree ? `<p class="hint">${q.reset}重置・另有免費頁數 ${q.free} 頁</p>` : ''}
+      ${q.usingFree ? `<p class="hint">本月額度已用完，先扣免費頁數；${q.reset}重置</p>` : ''}
+      ${q.plan === 'free' ? `<div class="proto-row">${q.low ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : `<button type="button" class="proto-small-link" data-act="subscribe">訂閱：每月 800 頁</button>`}</div>` : ''}
+    </section>`;
+  } else if (q.hint && !S.hintDismissed)
+    card = `<section class="proto-card" aria-label="內建翻譯提示"><div class="proto-card__head"><span class="proto-card__title">新功能：內建翻譯</span><button type="button" class="proto-x" data-act="dismissHint" aria-label="關閉提示">×</button></div><p>${ownKeyHintText}</p><div class="proto-row">${btn('改用內建翻譯', { act: 'goOnboardingLogin' })}</div></section>`;
+  const translated = q.canTranslate;
+  const statusText = translated ? (q.mode === 'ownKey' ? '已翻譯 2 頁 · claude-haiku-5-5 · 7.7 秒 · $0.00045' : '已翻譯 2 頁 · 7.7 秒') : '';
+  return `<main>${header()}${pageModeSwitch()}${card}${levels()}${transcript(translated, translated ? '已翻譯' : '')}</main>
+    ${footer(statusText, translated ? btn('重新翻譯') : '')}`;
+}
+
+function panelScreen() {
+  const q = quota(S.panelState);
+  if (q.mode === 'setup') return `<main>${setupScreen(S.variant)}</main>`;
+  return { A: panelA, B: panelB, C: panelC }[S.variant](q);
+}
+
+// ========================= 設定區：三個版本 =========================
+function account(state) {
+  const base = { email: S.email };
+  return {
+    hostedFree: { ...base, mode: 'hosted', signedIn: true, plan: 'free', free: 37 },
+    hostedSub: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', free: 12, renew: '2027 年 10 月 15 日' },
+    hostedCanceling: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', free: 12, ends: '2027 年 10 月 15 日' },
+    hostedPastDue: { ...base, mode: 'hosted', signedIn: true, plan: 'sub', monthLeft: 612, reset: '11 月 15 日', free: 12, pastDue: true },
+    hostedSignedOut: { mode: 'hosted', signedIn: false },
+    ownKeyLoggedIn: { ...base, mode: 'ownKey', signedIn: true, plan: 'free', free: 37, key: 'a1b2' },
+    ownKeyNoAccount: { mode: 'ownKey', signedIn: false, key: 'a1b2' },
+  }[state];
+}
+
+function planBadge(a) {
+  if (a.plan === 'free') return badge('免費');
+  if (a.pastDue) return badge('扣款失敗，重試中', 'warn');
+  if (a.ends) return badge('訂閱中・不會續訂', 'warn');
+  return badge('訂閱中', 'ok');
+}
+function planDetail(a) {
+  if (a.plan === 'free') return `免費頁數剩 ${a.free} / 50 頁`;
+  const lines = [`本月剩 ${a.monthLeft} / 800 頁，${a.reset}重置`, `另有免費頁數 ${a.free} 頁`];
+  if (a.ends) lines.push(`訂閱在 ${a.ends}結束，之後回到只剩免費頁數`);
+  else if (a.pastDue) lines.push('Paddle 會再嘗試扣款，這段期間照常可以使用');
+  else lines.push(`下次續訂：${a.renew}`);
+  return lines.join('<br>');
+}
+
+const ownKeyBlock = (a) => `<p>已設定 Claude API key（末四碼 ${a.key}）</p><div class="actions">${btn('測試連線')}${btn('刪除')}</div>
+  <p class="hint">建議在 Anthropic Console 為這個外掛建立專用的 API key，並設定花費上限。key 只存在這台電腦。</p>`;
+
+function deleteConfirm(v) {
+  const consequences = `<ul class="proto-list"><li>剩下的頁數與用量紀錄都會刪除。</li><li>有訂閱的話會一起取消，不會再扣款；已付的費用不會自動退還。</li><li>之後用同一個 email 重新註冊，不會再拿到免費頁數。</li><li>這台電腦上的翻譯快取、Series Notes 不受影響。</li></ul>`;
+  if (v === 'A')
+    return callout(`<p><strong>確定要刪除帳號 ${S.email}？</strong></p>${consequences}<div class="proto-row">${btn('刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone' })}${btn('取消', { act: 'deleteCancel' })}</div>`, 'danger', 'role="alert" style="flex-direction:column;align-items:flex-start"');
+  if (v === 'B')
+    return `<div class="proto-modal-backdrop"><div class="proto-modal" role="dialog" aria-label="刪除帳號"><h3>刪除帳號？</h3><p>${S.email}</p>${consequences}<div class="proto-row proto-row--end">${btn('取消', { act: 'deleteCancel' })}${btn('刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone' })}</div></div></div>`;
+  const ok = S.deleteTyped.trim() === S.email;
+  return callout(`<p><strong>刪除帳號</strong></p>${consequences}<label class="proto-field">輸入你的 email（${S.email}）確認<input data-input="deleteTyped" value="${esc(S.deleteTyped)}" autocomplete="off"></label><div class="proto-row">${btn('永久刪除帳號', { extra: 'proto-btn-danger', act: 'deleteDone', attrs: ok ? '' : 'disabled' })}${btn('取消', { act: 'deleteCancel' })}</div>`, 'danger', 'style="flex-direction:column;align-items:flex-start"');
+}
+
+function accountActions(a) {
+  return `<div class="actions">${a.plan === 'free' ? btn('訂閱', { variant: 'primary', act: 'subscribe' }) : ''}${btn('登出', { act: 'signOut' })}${btn('刪除帳號', { variant: 'ghost', act: 'deleteStart', extra: 'proto-text-danger' })}</div>`;
+}
+
+function settingsA(a) {
+  const modes = seg('翻譯方式', [
+    { value: 'hosted', label: '內建翻譯', description: '用帳號，Naruhodo 代為翻譯' },
+    { value: 'ownKey', label: '自備金鑰', description: '用你的 Anthropic API key' },
+  ], a.mode, 'lg', 'setMode');
+  let body = '';
+  if (a.mode === 'hosted')
+    body = a.signedIn
+      ? `<dl class="proto-dl"><dt>帳號</dt><dd>${a.email}</dd><dt>方案</dt><dd>${planBadge(a)}</dd><dt>剩餘</dt><dd>${planDetail(a)}</dd></dl>${S.deleting ? deleteConfirm('A') : accountActions(a)}`
+      : `<p>尚未登入。登入後就能使用內建翻譯。</p><div class="actions">${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}</div>`;
+  else
+    body = `${ownKeyBlock(a)}${a.signedIn ? `<p class="hint">帳號 ${a.email} 仍然登入著；切回內建翻譯就能接著用。</p>` : ''}`;
+  return `<section aria-label="翻譯方式與帳號" class="settings"><div class="section-head"><h2>翻譯方式與帳號</h2>${btn('關閉', { variant: 'ghost', act: 'goPanel' })}</div>
+    ${modes}<div class="proto-gap"></div>${body}
+    <div class="proto-divider"></div><div class="actions">${btn('撤回資料使用同意')}</div><div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></section>`;
+}
+
+function settingsB(a) {
+  const card = (mode, title, desc, inner) => `<label class="proto-radio-card${a.mode === mode ? ' proto-radio-card--on' : ''}">
+      <span class="proto-radio-card__head"><input type="radio" name="mode" ${a.mode === mode ? 'checked' : ''} data-act="setMode" data-value="${mode}"><span><strong>${title}</strong><span class="proto-radio-card__desc">${desc}</span></span></span>
+      ${a.mode === mode ? `<div class="proto-radio-card__body">${inner}</div>` : ''}</label>`;
+  const hostedInner = a.signedIn
+    ? `<p>${a.email}　${planBadge(a)}</p><p class="hint">${planDetail(a)}</p>${accountActions(a)}`
+    : `<p>尚未登入。</p>${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}`;
+  const ownInner = `${ownKeyBlock(a)}${a.signedIn ? `<p class="hint">帳號 ${a.email} 仍然登入著。</p>` : ''}`;
+  return `<section aria-label="翻譯方式與帳號" class="settings"><div class="section-head"><h2>翻譯方式</h2>${btn('關閉', { variant: 'ghost', act: 'goPanel' })}</div>
+    <div class="proto-radio-cards" role="radiogroup" aria-label="翻譯方式">
+      ${card('hosted', '內建翻譯', '用 email 帳號，Naruhodo 代為翻譯，有頁數限制', hostedInner)}
+      ${card('ownKey', '自備金鑰', '用你自己的 Anthropic API key，費用直接付給 Anthropic，沒有頁數限制', ownInner)}
+    </div>
+    <div class="proto-divider"></div><div class="actions">${btn('撤回資料使用同意')}</div><div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></section>
+    ${S.deleting ? deleteConfirm('B') : ''}`;
+}
+
+function settingsC(a) {
+  const radio = (mode, label, desc) => `<label class="proto-radio"><input type="radio" name="modeC" ${a.mode === mode ? 'checked' : ''} data-act="setMode" data-value="${mode}"><span><strong>${label}</strong><span class="proto-radio-card__desc">${desc}</span></span></label>`;
+  const accountSection = a.signedIn
+    ? `<h3 class="proto-h3">帳號</h3><p>${a.email}</p><p>${planBadge(a)}</p><p class="hint">${planDetail(a)}</p>${S.deleting ? deleteConfirm('C') : accountActions(a)}`
+    : a.mode === 'hosted' ? `<h3 class="proto-h3">帳號</h3><p>尚未登入。</p>${btn('登入', { variant: 'primary', act: 'goOnboardingLogin' })}` : '';
+  return `<section aria-label="設定" class="settings"><div class="section-head"><h2>設定</h2>${btn('關閉', { variant: 'ghost', act: 'goPanel' })}</div>
+    <h3 class="proto-h3">翻譯方式</h3>
+    ${radio('hosted', '內建翻譯', '用帳號翻譯，有頁數限制')}
+    ${radio('ownKey', '自備金鑰', '用你的 Anthropic API key，沒有限制')}
+    ${a.mode === 'ownKey' ? `<h3 class="proto-h3">API key</h3>${ownKeyBlock(a)}` : ''}
+    ${accountSection}
+    <h3 class="proto-h3">資料</h3><div class="actions">${btn('撤回資料使用同意')}</div><div class="backup">${btn('匯出 JSON')}${btn('匯入 JSON')}</div></section>`;
+}
+
+function settingsScreen() {
+  const a = account(S.settingsState);
+  const section = { A: settingsA, B: settingsB, C: settingsC }[S.variant](a);
+  const q = a.mode === 'ownKey' ? quota('ownKey') : a.signedIn ? quota('free') : quota('signedOut');
+  return `<main>${header()}${pageModeSwitch()}${section}${levels()}${transcript(q.canTranslate, '')}</main>${footer('', '')}`;
+}
+
+// ========================= onboarding：步驟內容（三個版本共用文案） =========================
+const PRICE = '年繳 US$20，每月可翻 800 頁';
+const TBD = '<span class="proto-tbd">暫定</span>';
+
+function stepIntro() {
+  return `<h1 class="ob-h1">歡迎使用 Naruhodo</h1>
+    <p class="ob-lead">在日文漫畫網站上，把對話框直接換成中文；也可以保留日文、滑過看讀音，拿來學日文。</p>
+    <div class="ob-price">
+      <p class="ob-price__title">這是付費服務，先送你 50 頁</p>
+      <ul class="proto-list">
+        <li>註冊帳號就有 <strong>50 頁免費頁數</strong>（大約兩話），不用輸入付款資料。</li>
+        <li>用完之後可以訂閱：${PRICE}。${TBD}</li>
+        <li>回頭看已經翻過的頁面不會扣頁數；翻譯失敗也不扣。</li>
+      </ul>
+    </div>`;
+}
+const introActions = () => btn('開始設定', { variant: 'primary', act: 'obNext', extra: 'ob-big' });
+
+const consentList = `<ul class="proto-list">
+    <li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
+    <li>辨識出的日文文字、同一部作品前幾頁的原文與譯文、作品的譯名表，會送到 Naruhodo 的服務，再交給 Anthropic 翻譯。</li>
+    <li>Naruhodo 的服務不保存這些文字，只記錄你的 email、訂閱狀態與每頁的用量。</li>
+  </ul>
+  <p class="hint">詳見 <a href="#">隱私權政策</a>、<a href="#">服務條款</a>。</p>`;
+
+function stepLogin() {
+  const masked = S.email;
+  if (['code', 'codeWrong', 'codeExpired', 'tooMany'].includes(S.sub)) {
+    const err = {
+      codeWrong: callout('<p>驗證碼不正確，請再確認一次。</p>', 'danger', 'role="alert"'),
+      codeExpired: callout('<p>驗證碼已經過期，請重新寄送。</p>', 'danger', 'role="alert"'),
+      tooMany: callout('<p>錯誤次數太多，這組驗證碼已失效，請重新寄送。</p>', 'danger', 'role="alert"'),
+    }[S.sub] ?? '';
+    const locked = S.sub === 'tooMany' || S.sub === 'codeExpired';
+    return `<h2 class="ob-h2">輸入驗證碼</h2>
+      <p>我們寄了一封含 6 位數驗證碼的信到 <strong>${masked}</strong>。沒看到的話，請找找垃圾郵件匣。</p>
+      ${err}
+      <form class="ob-form" data-form="verify"><label class="proto-field">驗證碼<input class="ob-code" data-input="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" value="${esc(S.code)}" ${locked ? 'disabled' : ''} placeholder="123456"></label>
+      ${btn('登入', { variant: 'primary', act: 'verify', attrs: locked ? 'disabled' : '' })}</form>
+      <p class="ob-links">${S.resendIn > 0 ? `<span class="hint">${S.resendIn} 秒後可以重新寄送</span>` : `<button type="button" class="proto-small-link" data-act="resend">重新寄送驗證碼</button>`}・<button type="button" class="proto-small-link" data-act="changeEmail">改用其他 email</button></p>`;
+  }
+  return `<h2 class="ob-h2">同意並登入</h2>
+    <p>翻譯前，先確認資料怎麼使用：</p>${consentList}
+    ${S.sub === 'rateLimited' ? callout('<p>寄送太頻繁了，請過幾分鐘再試。</p>', 'danger', 'role="alert"') : ''}
+    <form class="ob-form" data-form="send"><label class="proto-field">Email<input type="email" data-input="email" value="${esc(S.email)}" autocomplete="email"></label>
+    ${btn('同意並寄送驗證碼', { variant: 'primary', act: 'sendCode' })}</form>
+    <p class="hint">不用設定密碼：每次登入都用寄到信箱的驗證碼，登入後會一直保持登入。</p>`;
+}
+
+function stepPlan() {
+  if (S.sub === 'waitingPayment')
+    return `<h2 class="ob-h2">在新分頁完成付款</h2>
+      <p>付款頁已經在新分頁打開（由 Paddle 處理付款）。付款完成後，這裡會自動更新。</p>
+      <div class="proto-row">${btn('重新打開付款頁')}${btn('改成先用免費頁數', { variant: 'ghost', act: 'useFree' })}<button type="button" class="proto-sim" data-act="paid">（prototype：模擬付款完成）</button></div>`;
+  if (S.sub === 'paid')
+    return `<h2 class="ob-h2">訂閱完成</h2>${callout('<p>✓ 已訂閱：本月可翻 800 頁，每個月的今天重置。原本的 50 頁免費頁數也還在，當月額度用完後會接著用。</p>')}
+      ${btn('下一步', { variant: 'primary', act: 'obNext', extra: 'ob-big' })}`;
+  return `<h2 class="ob-h2">選擇方案</h2><p>已登入 <strong>${S.email}</strong>。你可以現在訂閱，或先用免費頁數試試看。</p>
+    <div class="ob-plans">
+      <div class="ob-plan"><p class="ob-plan__name">先用免費頁數</p><p class="ob-plan__price">50 頁</p><p class="hint">大約兩話，不會過期。用完再決定要不要訂閱。</p>${btn('先用免費的 50 頁', { act: 'useFree' })}</div>
+      <div class="ob-plan ob-plan--hl"><p class="ob-plan__name">訂閱（年繳）${TBD}</p><p class="ob-plan__price">US$20 / 年</p><p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。免費頁數不會作廢。</p>${btn('訂閱', { variant: 'primary', act: 'subscribeOb' })}</div>
+    </div>`;
+}
+
+function stepTutorial() {
+  return `<h2 class="ob-h2">開始翻譯</h2>
+    <p>打開日文漫畫網站（例如少年ジャンプ＋、Kindle 雲端閱讀器），然後：</p>
+    <div class="ob-toolbar"><span class="ob-toolbar__url">shonenjumpplus.com/episode/…</span><span class="ob-toolbar__icon">🧩</span><span class="ob-toolbar__icon ob-toolbar__icon--hl">${LOGO}</span></div>
+    <ol class="proto-list"><li>點工具列上的 Naruhodo 圖示，或按 <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>。</li>
+      <li>右邊會打開 side panel，翻到的頁面會自動翻譯。</li></ol>
+    <p class="hint">沒看到圖示？點拼圖圖示 🧩，把 Naruhodo 釘選到工具列。</p>
+    ${btn('完成', { variant: 'primary', act: 'finish', extra: 'ob-big' })}`;
+}
+
+function stepOwnKey() {
+  return `<h2 class="ob-h2">使用自備金鑰</h2>
+    <p>用你自己的 Anthropic API key 翻譯：不需要帳號，也沒有頁數限制，費用由 Anthropic 直接向你收取。</p>
+    <ul class="proto-list"><li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
+      <li>辨識出的日文文字、前幾頁的原文與譯文、作品的譯名表，會用你的 API key 直接送到 Anthropic 翻譯，不經過 Naruhodo 的服務。</li>
+      <li>API key 只存在這台電腦的外掛裡。</li></ul>
+    <form class="ob-form"><label class="proto-field">Claude API key<input type="password" autocomplete="off"></label>${btn('同意並儲存', { variant: 'primary', act: 'ownKeySaved' })}</form>
+    <p><button type="button" class="proto-small-link" data-act="obBackToLogin">回到內建翻譯</button></p>`;
+}
+
+const STEP_TITLES = ['說明', '同意並登入', '選擇方案', '開始翻譯'];
+const stepBody = () => (S.sub === 'ownkey' ? stepOwnKey() : [null, () => `${stepIntro()}${introActions()}`, stepLogin, stepPlan, stepTutorial][S.step]());
+const ownKeyFooter = () => S.sub === 'ownkey' ? '' : `<p class="ob-foot">已經有 Anthropic API key？<button type="button" class="proto-small-link" data-act="obOwnKey">使用自備金鑰</button></p>`;
+
+function doneScreen() {
+  return `<div class="ob-done">${LOGO.replace('24', '56').replace('24', '56')}<h1 class="ob-h1">設定完成</h1><p>可以關閉這個分頁，到漫畫網站點 Naruhodo 圖示開始翻譯。</p>${btn('關閉分頁', { variant: 'primary' })}</div>`;
+}
+
+function onboardingA() {
+  // 單欄精靈：一次只看一步，上面是進度點
+  const dots = STEP_TITLES.map((t, i) => `<li class="${i + 1 < S.step ? 'done' : i + 1 === S.step ? 'cur' : ''}"><span>${i + 1}</span>${t}</li>`).join('');
+  return `<div class="ob-a"><header class="ob-brand">${LOGO}Naruhodo</header>
+    ${S.sub === 'ownkey' ? '' : `<ol class="ob-dots">${dots}</ol>`}
+    <div class="ob-a__card">${stepBody()}</div>
+    ${S.step > 1 && S.step < 4 && S.sub !== 'ownkey' && !['code', 'codeWrong', 'codeExpired', 'tooMany'].includes(S.sub) ? `<p class="ob-back"><button type="button" class="proto-small-link" data-act="obBack">← 上一步</button></p>` : ''}
+    ${ownKeyFooter()}</div>`;
+}
+
+function onboardingB() {
+  // 兩欄：左邊永遠看得到全部步驟與每步的結果，右邊是目前這步
+  const items = STEP_TITLES.map((t, i) => {
+    const n = i + 1;
+    const state = S.sub === 'ownkey' ? '' : n < S.step ? 'done' : n === S.step ? 'cur' : '';
+    const result = n === 2 && S.step > 2 ? `<span class="ob-b__res">${S.email}</span>` : n === 3 && S.step > 3 ? `<span class="ob-b__res">${S.sub === 'paid' || S.paid ? '已訂閱' : '先用免費頁數'}</span>` : '';
+    return `<li class="${state}"><span class="ob-b__n">${n < S.step && S.sub !== 'ownkey' ? '✓' : n}</span><span>${t}${result}</span></li>`;
+  }).join('');
+  return `<div class="ob-b"><aside class="ob-b__side"><header class="ob-brand">${LOGO}Naruhodo</header><ol class="ob-b__steps">${items}</ol>
+      <div class="ob-b__sidefoot">${ownKeyFooter()}</div></aside>
+    <section class="ob-b__main">${stepBody()}</section></div>`;
+}
+
+function onboardingC() {
+  // 一頁長捲：每一步都看得到，還沒輪到的變淡鎖住，完成的收成一行摘要
+  const summary = (n) => ({ 1: '已閱讀說明', 2: `已登入 ${S.email}`, 3: S.paid ? '已訂閱' : '先用免費的 50 頁' })[n];
+  const sections = STEP_TITLES.map((t, i) => {
+    const n = i + 1;
+    if (S.sub === 'ownkey') return '';
+    if (n < S.step) return `<section class="ob-c__sec ob-c__sec--done"><span class="ob-c__n">✓</span><span><strong>${t}</strong>・${summary(n)}</span></section>`;
+    if (n === S.step) return `<section class="ob-c__sec ob-c__sec--cur"><span class="ob-c__n">${n}</span><div class="ob-c__body">${stepBody()}</div></section>`;
+    return `<section class="ob-c__sec ob-c__sec--locked"><span class="ob-c__n">${n}</span><span><strong>${t}</strong></span></section>`;
+  }).join('');
+  return `<div class="ob-c"><header class="ob-brand">${LOGO}Naruhodo</header>
+    ${S.step === 1 && S.sub !== 'ownkey' ? '' : ''}
+    ${S.sub === 'ownkey' ? `<section class="ob-c__sec ob-c__sec--cur"><div class="ob-c__body">${stepOwnKey()}</div></section>` : sections}
+    ${ownKeyFooter()}</div>`;
+}
+
+function onboardingScreen() {
+  if (S.sub === 'done') return doneScreen();
+  return { A: onboardingA, B: onboardingB, C: onboardingC }[S.variant]();
+}
+
+// ========================= 新元件的樣式（prototype 用；定案後才寫進 components.css／onboarding.css） =========================
+const PROTO_CSS = `
+  .sp { margin: 0; padding: 0 var(--naru-space-3); min-height: 100%; font-family: var(--naru-font-sans); font-size: var(--naru-text-label); line-height: 1.5; color: var(--naru-ink); background: var(--naru-surface); }
+  .proto-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--naru-space-2); }
+  .proto-row--end { justify-content: flex-end; }
+  .proto-small-link { border: 0; padding: 0; background: none; font: inherit; font-size: var(--naru-text-caption); color: var(--naru-ink-2); text-decoration: underline; cursor: pointer; }
+  .proto-quota-row { font-size: var(--naru-text-small); color: var(--naru-ink-2); }
+  .proto-quota-row--warn { color: var(--naru-warn); }
+  .proto-empty { display: flex; flex-direction: column; align-items: center; gap: var(--naru-space-2); padding: 96px var(--naru-space-4); text-align: center; }
+  .proto-empty h2 { margin: 0; font-size: var(--naru-text-body); }
+  .proto-empty p { margin: 0; color: var(--naru-ink-2); }
+  .proto-mini-steps { display: flex; gap: var(--naru-space-1); padding: 0; margin: var(--naru-space-2) 0; list-style: none; font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+  .proto-mini-steps li { padding: 2px 8px; border-radius: var(--naru-radius-pill); background: var(--naru-surface-2); }
+  .proto-mini-steps li.done { color: var(--naru-ok); background: var(--naru-ok-bg); }
+  .proto-mini-steps li.cur { color: var(--naru-on-accent); background: var(--naru-accent); }
+  .proto-header-wrap { position: relative; }
+  .proto-chip { flex: none; border: 0; border-radius: 4px; padding: 1px 6px; font: inherit; font-size: 11px; font-weight: 500; line-height: 1.5; cursor: pointer; background: var(--naru-surface-2); color: var(--naru-ink-2); }
+  .proto-chip--warn { background: var(--naru-warn-bg); color: var(--naru-warn); }
+  .proto-chip--danger { background: var(--naru-danger-bg); color: var(--naru-danger); }
+  .proto-quota-pop { left: 0; right: auto; top: 44px; padding: var(--naru-space-3); gap: 0; }
+  .proto-quota-pop p { margin: 0 0 var(--naru-space-1); }
+  .proto-k { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+  .proto-quota-pop .naru-btn { margin: var(--naru-space-2) 0; }
+  .proto-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--naru-space-2); margin: 0 calc(-1 * var(--naru-space-3)) var(--naru-space-1); padding: var(--naru-space-2) var(--naru-space-3); font-size: var(--naru-text-small); background: var(--naru-accent-weak); color: var(--naru-ink); }
+  .proto-banner--warn { background: var(--naru-warn-bg); color: var(--naru-warn); }
+  .proto-under-banner { margin: 0 0 var(--naru-space-2); font-size: var(--naru-text-caption); color: var(--naru-ink-3); text-align: right; }
+  .proto-x { border: 0; background: none; font-size: 18px; line-height: 1; color: var(--naru-ink-3); cursor: pointer; }
+  .proto-card { margin: var(--naru-space-2) 0; padding: var(--naru-space-3); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); }
+  .proto-card p { margin: 0 0 var(--naru-space-1); }
+  .proto-card--warn { background: var(--naru-warn-bg); border-color: transparent; color: var(--naru-warn); }
+  .proto-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--naru-space-2); }
+  .proto-card__title { font-weight: 700; font-size: var(--naru-text-label); }
+  .proto-meter { display: flex; align-items: baseline; gap: var(--naru-space-1); margin-top: var(--naru-space-1); }
+  .proto-meter__num { font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .proto-meter__of { font-size: var(--naru-text-small); color: var(--naru-ink-3); }
+  .proto-bar { height: 6px; margin: var(--naru-space-1) 0 var(--naru-space-2); border-radius: var(--naru-radius-pill); background: var(--naru-surface-2); overflow: hidden; }
+  .proto-bar span { display: block; height: 100%; background: var(--naru-accent); }
+  .proto-bar--warn span { background: var(--naru-warn); }
+  .proto-gap { height: var(--naru-space-3); }
+  .proto-divider { margin: var(--naru-space-3) 0; border-top: 1px solid var(--naru-line); }
+  .proto-dl { display: grid; grid-template-columns: auto 1fr; gap: var(--naru-space-1) var(--naru-space-3); margin: 0 0 var(--naru-space-2); }
+  .proto-dl dt { color: var(--naru-ink-3); font-size: var(--naru-text-small); }
+  .proto-dl dd { margin: 0; }
+  .proto-btn-danger { background: var(--naru-danger); border-color: var(--naru-danger); color: var(--naru-on-accent); }
+  .proto-text-danger { color: var(--naru-danger); }
+  .proto-list { margin: var(--naru-space-1) 0; padding-left: var(--naru-space-5); }
+  .proto-list li { margin-bottom: var(--naru-space-1); }
+  .proto-field { display: flex; flex-direction: column; gap: var(--naru-space-1); font-size: var(--naru-text-small); color: var(--naru-ink-2); }
+  .proto-field input { min-height: 36px; padding: 0 var(--naru-space-2); border: 1px solid var(--naru-line-strong); border-radius: var(--naru-radius-sm); font: inherit; font-size: var(--naru-text-body); color: var(--naru-ink); }
+  .proto-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: var(--naru-space-3); background: rgba(31, 29, 26, 0.4); }
+  .proto-modal { padding: var(--naru-space-4); border-radius: var(--naru-radius-md); background: var(--naru-surface); box-shadow: var(--naru-shadow-2); }
+  .proto-modal h3 { margin: 0; font-size: var(--naru-text-body); }
+  .proto-modal > p { margin: 0 0 var(--naru-space-2); color: var(--naru-ink-2); }
+  .proto-radio-cards { display: flex; flex-direction: column; gap: var(--naru-space-2); }
+  .proto-radio-card { display: block; padding: var(--naru-space-3); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); cursor: pointer; }
+  .proto-radio-card--on { border-color: var(--naru-accent); box-shadow: 0 0 0 1px var(--naru-accent); }
+  .proto-radio-card__head, .proto-radio { display: flex; align-items: flex-start; gap: var(--naru-space-2); }
+  .proto-radio-card__head > span, .proto-radio > span { display: flex; flex-direction: column; }
+  .proto-radio-card__desc { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+  .proto-radio-card__body { margin-top: var(--naru-space-2); padding-top: var(--naru-space-2); border-top: 1px solid var(--naru-line); cursor: default; }
+  .proto-radio-card__body p { margin: 0 0 var(--naru-space-1); }
+  .proto-radio { margin: var(--naru-space-1) 0; padding: var(--naru-space-1) 0; cursor: pointer; }
+  .proto-h3 { margin: var(--naru-space-4) 0 var(--naru-space-1); font-size: var(--naru-text-caption); font-weight: 700; color: var(--naru-ink-3); letter-spacing: .04em; }
+  .settings p { margin: 0 0 var(--naru-space-1); }
+  .proto-tbd { display: inline-block; margin-left: 4px; padding: 0 5px; border: 1px dashed var(--naru-warn); border-radius: 4px; font-size: 11px; font-weight: 700; line-height: 18px; color: var(--naru-warn); background: var(--naru-warn-bg); vertical-align: middle; }
+  .proto-sim { border: 1px dashed #b58b00; background: #fff8dd; color: #6e5000; border-radius: 4px; font: inherit; font-size: 12px; cursor: pointer; }
+`;
+
+const ONBOARDING_CSS = `
+  .ob { min-height: 640px; font-family: var(--naru-font-sans); font-size: var(--naru-text-body); line-height: 1.6; color: var(--naru-ink); background: var(--naru-surface-2); }
+  .ob a { color: var(--naru-accent); }
+  .ob kbd { padding: 1px 6px; border: 1px solid var(--naru-line-strong); border-bottom-width: 2px; border-radius: 4px; font-family: var(--naru-font-mono); font-size: var(--naru-text-small); background: var(--naru-surface); }
+  .ob-brand { display: flex; align-items: center; gap: var(--naru-space-2); font-weight: 700; font-size: var(--naru-text-body); }
+  .ob-h1 { margin: 0 0 var(--naru-space-2); font-size: 28px; line-height: 1.3; }
+  .ob-h2 { margin: 0 0 var(--naru-space-2); font-size: 22px; line-height: 1.3; }
+  .ob-lead { margin: 0 0 var(--naru-space-4); font-size: 17px; color: var(--naru-ink-2); }
+  .ob-price { margin: 0 0 var(--naru-space-4); padding: var(--naru-space-3) var(--naru-space-4); border-radius: var(--naru-radius-md); background: var(--naru-accent-weak); }
+  .ob-price__title { margin: 0; font-weight: 700; }
+  .ob-big { min-height: 40px; padding: 0 var(--naru-space-5); font-size: var(--naru-text-body); }
+  .ob-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--naru-space-2); margin: var(--naru-space-3) 0; }
+  .ob-form .proto-field { flex: 1 1 240px; }
+  .ob-code { letter-spacing: .4em; font-family: var(--naru-font-mono); }
+  .ob-links { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+  .ob-plans { display: grid; grid-template-columns: 1fr 1fr; gap: var(--naru-space-3); margin-top: var(--naru-space-3); }
+  .ob-plan { display: flex; flex-direction: column; align-items: flex-start; gap: var(--naru-space-1); padding: var(--naru-space-4); border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md); background: var(--naru-surface); }
+  .ob-plan p { margin: 0; }
+  .ob-plan--hl { border-color: var(--naru-accent); box-shadow: 0 0 0 1px var(--naru-accent); }
+  .ob-plan__name { font-weight: 700; }
+  .ob-plan__price { font-size: 22px; font-weight: 700; }
+  .ob-plan .naru-btn { margin-top: auto; }
+  .ob-toolbar { display: flex; align-items: center; gap: var(--naru-space-2); max-width: 460px; margin: var(--naru-space-3) 0; padding: var(--naru-space-2); border-radius: var(--naru-radius-md); background: #dfe3ea; }
+  .ob-toolbar__url { flex: 1; padding: 2px 12px; border-radius: var(--naru-radius-pill); background: var(--naru-surface); font-family: var(--naru-font-mono); font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+  .ob-toolbar__icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--naru-radius-pill); }
+  .ob-toolbar__icon--hl { background: var(--naru-surface); outline: 2px solid var(--naru-highlight); }
+  .ob-foot { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
+  .ob-done { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--naru-space-2); min-height: 640px; text-align: center; background: var(--naru-surface-2); font-family: var(--naru-font-sans); color: var(--naru-ink); }
+  .ob-done p { margin: 0 0 var(--naru-space-3); color: var(--naru-ink-2); }
+
+  /* A：單欄精靈 */
+  .ob-a { display: flex; flex-direction: column; align-items: center; padding: var(--naru-space-6) var(--naru-space-4); }
+  .ob-a .ob-brand { margin-bottom: var(--naru-space-4); }
+  .ob-dots { display: flex; gap: var(--naru-space-4); margin: 0 0 var(--naru-space-4); padding: 0; list-style: none; font-size: var(--naru-text-small); color: var(--naru-ink-3); }
+  .ob-dots li { display: flex; align-items: center; gap: 6px; }
+  .ob-dots span { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: var(--naru-radius-pill); background: var(--naru-line); color: var(--naru-ink-2); font-size: var(--naru-text-caption); font-weight: 700; }
+  .ob-dots li.cur { color: var(--naru-ink); font-weight: 700; }
+  .ob-dots li.cur span { background: var(--naru-accent); color: var(--naru-on-accent); }
+  .ob-dots li.done span { background: var(--naru-ok-bg); color: var(--naru-ok); }
+  .ob-a__card { width: min(600px, 100%); padding: var(--naru-space-6); border-radius: var(--naru-radius-md); background: var(--naru-surface); box-shadow: var(--naru-shadow-1); }
+  .ob-back, .ob-a .ob-foot { margin: var(--naru-space-3) 0 0; }
+
+  /* B：左側步驟清單 */
+  .ob-b { display: grid; grid-template-columns: 280px 1fr; min-height: 640px; }
+  .ob-b__side { display: flex; flex-direction: column; gap: var(--naru-space-5); padding: var(--naru-space-6) var(--naru-space-5); background: var(--naru-surface); border-right: 1px solid var(--naru-line); }
+  .ob-b__steps { display: flex; flex-direction: column; gap: var(--naru-space-4); margin: 0; padding: 0; list-style: none; color: var(--naru-ink-3); }
+  .ob-b__steps li { display: flex; gap: var(--naru-space-2); align-items: flex-start; }
+  .ob-b__steps li > span:last-child { display: flex; flex-direction: column; }
+  .ob-b__steps li.cur { color: var(--naru-ink); font-weight: 700; }
+  .ob-b__steps li.done { color: var(--naru-ink-2); }
+  .ob-b__n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: var(--naru-radius-pill); border: 1px solid var(--naru-line-strong); font-size: var(--naru-text-small); font-weight: 700; }
+  .ob-b__steps li.cur .ob-b__n { background: var(--naru-accent); border-color: var(--naru-accent); color: var(--naru-on-accent); }
+  .ob-b__steps li.done .ob-b__n { background: var(--naru-ok-bg); border-color: var(--naru-ok-bg); color: var(--naru-ok); }
+  .ob-b__res { font-size: var(--naru-text-caption); font-weight: 400; color: var(--naru-ink-3); }
+  .ob-b__sidefoot { margin-top: auto; }
+  .ob-b__main { max-width: 680px; padding: var(--naru-space-6) 48px; }
+
+  /* C：一頁長捲 */
+  .ob-c { display: flex; flex-direction: column; gap: var(--naru-space-3); width: min(720px, 100%); margin: 0 auto; padding: var(--naru-space-6) var(--naru-space-4); }
+  .ob-c__sec { display: flex; gap: var(--naru-space-3); align-items: flex-start; padding: var(--naru-space-3) var(--naru-space-4); border-radius: var(--naru-radius-md); background: var(--naru-surface); }
+  .ob-c__sec--cur { padding: var(--naru-space-5); box-shadow: var(--naru-shadow-1); outline: 1px solid var(--naru-accent-weak); }
+  .ob-c__sec--done { color: var(--naru-ink-2); font-size: var(--naru-text-small); }
+  .ob-c__sec--locked { opacity: .5; }
+  .ob-c__n { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: var(--naru-radius-pill); background: var(--naru-surface-2); font-size: var(--naru-text-small); font-weight: 700; }
+  .ob-c__sec--cur .ob-c__n { background: var(--naru-accent); color: var(--naru-on-accent); }
+  .ob-c__sec--done .ob-c__n { background: var(--naru-ok-bg); color: var(--naru-ok); }
+  .ob-c__body { flex: 1; min-width: 0; }
+`;
+
+// ========================= 外框與事件 =========================
+const STYLES = `<link rel="stylesheet" href="../shared/tokens.css"><link rel="stylesheet" href="components.css">`;
+
+let host;
+function mount(kind) {
+  const stage = document.getElementById('stage');
+  if (kind === 'onboarding') {
+    stage.innerHTML = `<div class="pt-tab"><div class="pt-tab__chrome">◀ ▶ ⟳ <span class="pt-tab__url">chrome-extension://…/onboarding.html</span></div><div class="pt-tab__body" id="host"></div></div>`;
+  } else {
+    stage.innerHTML = `<div class="pt-window"><div class="pt-page"></div><div class="pt-sidepanel"><div class="pt-sidepanel__chrome">${LOGO.replace('24', '14').replace('24', '14')} Naruhodo</div><div class="pt-sidepanel__body" id="host"></div></div></div>`;
+  }
+  host = document.getElementById('host').attachShadow({ mode: 'open' });
+  host.addEventListener('click', onClick);
+  host.addEventListener('input', onInput);
+  host.addEventListener('submit', (e) => e.preventDefault());
+  host.addEventListener('change', onChange);
+}
+
+let mounted;
+function render() {
+  syncUrl();
+  if (mounted !== (S.screen === 'onboarding' ? 'onboarding' : 'panel')) {
+    mounted = S.screen === 'onboarding' ? 'onboarding' : 'panel';
+    mount(mounted);
+  }
+  const content = S.screen === 'onboarding'
+    ? `${STYLES}<style>${PROTO_CSS}${ONBOARDING_CSS}</style><div class="ob">${onboardingScreen()}</div>`
+    : `${STYLES}<link rel="stylesheet" href="sidepanel.css"><style>${PROTO_CSS}</style><div class="sp">${S.screen === 'panel' ? panelScreen() : settingsScreen()}</div>`;
+  host.innerHTML = content;
+  renderBar();
+  const names = VARIANT_NAMES[S.screen];
+  document.getElementById('variant-label').textContent = `${S.variant}（${names[S.variant]}）`;
+}
+
+function renderBar() {
+  const tabs = [['onboarding', '全頁 onboarding'], ['panel', 'side panel'], ['settings', '設定區']]
+    .map(([k, l]) => `<button type="button" data-screen="${k}" aria-pressed="${S.screen === k}">${l}</button>`).join('');
+  let states;
+  if (S.screen === 'panel') states = Object.entries(PANEL_STATES).map(([k, l]) => `<button type="button" data-state="${k}" aria-pressed="${S.panelState === k}">${l}</button>`).join('');
+  else if (S.screen === 'settings') states = Object.entries(SETTINGS_STATES).map(([k, l]) => `<button type="button" data-settings="${k}" aria-pressed="${S.settingsState === k}">${l}</button>`).join('');
+  else states = Object.entries(ONBOARDING_STATES).map(([k, l]) => {
+    const [step, sub] = k.split(':');
+    const cur = (S.sub === 'ownkey' && sub === 'ownkey') || (S.sub === 'done' && sub === 'done') || (String(S.step) === step && (S.sub || '') === sub);
+    return `<button type="button" data-ob="${k}" aria-pressed="${cur}">${l}</button>`;
+  }).join('');
+  const dump = S.screen === 'onboarding' ? { step: S.step, sub: S.sub, email: S.email, wrongTries: S.wrongTries } : S.screen === 'panel' ? { state: S.panelState, ...quota(S.panelState) } : { state: S.settingsState, ...account(S.settingsState), deleting: S.deleting };
+  document.getElementById('bar').innerHTML = `<div class="pt-bar"><strong>PROTOTYPE・spec #86 外掛帳號畫面</strong><span class="pt-tabs">${tabs}</span><span class="pt-dump">${esc(JSON.stringify(dump))}</span></div>
+    <div class="pt-states"><span>狀態：</span>${states}</div>`;
+}
+
+document.getElementById('bar').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.screen) { S.screen = b.dataset.screen; S.deleting = false; S.quotaOpen = false; }
+  if (b.dataset.state) { S.panelState = b.dataset.state; S.hintDismissed = false; S.quotaOpen = false; }
+  if (b.dataset.settings) { S.settingsState = b.dataset.settings; S.deleting = false; }
+  if (b.dataset.ob) {
+    const [step, sub] = b.dataset.ob.split(':');
+    S.step = Number(step) || 1; S.sub = sub; S.code = ''; S.wrongTries = sub === 'tooMany' ? 5 : 0;
+    if (sub === 'ownkey' || sub === 'done') S.step = sub === 'done' ? 4 : 1;
+  }
+  render();
+});
+
+let timer;
+function startResendTimer() {
+  S.resendIn = 30;
+  clearInterval(timer);
+  timer = setInterval(() => { S.resendIn -= 1; if (S.resendIn <= 0) clearInterval(timer); if (S.screen === 'onboarding') render(); }, 1000);
+}
+
+const ACTIONS = {
+  goSettings: () => { S.screen = 'settings'; S.quotaOpen = false; },
+  goPanel: () => { S.screen = 'panel'; S.deleting = false; },
+  goOnboarding: () => { S.screen = 'onboarding'; S.step = 3; S.sub = 'choose'; },
+  goOnboardingLogin: () => { S.screen = 'onboarding'; S.step = 2; S.sub = 'email'; },
+  useOwnKey: () => { S.screen = 'settings'; S.settingsState = 'ownKeyLoggedIn'; },
+  subscribe: () => alert('（prototype）用新分頁打開 #89 的 checkout 頁'),
+  dismissHint: () => { S.hintDismissed = true; },
+  toggleQuota: () => { S.quotaOpen = !S.quotaOpen; },
+  setMode: (b) => {
+    const signedIn = account(S.settingsState).signedIn;
+    S.settingsState = b.dataset.value === 'ownKey' ? (signedIn ? 'ownKeyLoggedIn' : 'ownKeyNoAccount') : (signedIn ? 'hostedFree' : 'hostedSignedOut');
+  },
+  signOut: () => { S.settingsState = 'hostedSignedOut'; },
+  deleteStart: () => { S.deleting = true; S.deleteTyped = ''; },
+  deleteCancel: () => { S.deleting = false; },
+  deleteDone: () => { S.deleting = false; S.settingsState = 'hostedSignedOut'; },
+  obNext: () => { S.step += 1; S.sub = { 2: 'email', 3: 'choose', 4: '' }[S.step] ?? ''; },
+  obBack: () => { S.step -= 1; S.sub = { 1: '', 2: 'email', 3: 'choose' }[S.step]; },
+  sendCode: () => { S.sub = 'code'; S.code = ''; S.wrongTries = 0; startResendTimer(); },
+  resend: () => { S.sub = 'code'; S.code = ''; S.wrongTries = 0; startResendTimer(); },
+  changeEmail: () => { S.sub = 'email'; },
+  verify: () => {
+    if (S.code === '123456') { S.step = 3; S.sub = 'choose'; return; }
+    if (S.code === '000000') { S.sub = 'codeExpired'; return; }
+    S.wrongTries += 1;
+    S.sub = S.wrongTries >= 5 ? 'tooMany' : 'codeWrong';
+  },
+  subscribeOb: () => { S.sub = 'waitingPayment'; },
+  paid: () => { S.sub = 'paid'; S.paid = true; },
+  useFree: () => { S.step = 4; S.sub = ''; S.paid = false; },
+  finish: () => { S.sub = 'done'; },
+  obOwnKey: () => { S.sub = 'ownkey'; },
+  obBackToLogin: () => { S.step = 1; S.sub = ''; },
+  ownKeySaved: () => { S.step = 4; S.sub = ''; },
+};
+
+function onClick(e) {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.disabled) return;
+  // radio 的 change 交給 onChange
+  if (el.tagName === 'INPUT') return;
+  e.preventDefault();
+  ACTIONS[el.dataset.act]?.(el);
+  render();
+}
+function onChange(e) {
+  const el = e.target.closest('input[type=radio][data-act]');
+  if (!el) return;
+  ACTIONS[el.dataset.act]?.(el);
+  render();
+}
+function onInput(e) {
+  const key = e.target.dataset.input;
+  if (!key) return;
+  S[key] = e.target.value;
+  // 刪除帳號的確認按鈕要跟著輸入啟用，局部更新就好，不重畫（避免失去焦點）
+  if (key === 'deleteTyped') {
+    const b = host.querySelector('[data-act="deleteDone"]');
+    if (b) b.disabled = S.deleteTyped.trim() !== S.email;
+  }
+}
+
+function cycle(delta) {
+  const keys = ['A', 'B', 'C'];
+  S.variant = keys[(keys.indexOf(S.variant) + delta + keys.length) % keys.length];
+  S.quotaOpen = false;
+  render();
+}
+document.getElementById('prev').addEventListener('click', () => cycle(-1));
+document.getElementById('next').addEventListener('click', () => cycle(1));
+document.addEventListener('keydown', (e) => {
+  const target = e.composedPath()[0];
+  if (target instanceof HTMLElement && (target.matches('input, textarea, select') || target.isContentEditable)) return;
+  if (e.key === 'ArrowLeft') cycle(-1);
+  if (e.key === 'ArrowRight') cycle(1);
+});
+
+render();
+</script>
+</body>
+</html>
