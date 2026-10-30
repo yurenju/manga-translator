@@ -121,10 +121,12 @@ test('訂閱：side panel 的「訂閱」用新分頁打開 checkout 頁；webho
   const remaining = panel.getByRole('status', { name: '剩餘額度' });
   await expect(remaining).toHaveText(/免費額度剩 50 頁/);
 
+  // 本機的產品網站沒有啟動，只看網址：Worker 自己組的 checkout 頁，transaction id（假 Paddle 帶 Account id）。
+  // 網站回空白頁：連不上的話網址會變成 chrome-error://（Linux 上立刻就變），就看不到原本的網址
+  await context.route('http://localhost:4321/**', (route) => route.fulfill({ contentType: 'text/html', body: '' }));
   const opened = context.waitForEvent('page');
   await remaining.getByRole('button', { name: '訂閱' }).click();
   const checkout = await opened;
-  // 本機的產品網站沒有啟動，只看網址：Worker 自己組的 checkout 頁，transaction id（假 Paddle 帶 Account id）
   await expect.poll(() => checkout.url()).toMatch(/^http:\/\/localhost:4321\/zh-tw\/checkout\?_ptxn=txn_fake_/);
   const accountId = new URL(checkout.url()).searchParams.get('_ptxn')!.replace('txn_fake_', '');
 
