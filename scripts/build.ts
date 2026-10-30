@@ -23,7 +23,9 @@ const STATIC_FILES: [string, string][] = [
   ['src/sidepanel/sidepanel.html', 'sidepanel.html'],
   // design tokens（#71）：side panel 直接載入；content script 另外把它打包成字串放進 shadow DOM
   ['src/shared/tokens.css', 'tokens.css'],
-  ['src/sidepanel/components.css', 'components.css'],
+  // side panel 的畫面樣式（src/ui/，#108）；sidepanel.css 只剩外掛整頁的 html／body
+  ['src/ui/components.css', 'components.css'],
+  ['src/ui/side-panel.css', 'side-panel.css'],
   ['src/sidepanel/sidepanel.css', 'sidepanel.css'],
   ['src/offscreen/offscreen.html', 'offscreen.html'],
   // onnxruntime-web 不打包進 offscreen.js，執行時動態 import（見 src/offscreen/ort-engine.ts）。
@@ -102,7 +104,12 @@ export async function build({ e2e, debug = false, outDir }: { e2e: boolean; debu
         ...(e2e ? { 'test-pipeline': 'src/test-pipeline/main.ts', 'test-overlay': 'src/test-overlay/main.ts' } : {}),
       },
     }),
-    esbuild.build({ ...common, format: 'iife', entryPoints: { content: 'src/content/index.ts' } }),
+    esbuild.build({
+      ...common,
+      format: 'iife',
+      // test-ui：注入一般網頁、證明網站能重用畫面的測試 script（browser/ui-reuse.spec.ts）
+      entryPoints: { content: 'src/content/index.ts', ...(e2e ? { 'test-ui': 'src/test-ui/main.tsx' } : {}) },
+    }),
     ...files.map(async ([from, to]) => {
       await mkdir(dirname(join(outDir, to)), { recursive: true });
       await copyFile(join(root, from), join(outDir, to));
