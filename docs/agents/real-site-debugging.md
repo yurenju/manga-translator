@@ -1,16 +1,25 @@
 # Real-site debugging
 
-How to debug the extension on a real manga site (Jump+, Kindle), where the e2e mock site cannot reproduce the problem. The user drives the browser; you read a **trace** of everything the pipeline did. Windows only.
+How to debug the extension on a real manga site (Jump+, Kindle), where the e2e mock site cannot reproduce the problem. You drive the browser over CDP and read a **trace** of everything the pipeline did; the user only sets up the profile once, and steps in for the exceptions below. Windows only.
+
+Local flows that need no real site (the mock site, a local Worker, Paddle sandbox) are not debugged here: write them as Playwright tests on the e2e build, which already opens the side panel and activates without a click (`openSidePanel`, `testActivate` in `browser/fixtures.ts`).
 
 The trace covers, per Page: page-turn signals → Page candidates (with why the rest were rejected) → capture → crop and Page hash → cache hit/miss → detection and OCR → LLM request/response → overlay layout, and every way the overlay hides or reattaches. Console warnings, errors and uncaught exceptions from the extension's own contexts are recorded too.
 
 ## Steps
 
 1. **Start the recorder** in a Terminal panel tab (it runs until Chrome closes): `npm run debug:chrome`. It builds the debug flavour to `%LOCALAPPDATA%\naruhodo\extension`, opens Chrome with its own profile and remote debugging, and records over CDP. If that Chrome is already open, it reloads the extension instead of launching.
-2. **First run only, the user sets up the profile** (it persists): in that Chrome, `chrome://extensions` → Developer mode → Load unpacked → `%LOCALAPPDATA%\naruhodo\extension`; set the API key in the side panel; log in to the site. Hand these steps to the user, then wait.
-3. **The user reproduces the bug**: refresh the manga tab, click the extension icon, read until the problem shows, and send a screenshot with what they expected. The content script only exists after the icon click, so nothing from the page is traced before it.
-4. **Read the trace** (below) until you can name the record where behaviour departs from what the user expected.
-5. **After a code change**, `npm run debug:reload` in a Terminal panel tab rebuilds and reloads the extension; the user then refreshes the tab and clicks the icon again (a reload orphans the old content script, and Chrome revokes `activeTab` on navigation).
+2. **First run only, the user sets up the profile** (it persists): in that Chrome, `chrome://extensions` → Developer mode → Load unpacked → `%LOCALAPPDATA%\naruhodo\extension`; set the API key in the side panel; log in to the site. Hand these steps to the user, then wait. You never type the user's site passwords.
+3. **Reproduce the bug yourself**: open the manga page (CDP `Target.createTarget`, or ask the user to leave it on the starting page), then `npm run debug:activate` (add `--url <part of the url>` when several tabs are open). It opens that tab's side panel as its own window (`sidepanel.html?tabId=N`, like `openSidePanel`) and sends `test:activate`, the same activation as an icon click; it waits until the panel shows 已啟動. `npm run debug:panel` only opens the panel window. Then turn pages and operate the panel over CDP until the problem shows. The content script only exists after activation, so nothing from the page is traced before it.
+4. **Read the trace** (below) until you can name the record where behaviour departs from what you expected.
+5. **After a code change**, `npm run debug:reload` in a Terminal panel tab rebuilds and reloads the extension; refresh the tab (CDP `Page.reload`) and run `npm run debug:activate` again (a reload orphans the old content script).
+
+### When the user still has to click
+
+The debug build declares `<all_urls>` and accepts `test:activate`, like the e2e build, so activation does not depend on `activeTab`. That hides two kinds of bug; for these, ask the user to refresh the tab and click the extension icon instead of `debug:activate`:
+
+- **`activeTab` behaviour**: Chrome grants `activeTab` only on the click and revokes it on navigation; with `<all_urls>` none of that happens.
+- **The real side panel**: `chrome.sidePanel.open` needs a user gesture, so `debug:activate` uses a 400 px window. A layout problem that only appears in Chrome's own side panel needs the user to open it.
 
 Run both build commands in the Terminal panel: files the Bash and PowerShell tools write under `%LOCALAPPDATA%` stay invisible to the Terminal and to the Chrome it opened, while the Terminal's writes are visible to the tools. Reading traces, `debug:summary` and `debug:eval` all work from Bash.
 

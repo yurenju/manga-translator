@@ -13,6 +13,8 @@
     "debug:reload": "node scripts/debug-chrome.ts --reload",
     "debug:summary": "node scripts/debug-summary.ts",
     "debug:eval": "node scripts/debug-eval.ts",
+    "debug:panel": "node scripts/debug-drive.ts panel",
+    "debug:activate": "node scripts/debug-drive.ts activate",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:browser": "npm run build:e2e && playwright test",

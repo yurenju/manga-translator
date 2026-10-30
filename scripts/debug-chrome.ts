@@ -1,7 +1,7 @@
 /**
  * 在真實網站上除錯（目前只支援 Windows）：
  *   npm run debug:chrome   build debug 版外掛 → 用獨立 profile 開 Chrome（帶 remote debugging）→ 透過 CDP 錄下除錯記錄
- *   npm run debug:reload   重新 build，並叫已開著的 Chrome 重新載入外掛（之後重新整理分頁、再點一次圖示）
+ *   npm run debug:reload   重新 build，並叫已開著的 Chrome 重新載入外掛（之後重新整理分頁、再跑 npm run debug:activate）
  *
  * 外掛 build 到固定位置（不跟 worktree 走），profile 載入一次就好：第一次在那個 Chrome 的
  * chrome://extensions 開「開發人員模式」→「載入未封裝項目」選 EXTENSION_DIR。新版 Chrome 不接受 --load-extension。
@@ -10,6 +10,7 @@
  * console 警告／錯誤與未捕捉的例外），圖片（截圖、縮圖、偵測疊圖）在 images/。真實網站的頁面只為了除錯暫存，不要 commit。
  *
  * 選項：--chrome <path>（例如 Playwright 的 Chromium）、--profile <dir>、--port <n>、--load-extension（只有 Chromium 認得）
+ * --profile 用短路徑：Chrome 在 profile 底下的 IndexedDB 路徑很深，超過 Windows 260 字元時外掛的 IndexedDB 會開不起來（LOCK: File not found）。
  */
 import { spawn } from 'node:child_process';
 import { appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
@@ -38,7 +39,7 @@ interface CdpMessage {
 }
 
 /** 最小的 CDP client：一條 browser 層級的 WebSocket，flatten 模式下各 target 用 sessionId 區分。 */
-async function connectCdp(port: number) {
+export async function connectCdp(port: number) {
   const { webSocketDebuggerUrl } = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()) as { webSocketDebuggerUrl: string };
   const ws = new WebSocket(webSocketDebuggerUrl);
   await new Promise<void>((resolve, reject) => {
@@ -71,9 +72,9 @@ async function connectCdp(port: number) {
   };
 }
 
-type Cdp = Awaited<ReturnType<typeof connectCdp>>;
+export type Cdp = Awaited<ReturnType<typeof connectCdp>>;
 
-async function isListening(port: number): Promise<boolean> {
+export async function isListening(port: number): Promise<boolean> {
   return fetch(`http://127.0.0.1:${port}/json/version`).then(
     (r) => r.ok,
     () => false,
@@ -218,30 +219,40 @@ async function record(cdp: Cdp, sessionDir: string): Promise<void> {
   console.log('Chrome 已關閉，結束錄製。');
 }
 
-const RELOADED_MESSAGE = '已重新載入外掛：重新整理漫畫分頁，再點一次外掛圖示。';
+const RELOADED_MESSAGE = '已重新載入外掛：重新整理漫畫分頁，再跑 npm run debug:activate（或點外掛圖示）。';
 
 /**
- * 在背景開一個 chrome://extensions 分頁，用它的 chrome.developerPrivate 重新載入外掛。
- * 不靠外掛自己的 SW 執行 chrome.runtime.reload()：SW 閒置時會被停掉、不在 target 清單裡。
- * 外掛還沒載入（第一次使用）時回傳 false。
+ * 在背景開一個 chrome://extensions 分頁，找到這個外掛後執行 body（裡面可以用 extension，回傳值要能 JSON 化）。
+ * 不靠外掛自己的 SW：SW 閒置時會被停掉、不在 target 清單裡。外掛還沒載入（第一次使用）時回傳 null。
  */
-async function reloadExtension(cdp: Cdp): Promise<boolean> {
+async function withExtensionInfo(cdp: Cdp, body: string, failure: string): Promise<unknown> {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'chrome://extensions', background: true });
   try {
     const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
     const expression = `(async () => {
       for (let i = 0; i < 50 && !chrome.developerPrivate; i++) await new Promise((r) => setTimeout(r, 100));
       const extension = (await chrome.developerPrivate.getExtensionsInfo()).find((e) => e.name === ${JSON.stringify(EXTENSION_NAME)});
-      if (!extension) return false;
-      await chrome.developerPrivate.reload(extension.id, { failQuietly: true });
-      return true;
+      if (!extension) return null;
+      ${body}
     })()`;
     const { result, exceptionDetails } = await cdp.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId);
-    if (exceptionDetails) throw new Error(`重新載入外掛失敗：${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
-    return result.value === true;
+    if (exceptionDetails) throw new Error(`${failure}：${exceptionDetails.exception?.description ?? exceptionDetails.text}`);
+    return result.value;
   } finally {
     await cdp.send('Target.closeTarget', { targetId }).catch(() => {});
   }
+}
+
+/** 用 chrome.developerPrivate 重新載入外掛；外掛還沒載入時回傳 false。 */
+async function reloadExtension(cdp: Cdp): Promise<boolean> {
+  const reloaded = await withExtensionInfo(cdp, 'await chrome.developerPrivate.reload(extension.id, { failQuietly: true }); return true;', '重新載入外掛失敗');
+  return reloaded === true;
+}
+
+/** debug 版外掛的 id（chrome-extension://<id>）；還沒載入時回傳 undefined。 */
+export async function extensionId(cdp: Cdp): Promise<string | undefined> {
+  const id = await withExtensionInfo(cdp, 'return extension.id;', '查外掛 id 失敗');
+  return typeof id === 'string' ? id : undefined;
 }
 
 function option(name: string): string | undefined {

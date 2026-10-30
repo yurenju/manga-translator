@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildExpression, candidateTargets, isOurExtension, type TargetInfo } from './debug-targets.ts';
+import { buildExpression, candidateTargets, isOurExtension, panelTarget, pickMangaTab, type ChromeTab, type TargetInfo } from './debug-targets.ts';
 
 const target = (type: string, url: string): TargetInfo => ({ id: url, type, url, webSocketDebuggerUrl: `ws://127.0.0.1:9222/devtools/${type}/${url}` });
 
@@ -64,5 +64,41 @@ describe('buildExpression', () => {
 
   it('沒有程式就報錯', () => {
     expect(() => buildExpression(' ;\n', 'sw')).toThrow('沒有要執行的程式');
+  });
+});
+
+describe('pickMangaTab', () => {
+  const tabs: ChromeTab[] = [
+    { id: 1, url: 'https://example.com/', active: true, windowId: 10 },
+    { id: 2, url: 'https://shonenjumpplus.com/episode/1', active: false, windowId: 20 },
+    { id: 3, url: 'https://read.amazon.co.jp/manga/X', active: true, windowId: 20 },
+    { id: 4, url: 'chrome://extensions/', active: true, windowId: 30 },
+  ];
+
+  it('沒給 url：最後聚焦視窗的作用中分頁', () => {
+    expect(pickMangaTab(tabs, 20)?.id).toBe(3);
+  });
+
+  it('最後聚焦的是 side panel 視窗之類沒有網頁的視窗：退回任一視窗的作用中網頁分頁', () => {
+    expect(pickMangaTab(tabs, 30)?.id).toBe(1);
+    expect(pickMangaTab(tabs, undefined)?.id).toBe(1);
+  });
+
+  it('給了 url：第一個 url 含這段字的網頁分頁，不管是不是作用中', () => {
+    expect(pickMangaTab(tabs, 20, 'jumpplus')?.id).toBe(2);
+    expect(pickMangaTab(tabs, 20, 'extensions')).toBeUndefined();
+  });
+
+  it('沒有網頁分頁就回傳 undefined', () => {
+    expect(pickMangaTab([tabs[3]!], 30)).toBeUndefined();
+  });
+});
+
+describe('panelTarget', () => {
+  it('挑出這個分頁專屬的 side panel（sidepanel.html?tabId=N）', () => {
+    const panels = [target('page', `${ours}/sidepanel.html?tabId=12`), target('page', `${ours}/sidepanel.html?tabId=3`), target('page', `${ours}/sidepanel.html`)];
+    expect(panelTarget(panels, 3)?.url).toBe(`${ours}/sidepanel.html?tabId=3`);
+    expect(panelTarget(panels, 1)).toBeUndefined();
+    expect(panelTarget([target('page', 'https://example.com/sidepanel.html?tabId=3')], 3)).toBeUndefined();
   });
 });

@@ -323,8 +323,9 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
-  // __E2E__ 是 build 時的常數，正式 build 裡這段會被整段移除。
-  if (__E2E__ && message.type === 'test:activate') {
+  // __E2E__、__DEBUG__ 是 build 時的常數，正式 build 裡這段會被整段移除。
+  // debug build 也有：npm run debug:activate 不靠點圖示啟動（#112）。
+  if ((__E2E__ || __DEBUG__) && message.type === 'test:activate') {
     activation.activate(message.tabId).then(() => sendResponse());
     return true;
   }

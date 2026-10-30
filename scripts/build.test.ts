@@ -155,13 +155,18 @@ describe('e2e build', () => {
 });
 
 describe('debug build', () => {
-  it('三個流水線 context 都印除錯記錄，權限跟正式 build 一樣', async () => {
-    const [manifest, prodManifest] = await Promise.all([readJson(debugDir, 'manifest.json'), readJson(prodDir, 'manifest.json')]);
+  it('三個流水線 context 都印除錯記錄', async () => {
+    const manifest = await readJson(debugDir, 'manifest.json');
 
     for (const file of ['background.js', 'offscreen.js', 'content.js']) expect(await readText(debugDir, file)).toContain('[manga-trace]');
     expect(manifest.name).toBe('Naruhodo (debug)');
+  });
+
+  it('跟 e2e build 一樣多宣告 <all_urls> 與啟動入口，agent 不用點圖示就能啟動（#112）', async () => {
+    const [manifest, prodManifest] = await Promise.all([readJson(debugDir, 'manifest.json'), readJson(prodDir, 'manifest.json')]);
+
     expect(manifest.permissions).toEqual(prodManifest.permissions);
-    expect(manifest.host_permissions).toBeUndefined();
-    expect(await readText(debugDir, 'background.js')).not.toContain('test:activate');
+    expect(manifest.host_permissions).toEqual(['<all_urls>']);
+    expect(await readText(debugDir, 'background.js')).toContain('test:activate');
   });
 });
