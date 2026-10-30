@@ -128,6 +128,13 @@ async function viaPaddle(run: () => Promise<Response>): Promise<Response> {
   }
 }
 
+/** 依 IP 與依 email 的頻率限制兩個都要過：換 IP 不能對同一個信箱一直試，同一個 IP 也不能換信箱一直試。 */
+async function withinLimits(request: Request, email: string, byIp: RateLimit, byEmail: RateLimit): Promise<boolean> {
+  const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
+  const results = await Promise.all([byIp.limit({ key: ip }), byEmail.limit({ key: email })]);
+  return results.every((r) => r.success);
+}
+
 const VERIFY_ERRORS = {
   wrongCode: '驗證碼不正確',
   codeExpired: '驗證碼已經過期',
@@ -140,10 +147,7 @@ const ROUTES: Record<string, Handler> = {
   [`POST ${SEND_CODE_PATH}`]: async ({ request, env, now }) => {
     const email = parseEmail(field(await request.json().catch(() => undefined), 'email'));
     if (!email) return invalid();
-    // 兩個都要過：換 IP 不能對同一個信箱一直寄，同一個 IP 也不能換信箱一直寄
-    const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
-    const [byIp, byEmail] = await Promise.all([env.SEND_CODE_BY_IP.limit({ key: ip }), env.SEND_CODE_BY_EMAIL.limit({ key: email })]);
-    if (!byIp.success || !byEmail.success) return error(429, '寄送太頻繁', 'rateLimited');
+    if (!(await withinLimits(request, email, env.SEND_CODE_BY_IP, env.SEND_CODE_BY_EMAIL))) return error(429, '寄送太頻繁', 'rateLimited');
     await sendCode(env.DB, mailer(env), email, now);
     return new Response(null, { status: 204 });
   },
@@ -152,8 +156,9 @@ const ROUTES: Record<string, Handler> = {
     const email = parseEmail(field(body, 'email'));
     const code = field(body, 'code');
     if (!email || typeof code !== 'string') return invalid();
+    if (!(await withinLimits(request, email, env.VERIFY_CODE_BY_IP, env.VERIFY_CODE_BY_EMAIL))) return error(429, '嘗試太頻繁', 'rateLimited');
     const result = await verifyCode(env.DB, email, code.trim(), now);
-    if (!result.ok) return error(400, VERIFY_ERRORS[result.reason], result.reason);
+    if (!result.ok) return result.reason === 'rateLimited' ? error(429, '嘗試太頻繁', 'rateLimited') : error(400, VERIFY_ERRORS[result.reason], result.reason);
     return Response.json({ token: result.token } satisfies VerifyCodeResponse);
   },
   [`POST ${SIGN_OUT_PATH}`]: authed(async ({ request, env, now }) => {

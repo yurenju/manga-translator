@@ -14,7 +14,7 @@ import { HostedDataFlow, PolicyLinks } from './data-flow.tsx';
 const RESEND_COOLDOWN_S = 30;
 
 const ERRORS: Partial<Record<HostedErrorReason, string>> = {
-  rateLimited: '寄送太頻繁了，請過幾分鐘再試。',
+  rateLimited: '嘗試太頻繁了，請稍後再試。',
   wrongCode: '驗證碼不正確，請再確認一次。',
   codeExpired: '驗證碼已經過期，請重新寄送。',
   tooManyAttempts: '錯誤次數太多，這組驗證碼已失效，請重新寄送。',

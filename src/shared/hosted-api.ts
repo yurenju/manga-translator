@@ -6,7 +6,7 @@
  * （latencyMs 只算 Worker 到 Anthropic，外掛換成自己量的）。要帶 `Authorization: Bearer <session token>`。
  *
  * 錯誤回應一律是 HostedError：401 沒登入（reason signedOut）、400 輸入格式不符或驗證碼不對、402 額度用完、
- * 429 寄送太頻繁、404 沒有這個端點、502 Anthropic 重試後仍失敗。
+ * 429 寄送或驗證太頻繁、404 沒有這個端點、502 Anthropic 重試後仍失敗。
  */
 export const TRANSLATE_PATH = '/v1/translate';
 export const NOTES_PATH = '/v1/notes';
@@ -94,7 +94,7 @@ export interface AccountResponse {
 /**
  * 外掛要依原因換畫面的錯誤：
  * - signedOut：沒帶 token、token 錯誤、過期或已撤銷
- * - rateLimited：寄送驗證碼太頻繁（依 IP 與 email）
+ * - rateLimited：寄送或驗證太頻繁（依 IP 與 email），或同一個 email 一小時內驗證太多次
  * - wrongCode／codeExpired／tooManyAttempts：驗證碼錯、過期（或沒寄過）、錯太多次這組已失效
  * - freePagesExhausted：沒有訂閱、免費額度用完（402）；訂閱結束後免費額度也是 0 的也是這個
  * - monthlyLimitReached：訂閱中、本月額度用完（402）；重置日期在 GET /v1/account 的 quota.resetsAt

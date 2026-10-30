@@ -57,6 +57,7 @@ Only Hosted Translation uses the Naruhodo service. It keeps:
 |---|---|
 | Your email address, a random account identifier, and when the account was created | Your account |
 | Sign-in codes not yet used: the email address, a hash of the code, its expiry time and the number of wrong attempts | Signing in. A code is valid for 10 minutes |
+| A SHA-256 hash of your email address and how many sign-in codes were tried for it in the past hour | Limiting how many sign-in codes can be tried. Deleted when you sign in. Otherwise the count expires one hour after the first try and is deleted later, the next time anyone requests a sign-in code |
 | A hash of each sign-in token, when it was created and last used, and when you signed out | Keeping you signed in. A token stops working after 180 days without use, or when you sign out |
 | Free pages remaining; for subscribers, the start of the current monthly period and pages used in it | Your page quota |
 | One usage record for each successful translation or Series Notes request: the time, the kind of request, token counts and cost | Usage and cost accounting. Usage records contain no text, translations, series names or page addresses |
@@ -64,7 +65,7 @@ Only Hosted Translation uses the Naruhodo service. It keeps:
 | Your Paddle subscription and customer identifiers, subscription status, start date, end of the paid period, whether cancellation is scheduled, and the time of the last update from Paddle | Your subscription |
 | Identifiers of the payment notifications Paddle has sent, and when they arrived | Processing each notification only once. They contain no account or email information |
 
-The service also uses your IP address and email address to limit how often sign-in codes can be requested. It does not store them for this purpose.
+The service also uses your IP address and email address to limit how often sign-in codes can be requested and tried. Apart from the hourly count above, it does not store them for this purpose.
 
 The service does not store your payment card, billing address, or the text you translate.
 
@@ -89,7 +90,7 @@ Data on your computer stays until you delete it:
 **Deleting your account** (Settings → Delete account in the extension):
 
 - If you have a subscription, it is cancelled first: it stays usable until the end of the paid year and will not renew. **Payments already made are not refunded automatically.** If the cancellation fails, nothing is deleted and you can try again.
-- The service then deletes your account, all of your sign-in tokens (signing you out on every computer), your page quota, your usage records, your subscription record, and any sign-in code not yet used for your email address.
+- The service then deletes your account, all of your sign-in tokens (signing you out on every computer), your page quota, your usage records, your subscription record, any sign-in code not yet used for your email address, and the count of sign-in codes tried for it.
 - The service keeps only the SHA-256 hash of your email address and when it received free pages, so that registering again with the same email address does not give free pages again, plus the payment notification identifiers described above. **After deletion, the service keeps no copy of your email address.**
 - Data held by third parties is not deleted by the Naruhodo service: Paddle keeps its customer, subscription and transaction records under its own policy and its legal record-keeping obligations, and Resend keeps its email delivery records under its own policy.
 - On your computer, deleting your account only signs you out. The translation cache, Series, Series Notes and settings stay.

@@ -85,6 +85,66 @@ describe('登入', () => {
   });
 });
 
+describe('猜驗證碼的限制', () => {
+  /** 送一組錯的驗證碼，回傳 reason。 */
+  const guessWrong = async (email: string, code: string) =>
+    ((await (await post(VERIFY_CODE_PATH, { email, code: otherCode(code) })).json()) as { reason: string }).reason;
+
+  /** 寄兩次驗證碼、每組都錯 5 次：用完這個 email 一小時內的 10 次。 */
+  async function useUpAttempts(email: string) {
+    for (let round = 0; round < 2; round++) {
+      await post(SEND_CODE_PATH, { email });
+      const code = await lastCode(email);
+      for (let i = 0; i < 5; i++) await guessWrong(email, code);
+    }
+  }
+
+  it('同一個 email 一小時內錯 10 次就被擋：重新寄送也不會歸零，連正確的新驗證碼都回 429 rateLimited', async () => {
+    const email = freshEmail();
+    await useUpAttempts(email);
+    await post(SEND_CODE_PATH, { email });
+
+    const blocked = await post(VERIFY_CODE_PATH, { email, code: await lastCode(email) });
+
+    expect(blocked.status).toBe(429);
+    expect(await blocked.json()).toMatchObject({ reason: 'rateLimited' });
+  });
+
+  it('被擋一小時後，重新寄送的驗證碼可以登入', async () => {
+    const email = freshEmail();
+    await useUpAttempts(email);
+
+    vi.setSystemTime(Date.now() + 60 * 60 * 1000 + 1);
+    await post(SEND_CODE_PATH, { email });
+
+    expect((await post(VERIFY_CODE_PATH, { email, code: await lastCode(email) })).status).toBe(200);
+  });
+
+  it('登入成功後錯誤次數歸零', async () => {
+    const email = freshEmail();
+    await post(SEND_CODE_PATH, { email });
+    const first = await lastCode(email);
+    for (let i = 0; i < 4; i++) await guessWrong(email, first);
+    expect((await post(VERIFY_CODE_PATH, { email, code: first })).status).toBe(200);
+
+    await post(SEND_CODE_PATH, { email });
+    const code = await lastCode(email);
+    const reasons = [];
+    for (let i = 0; i < 4; i++) reasons.push(await guessWrong(email, code));
+
+    expect(reasons).toEqual(['wrongCode', 'wrongCode', 'wrongCode', 'wrongCode']);
+    expect((await post(VERIFY_CODE_PATH, { email, code })).status).toBe(200);
+  });
+
+  it('同一個 IP 一分鐘內第 31 次驗證回 429 rateLimited（即使換 email）', async () => {
+    const ip = freshIp();
+    const statuses = [];
+    for (let i = 0; i < 31; i++) statuses.push((await post(VERIFY_CODE_PATH, { email: freshEmail(), code: '123456' }, { ip })).status);
+
+    expect(statuses).toEqual([...Array(30).fill(400), 429]);
+  });
+});
+
 describe('寄送驗證碼的頻率限制', () => {
   it('同一個 email 一分鐘內第 4 次回 429 rateLimited（即使換 IP），沒有寄出新的驗證碼', async () => {
     const email = freshEmail();

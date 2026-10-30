@@ -5,7 +5,7 @@
  */
 import { env } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ACCOUNT_PATH, SEND_CODE_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
+import { ACCOUNT_PATH, SEND_CODE_PATH, TRANSLATE_PATH, VERIFY_CODE_PATH } from '../../src/shared/hosted-api.ts';
 import type { TranslateInput } from '../../src/shared/translator.ts';
 import { sha256 } from './hash.ts';
 import { fakeAnthropic, reply } from './test/anthropic.ts';
@@ -131,6 +131,17 @@ describe('刪除帳號', () => {
     expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
 
     expect((await env.DB.prepare('SELECT * FROM otps WHERE email = ?').bind(email).all()).results).toEqual([]);
+  });
+
+  it('登入後有人猜錯驗證碼：刪除時這個 email 的驗證次數也一起刪掉', async () => {
+    const email = freshEmail();
+    const token = await signIn(email);
+    await post(SEND_CODE_PATH, { email });
+    await post(VERIFY_CODE_PATH, { email, code: 'abcdef' });
+
+    expect((await del(ACCOUNT_PATH, token)).status).toBe(204);
+
+    expect((await env.DB.prepare('SELECT * FROM verify_attempts WHERE email_hash = ?').bind(await sha256(email)).all()).results).toEqual([]);
   });
 });
 
