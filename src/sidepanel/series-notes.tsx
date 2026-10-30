@@ -6,7 +6,7 @@ import { useEffect, useState } from 'preact/hooks';
 import type { Message, NotesResponse } from '../shared/messages.ts';
 import type { EditableFields, NotesSuggestion } from '../shared/series-notes.ts';
 import type { NotesEntry } from '../shared/translator.ts';
-import { Button, Callout } from './components.tsx';
+import { Button, Callout } from '../ui/components.tsx';
 
 const send = <R,>(message: Message) => chrome.runtime.sendMessage<Message, R>(message);
 

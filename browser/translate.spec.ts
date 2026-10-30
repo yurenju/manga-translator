@@ -1,6 +1,6 @@
 /**
  * #31：side panel 設定區輸入 API key → 「翻譯此頁」→ 逐字稿出現讀音與譯文、狀態列顯示已翻譯。
- * 狀態列的格式（模型・秒數・費用、加總）在 src/sidepanel/view.test.ts。
+ * 狀態列的格式（模型・秒數・費用、加總）在 src/ui/view.test.ts。
  * FakeTranslator 取代 Claude，但跟正式 build 一樣要先存 key（requireApiKey）。
  * 也檢查 key 不經過 content script 與 messaging（spec #27 第 5 節）。
  */

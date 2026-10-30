@@ -152,6 +152,11 @@ describe('e2e build', () => {
     expect(await readText(e2eDir, 'test-pipeline.html')).toContain('test-pipeline.js');
     expect(await readText(e2eDir, 'test-overlay.html')).toContain('test-overlay.js');
   });
+
+  it('多一個注入一般網頁的 UI 測試 script（#108），是傳統 script；正式 build 沒有', async () => {
+    expect(await readText(e2eDir, 'test-ui.js')).not.toMatch(/^\s*(import|export)\b/m);
+    expect(await exists(prodDir, 'test-ui.js')).toBe(false);
+  });
 });
 
 describe('debug build', () => {
