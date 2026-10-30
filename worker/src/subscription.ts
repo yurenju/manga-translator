@@ -25,6 +25,9 @@ interface Row {
   paddle_customer_id: string;
 }
 
+/** SQL 裡的 ENTITLED（常數，不是使用者輸入）。 */
+const ENTITLED_SQL = ENTITLED.map((status) => `'${status}'`).join(', ');
+
 const isEntitled = (status: string): status is Subscription['status'] => (ENTITLED as readonly string[]).includes(status);
 
 /** 這個 Account 有權限的訂閱；沒訂閱過、或已經結束就是 undefined。 */
@@ -100,7 +103,12 @@ const text = (value: unknown): string | undefined => (typeof value === 'string' 
 /**
  * 套用一個已經驗過簽章的 Paddle 事件。只看 subscription.*，其他事件（transaction.completed 等）不做事。
  * - Account 來自 custom_data.account_id（Worker 建立 transaction 時放的，Paddle 帶到 subscription 上）；沒有的話用 subscription id 找已經存在的那一列
- * - 用 event_id 去重；用 occurred_at 判斷新舊，比已經套用的事件舊就不覆蓋
+ * - 用 event_id 去重
+ * - 每個 Account 只記一筆訂閱（重新訂閱是 Paddle 的另一個 subscription id），哪個事件可以覆蓋目前這一列：
+ *   - 同一個 subscription id：用 occurred_at 判斷新舊，比已經套用的事件舊就不覆蓋
+ *   - 不同的 subscription id：只有目前這筆沒有權限（paused、canceled）、而且事件的那筆有權限時，才換成那一筆。
+ *     所以舊訂閱之後才送來的事件（例如 paused 之後重新訂閱、舊的那筆才被取消）蓋不掉有權限的新訂閱；
+ *     新訂閱的事件不看 occurred_at，比舊訂閱最後的事件還早發生也照樣換過去
  */
 export async function applyPaddleEvent(db: D1Database, event: unknown, now: number): Promise<void> {
   const e = object(event);
@@ -127,7 +135,9 @@ export async function applyPaddleEvent(db: D1Database, event: unknown, now: numb
            paddle_subscription_id = excluded.paddle_subscription_id, paddle_customer_id = excluded.paddle_customer_id, status = excluded.status,
            started_at = excluded.started_at, period_ends_at = excluded.period_ends_at, cancel_scheduled = excluded.cancel_scheduled,
            event_occurred_at = excluded.event_occurred_at
-         WHERE excluded.event_occurred_at > subscriptions.event_occurred_at`,
+         WHERE (excluded.paddle_subscription_id = subscriptions.paddle_subscription_id AND excluded.event_occurred_at > subscriptions.event_occurred_at)
+            OR (excluded.paddle_subscription_id <> subscriptions.paddle_subscription_id
+                AND subscriptions.status NOT IN (${ENTITLED_SQL}) AND excluded.status IN (${ENTITLED_SQL}))`,
       )
       .bind(
         accountId,
