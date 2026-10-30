@@ -58,6 +58,9 @@ function parseEmail(value: unknown): string | undefined {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : undefined;
 }
 
+/** request 的 JSON body；不是 JSON 就是 undefined（各端點再當成格式不符）。 */
+const jsonBody = (request: Request): Promise<unknown> => request.json().catch(() => undefined);
+
 const field = (body: unknown, key: string): unknown => (typeof body === 'object' && body !== null ? (body as Record<string, unknown>)[key] : undefined);
 
 const bearer = (request: Request) => request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1];
@@ -102,7 +105,7 @@ const llm =
     pageRecord: (input: I) => number | undefined = () => undefined,
   ): AuthedHandler =>
   async ({ request, env, now }, accountId) => {
-    const input = parse(await request.json().catch(() => undefined));
+    const input = parse(await jsonBody(request));
     if (input === undefined) return invalid();
     const charged = kind === 'translate';
     if (charged) {
@@ -152,14 +155,14 @@ const ROUTES: Record<string, Handler> = {
   [`POST ${TRANSLATE_PATH}`]: authed(llm('translate', parseTranslateInput, (t, input) => t.translatePage(input))),
   [`POST ${NOTES_PATH}`]: authed(llm('notes', parseNotesInput, (t, input) => t.proposeNotes(input), (input) => input.pageUsageRecordId)),
   [`POST ${SEND_CODE_PATH}`]: async ({ request, env, now }) => {
-    const email = parseEmail(field(await request.json().catch(() => undefined), 'email'));
+    const email = parseEmail(field(await jsonBody(request), 'email'));
     if (!email) return invalid();
     if (!(await withinLimits(request, email, env.SEND_CODE_BY_IP, env.SEND_CODE_BY_EMAIL))) return error(429, '寄送太頻繁', 'rateLimited');
     await sendCode(env.DB, mailer(env), email, now);
     return new Response(null, { status: 204 });
   },
   [`POST ${VERIFY_CODE_PATH}`]: async ({ request, env, now }) => {
-    const body = await request.json().catch(() => undefined);
+    const body = await jsonBody(request);
     const email = parseEmail(field(body, 'email'));
     const code = field(body, 'code');
     if (!email || typeof code !== 'string') return invalid();
@@ -187,7 +190,7 @@ const ROUTES: Record<string, Handler> = {
     }),
   ),
   [`POST ${CHECKOUT_PATH}`]: authed(async ({ request, env }, accountId) => {
-    const requested = field(await request.json().catch(() => undefined), 'locale');
+    const requested = field(await jsonBody(request), 'locale');
     const locale = CHECKOUT_LOCALES.find((l) => l === requested) ?? 'zh-tw';
     if (!env.SITE_ORIGIN) return error(500, '沒有設定產品網站的網址');
     const site = env.SITE_ORIGIN;
@@ -225,7 +228,7 @@ const ROUTES: Record<string, Handler> = {
   },
   [`POST ${DEV_FREE_PAGES_PATH}`]: async ({ request, env }) => {
     if (env.DEV_ENDPOINTS !== 'true') return error(404, '沒有這個端點');
-    const body = await request.json().catch(() => undefined);
+    const body = await jsonBody(request);
     const email = parseEmail(field(body, 'email'));
     const remaining = field(body, 'remaining');
     if (!email || !Number.isInteger(remaining) || (remaining as number) < 0) return invalid();
