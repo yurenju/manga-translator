@@ -761,7 +761,8 @@ const ACTIONS = {
   subscribeOb: () => { S.sub = 'waitingPayment'; },
   paid: () => { S.sub = 'paid'; S.paid = true; },
   useFree: () => { S.step = 4; S.sub = ''; S.paid = false; },
-  finish: () => { S.sub = 'done'; },
+  // 定案：按「完成」直接 window.close()，不顯示「設定完成」頁（狀態列的「完成」只留著看文案）
+  finish: () => { alert('（prototype）window.close()：直接關掉 onboarding 分頁'); },
   obOwnKey: () => { S.sub = 'ownkey'; },
   obBackToLogin: () => { S.step = 1; S.sub = ''; },
   ownKeySaved: () => { S.step = 4; S.sub = ''; },
