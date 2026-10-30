@@ -34,10 +34,25 @@ export async function onboardingPage(context: BrowserContext, open?: () => Promi
   return page;
 }
 
+/**
+ * 按 onboarding 第 4 步的「完成」，等分頁關掉。按鈕在 click handler 裡直接 window.close()，Playwright 的 click 收尾前
+ * 分頁可能已經關了（CI 上遇過），這個錯誤不算失敗；分頁到底有沒有關，由等 close 事件來判斷。
+ */
+export async function finishOnboarding(onboarding: Page): Promise<void> {
+  const closed = onboarding.waitForEvent('close');
+  await onboarding
+    .getByRole('button', { name: '完成' })
+    .click()
+    .catch((error: Error) => {
+      if (!error.message.includes('has been closed')) throw error;
+    });
+  await closed;
+}
+
 /** side panel 按「登入」（open）→ onboarding 第 2 步登入 → 先用免費額度 → 第 4 步按「完成」關掉分頁。 */
 export async function signInFromPanel(context: BrowserContext, open: () => Promise<void>, email: string): Promise<void> {
   const onboarding = await onboardingPage(context, open);
   await signInWithEmail(onboarding, email);
   await onboarding.getByRole('button', { name: '先用免費的 50 頁' }).click();
-  await Promise.all([onboarding.waitForEvent('close'), onboarding.getByRole('button', { name: '完成' }).click()]);
+  await finishOnboarding(onboarding);
 }

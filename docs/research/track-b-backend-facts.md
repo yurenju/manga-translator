@@ -256,6 +256,14 @@
 - 上線時依照 go-live checklist：換憑證、重建商品目錄和 notification 設定、切換 base URL。
   來源：https://developer.paddle.com/build/tools/sandbox
 
+### 4.6 sandbox 實測過的行為（2026-10-30）
+
+文件沒寫、在 sandbox 試出來的：
+- **核准全額退款不會取消訂閱**：訂閱照樣是 `active`，到期還會續約扣款。所以 Worker 收到 `adjustment.updated`（refund 且 `approved`）時自己立即取消（`worker/src/subscription.ts` 的 `refundedSubscription`）；notification 設定要訂閱 `adjustment.updated`。
+- **後台按「全額退款」，adjustment 最上層的 `type` 是 `partial`**，只有每個 item 的 `type` 是 `full`。判斷全額要看 items，不能只看最上層。
+- **`paused` 的訂閱只能立即取消**：`effective_from: next_billing_period` 回 400，要用 `immediately`。
+- **cloudflared quick tunnel 約一小時後失效**：網址的 DNS 查不到，webhook 變成 `needs_retry`。重開 `scripts/paddle-tunnel.ts` 就好。
+
 ### 對設計的意涵
 - 需要一個有 HTTPS 的產品網站，上面要有說明、價格、Terms、Refund、Privacy 頁面，checkout 頁也放在這裡。這是 Paddle live 審核的前提，要排進時程，最好在開發早期就送審。
 - user_id 建議由 Worker 建立 transaction 時寫進 `custom_data`（方式 B），外掛只負責開分頁到 `checkout.url`。webhook 處理要做到：先驗證簽章、用 `event_id` 去重、依 `occurred_at` 判斷新舊、在 5 秒內回 200。
