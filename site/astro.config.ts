@@ -21,7 +21,8 @@ function cssImportedByScriptsAsText(): Plugin {
 // 產品網站（#89）：先輸出純靜態頁面，跟 api. 的 Worker 分開部署。
 // 共用外掛的 src/（tokens.css、logo、展示用的元件）與根目錄的 PRIVACY.md、testdata/synthetic 的合成頁，所以允許讀上一層。
 export default defineConfig({
-  server: { port: 4321 },
+  // Worker 的 SITE_ORIGIN 寫死 4321：被占用時直接報錯，不要默默換 port 讓 checkout 開到別的網站
+  server: { port: 4321, strictPort: true },
   vite: {
     server: { fs: { allow: ['..'] } },
     plugins: [cssImportedByScriptsAsText()],
