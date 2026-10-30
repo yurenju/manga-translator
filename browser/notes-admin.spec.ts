@@ -22,12 +22,20 @@ async function openNotes(panel: Page): Promise<void> {
   await expect(notesSection(panel)).toBeVisible();
 }
 
-/** 編輯一個條目：只改給的欄位。 */
+/** Series Notes 是整頁（#93）：按「←」回到逐字稿。 */
+async function backToTranscript(panel: Page): Promise<void> {
+  await panel.getByRole('button', { name: '返回' }).click();
+  await expect(notesSection(panel)).toHaveCount(0);
+}
+
+/** 編輯一個條目：只改給的欄位，存好後回到逐字稿。 */
 async function editNote(panel: Page, 原文: string, fields: Record<string, string>): Promise<void> {
   const section = notesSection(panel);
   await section.getByRole('button', { name: `編輯 ${原文}` }).click();
   for (const [label, value] of Object.entries(fields)) await section.getByRole('textbox', { name: label, exact: true }).fill(value);
   await section.getByRole('button', { name: '儲存' }).click();
+  await expect(section.getByRole('row', { name: new RegExp(原文) })).toContainText(Object.values(fields)[0]!);
+  await backToTranscript(panel);
 }
 
 const entryOf = async (sw: Parameters<typeof readStore>[0], 原文: string) =>
@@ -61,9 +69,10 @@ test('在 side panel 編輯條目會寫進 Notes（locked）；重新翻譯後 L
   // 這頁用到パン：馬上出現過時提示；重新翻譯時 FakeTranslator 想把譯文改回麵包，變成建議
   await page.bringToFront();
   await staleHint(panel).getByRole('button', { name: '重新翻譯' }).click();
+  await expect(staleHint(panel)).toBeHidden();
+  await openNotes(panel);
   const suggestion = notesSection(panel).getByRole('listitem').filter({ hasText: 'パン' });
   await expect(suggestion).toContainText('麵包');
-  await expect(staleHint(panel)).toBeHidden();
 
   await suggestion.getByRole('button', { name: '接受' }).click();
   await expect.poll(() => entryOf(sw, 'パン')).toMatchObject({ 譯文: '麵包', locked: true });
@@ -93,7 +102,7 @@ test('匯出 JSON 真的下載得到檔案，在乾淨的 profile 選檔匯入�
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   // Notes 在背景整理（ADR 0005）：寫進去之後再匯出
   await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');
-  await chooseFromPanelMenu(panel, 'API key 與模型');
+  await chooseFromPanelMenu(panel, '設定');
 
   const downloading = panel.waitForEvent('download');
   await panel.getByRole('button', { name: '匯出 JSON' }).click();
@@ -103,7 +112,7 @@ test('匯出 JSON 真的下載得到檔案，在乾淨的 profile 選檔匯入�
   try {
     const cleanSw = await configuredServiceWorker(clean, mockSite);
     const cleanPanel = await openSidePanel(clean, new URL(cleanSw.url()).host);
-    await chooseFromPanelMenu(cleanPanel, 'API key 與模型');
+    await chooseFromPanelMenu(cleanPanel, '設定');
     await cleanPanel.getByLabel('匯入 JSON').setInputFiles(file);
     await expect(cleanPanel.getByText('匯入完成')).toBeVisible();
 

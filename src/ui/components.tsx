@@ -109,6 +109,44 @@ export function Switch({
   );
 }
 
+/**
+ * 單選卡片（radiogroup 裡的一張，#93 設定頁的翻譯方式）：標題與說明，選中的有主色框並展開內容。
+ * 原生 radio，鍵盤與讀屏照原生走；accessible name 只有標題，說明用 aria-describedby。
+ */
+export function RadioCard({
+  name,
+  title,
+  description,
+  checked,
+  onSelect,
+  children,
+}: {
+  /** 同一組卡片共用的 radio name。 */
+  name: string;
+  title: string;
+  description: string;
+  checked: boolean;
+  onSelect: () => void;
+  /** 選中時展開的內容。 */
+  children?: ComponentChildren;
+}) {
+  const id = useId();
+  return (
+    <div class={cx('naru-radio-card', checked && 'naru-radio-card--on')}>
+      <label class="naru-radio-card__head">
+        <input type="radio" name={name} checked={checked} aria-labelledby={`${id}-t`} aria-describedby={`${id}-d`} onChange={onSelect} />
+        <span class="naru-radio-card__text">
+          <strong id={`${id}-t`}>{title}</strong>
+          <span id={`${id}-d`} class="naru-radio-card__desc">
+            {description}
+          </span>
+        </span>
+      </label>
+      {checked && <div class="naru-radio-card__body">{children}</div>}
+    </div>
+  );
+}
+
 /** 小標籤。neutral：一般；warn：推測、過期；loose：框外文字（Loose Text）；danger：失敗；ok：啟動狀態（膠囊＋圓點）。 */
 export type BadgeTone = 'neutral' | 'warn' | 'loose' | 'danger' | 'ok';
 

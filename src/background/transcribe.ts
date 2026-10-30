@@ -368,6 +368,31 @@ export function createTranscriber(deps: TranscriberDeps) {
     const pages = pageHash === undefined ? tab.pages : tab.pages.filter((p) => p.pageHash === pageHash);
     const visible = [...new Set(pages.flatMap((p) => findSamePage(tab.records, p.pageHash) ?? []))];
     if (pageHash !== undefined) for (const record of visible) if (record.transcript.state === 'done') record.text ??= record.transcript.text;
+    await start(tab, visible, translator);
+  }
+
+  /**
+   * 能翻譯了（同意、登入，#93）：自動翻譯開著的 tab，畫面上辨識完、還沒翻譯的頁直接翻，不必再按「翻譯此頁」。
+   * 已翻好（含快取）的不重翻；自動翻譯關著的 tab 照舊等讀者按。
+   */
+  async function translateUntranslated(): Promise<void> {
+    const translator = await deps.getTranslator();
+    if (!translator) return;
+    await Promise.all(
+      [...tabs.values()]
+        .filter((tab) => isAutoTranslate(tab.tabId))
+        .map((tab) => {
+          const waiting = tab.pages.flatMap((p) => {
+            const record = findSamePage(tab.records, p.pageHash);
+            return record?.transcript.state === 'done' && !record.transcript.translated ? [record] : [];
+          });
+          return start(tab, [...new Set(waiting)], translator);
+        }),
+    );
+  }
+
+  /** 把這些可見的 Page 排進佇列：pending 的跑本機流水線，辨識完的（有 Translator 時）重新翻譯；已有工作在跑的不重複排。 */
+  async function start(tab: TabState, visible: PageRecord[], translator: Translator | undefined): Promise<void> {
     const batch = ++batches;
     const groupOf = snapshotGroups();
     const prior = priorOf(tab);
@@ -476,6 +501,7 @@ export function createTranscriber(deps: TranscriberDeps) {
   return {
     update,
     translate,
+    translateUntranslated,
     setAutoTranslate,
     isAutoTranslate,
     get,

@@ -10,13 +10,16 @@ import type { LineRef, ModelStatus, PageView } from '../shared/messages.ts';
 import type { PageMode } from '../shared/page-mode.ts';
 import type { StaleReason } from '../shared/series-notes.ts';
 import { Badge, Button, Callout, PageHeader, Progress, SegmentedControl, type SegmentOption } from './components.tsx';
+import { OwnKeyDataFlow } from './data-flow.tsx';
 import { PRIVACY_URL } from './links.ts';
 import { DEFAULT_LEVEL, DisplaySwitch, Transcript, type Display, type Level } from './transcript.tsx';
 import {
   quotaView,
   setupNotices,
+  sidePanelScreen,
   sidePanelView,
   type OverallStatus,
+  type PanelPage,
   type PageEntry,
   type QuotaView,
   type SetupNotice,
@@ -127,8 +130,8 @@ function PageItem({
 }
 
 /**
- * 資料使用說明（shared/data-consent.ts）：還沒同意就固定顯示在最上面，啟動前、從內建選單打開時都一樣。
- * 內容要跟 PRIVACY.md 一致；資料處理方式改了，兩邊一起改，並把 DATA_CONSENT_VERSION 加一。
+ * 自備金鑰的資料使用說明（shared/data-consent.ts）：還沒同意就固定顯示在最上面，啟動前、從內建選單打開時都一樣。
+ * 文字在 data-flow.tsx（跟 onboarding 的「使用自備金鑰」同一份）。按了「同意並啟用翻譯」，已啟動的分頁直接開始翻譯（SW）。
  */
 function DataConsentCard({ onAccept }: { onAccept: () => void }) {
   return (
@@ -137,11 +140,7 @@ function DataConsentCard({ onAccept }: { onAccept: () => void }) {
         <p>
           <strong>翻譯前請先確認資料怎麼使用</strong>
         </p>
-        <ul>
-          <li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
-          <li>辨識出的日文文字、同一部作品前幾頁的原文與譯文、作品的譯名表，會用你的 API key 直接送到 Anthropic 翻譯。</li>
-          <li>API key、翻譯快取與作品筆記只存在這台電腦。開發者沒有伺服器，收不到你的任何資料。</li>
-        </ul>
+        <OwnKeyDataFlow />
         <p>
           詳見
           <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
@@ -158,12 +157,42 @@ function DataConsentCard({ onAccept }: { onAccept: () => void }) {
 }
 
 /**
- * 逐字稿上方的設定提示（view.ts 的 setupNotices 決定顯示哪一個）。「尚未登入」的版面與文案照 #91 畫面定案；
- * 「登入」與「使用自備金鑰」都打開設定區（全頁 onboarding 在 #93 才有）。
+ * 逐字稿上方的設定提示（view.ts 的 setupNotices 決定顯示哪一個）。「尚未登入」的版面與文案照 #91 畫面定案、
+ * 內建翻譯提示照 #93：「登入」「改用內建翻譯」打開 onboarding 的第 2 步，「使用自備金鑰」打開設定頁。
  */
-function SetupNoticeCallout({ notice, onSignIn, onUseOwnKey }: { notice: SetupNotice; onSignIn: () => void; onUseOwnKey: () => void }) {
+function SetupNoticeCallout({
+  notice,
+  onSignIn,
+  onUseOwnKey,
+  onDismissHostedHint,
+}: {
+  notice: SetupNotice;
+  onSignIn: () => void;
+  onUseOwnKey: () => void;
+  onDismissHostedHint: () => void;
+}) {
   if (notice === 'noKey')
-    return <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在 ⚙ 選單的「API key 與模型」輸入 key。</Callout>;
+    return <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在 ⚙ 選單的「設定」輸入 key。</Callout>;
+  if (notice === 'hostedHint')
+    return (
+      <Callout class="naru-callout--stack" role="group" aria-label="內建翻譯提示">
+        <p>現在也可以改用內建翻譯：用 email 登入就能翻，不用自備 API key。新帳號有 50 頁免費額度。</p>
+        <div class="naru-row">
+          {/* 按任何一個都算關掉，不再出現 */}
+          <Button
+            onClick={() => {
+              onDismissHostedHint();
+              onSignIn();
+            }}
+          >
+            改用內建翻譯
+          </Button>
+          <Button variant="ghost" onClick={onDismissHostedHint}>
+            不用了
+          </Button>
+        </div>
+      </Callout>
+    );
   if (notice !== 'signedOut') return null;
   return (
     <Callout tone="warn" class="naru-callout--stack" role="group" aria-label="尚未登入">
@@ -273,12 +302,9 @@ function MenuItem({ label, description, onClick }: { label: string; description?
   );
 }
 
-/** 從 ⚙ 選單打開、顯示在頂部下面的區塊。 */
-type PanelSection = 'notes' | 'settings';
-
 /**
  * 頂部的 ⚙ 選單（spec #70、#77）：不常用的功能收在這裡。點外面或按 Esc 收起；按了一項（開關以外）也收起。
- * 沒有啟動的 tab 時只有「API key 與模型」。container 沒給的區塊（網站上）就沒有那一項。
+ * 沒有啟動的 tab 時只有「設定」。container 沒給的頁（網站上）就沒有那一項。
  */
 function PanelMenu({
   running,
@@ -289,9 +315,9 @@ function PanelMenu({
 }: {
   running: boolean;
   autoTranslate: ComponentChildren;
-  sections: Record<PanelSection, boolean>;
+  sections: Record<PanelPage, boolean>;
   onScan: () => void;
-  onOpen: (section: PanelSection) => void;
+  onOpen: (page: PanelPage) => void;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -327,7 +353,7 @@ function PanelMenu({
               {sections.notes && <MenuItem label="Series Notes" onClick={choose(() => onOpen('notes'))} />}
             </>
           )}
-          {sections.settings && <MenuItem label="API key 與模型" onClick={choose(() => onOpen('settings'))} />}
+          {sections.settings && <MenuItem label="設定" onClick={choose(() => onOpen('settings'))} />}
         </div>
       )}
     </div>
@@ -357,8 +383,18 @@ export interface SidePanelProps {
   /** 滑過逐字稿的某行；null＝離開。 */
   onLineHover: (line: LineRef | null) => void;
   onAcceptConsent: () => void;
-  /** 「尚未登入」與「免費額度已用完」的「使用自備金鑰」：切到自備金鑰（設定區同時打開）。 */
+  /** 「尚未登入」與「免費額度已用完」的「使用自備金鑰」：切到自備金鑰（設定頁同時打開）。 */
   onUseOwnKey: () => void;
+  /** 「登入」「改用內建翻譯」：外掛打開 onboarding 的第 2 步（同意並登入）。 */
+  onSignIn: () => void;
+  /** onboarding 做完了沒（#93）；false＝只顯示「完成設定」。沒給＝完成（網站上）。 */
+  setupComplete?: boolean;
+  /** 「完成設定」：打開 onboarding，回到停下來的那一步。 */
+  onFinishSetup?: () => void;
+  /** 從舊版更新、仍用自備金鑰：顯示一次「現在也可以改用內建翻譯」。 */
+  hostedHint?: boolean;
+  /** 內建翻譯提示的任何一個按鈕：記下已經關掉。 */
+  onDismissHostedHint?: () => void;
   /** 內建翻譯的剩餘額度（Worker 的 GET /v1/account）；undefined＝還在讀、沒登入或自備金鑰。 */
   quota?: Quota;
   /** 「訂閱」：#94 接上 Paddle checkout；沒給時訂閱按鈕停用。 */
@@ -368,10 +404,45 @@ export interface SidePanelProps {
   autoTranslate?: ComponentChildren;
   /** 底部列的系列。 */
   series?: ComponentChildren;
-  /** 「API key 與模型」區塊。 */
+  /** 「設定」頁的內容（標題列由 SidePanel 畫）。 */
   renderSettings?: (close: () => void) => ComponentChildren;
-  /** 「Series Notes」區塊。 */
+  /** 「Series Notes」頁的內容。 */
   renderNotes?: (close: () => void) => ComponentChildren;
+}
+
+/** 沒做完 onboarding（#93 畫面定案）：只有置中的大 logo、名稱、「設定還沒完成」與「完成設定」，沒有頂部的狀態與 ⚙。 */
+function FinishSetup({ logoSrc, onFinishSetup }: { logoSrc: string; onFinishSetup: (() => void) | undefined }) {
+  return (
+    <div class="naru-side-panel">
+      <main class="finish-setup">
+        <img src={logoSrc} alt="" width={48} height={48} />
+        <h1>Naruhodo</h1>
+        <p>設定還沒完成</p>
+        <Button variant="primary" onClick={onFinishSetup}>
+          完成設定
+        </Button>
+      </main>
+    </div>
+  );
+}
+
+const PAGE_TITLES: Record<PanelPage, string> = { settings: '設定', notes: 'Series Notes' };
+
+/** 從 ⚙ 選單打開的一頁（設定、Series Notes）：整個 side panel 換成它，頂部是「←」＋標題，沒有逐字稿與底部狀態列。 */
+function PanelPageView({ title, onBack, children }: { title: string; onBack: () => void; children: ComponentChildren }) {
+  return (
+    <div class="naru-side-panel">
+      <main>
+        <div class="panel-header">
+          <Button variant="icon" aria-label="返回" onClick={onBack}>
+            ←
+          </Button>
+          <h1 class="title">{title}</h1>
+        </div>
+        {children}
+      </main>
+    </div>
+  );
 }
 
 export function SidePanel(props: SidePanelProps) {
@@ -379,9 +450,17 @@ export function SidePanel(props: SidePanelProps) {
   const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
   const [furigana, setFurigana] = useState(true);
   const display: Display = pageMode === 'learn' ? { mode: 'learn', furigana } : { mode: 'read', level };
-  const [section, setSection] = useState<PanelSection | undefined>(undefined);
+  const [page, setPage] = useState<PanelPage | undefined>(undefined);
 
-  const close = () => setSection(undefined);
+  const close = () => setPage(undefined);
+  const screen = sidePanelScreen({ setupComplete: props.setupComplete ?? true, page });
+  if (screen === 'finishSetup') return <FinishSetup logoSrc={props.logoSrc} onFinishSetup={props.onFinishSetup} />;
+  if (screen !== 'transcript')
+    return (
+      <PanelPageView title={PAGE_TITLES[screen]} onBack={close}>
+        {screen === 'settings' ? props.renderSettings?.(close) : props.renderNotes?.(close)}
+      </PanelPageView>
+    );
   // 頂部只有 logo、名稱、狀態、停止、⚙（#77）；其餘收進 ⚙ 選單
   const header = (
     <div class="panel-header">
@@ -398,20 +477,18 @@ export function SidePanel(props: SidePanelProps) {
         autoTranslate={props.autoTranslate}
         sections={{ notes: Boolean(props.renderNotes), settings: Boolean(props.renderSettings) }}
         onScan={onScan}
-        onOpen={(s) => setSection(section === s ? undefined : s)}
+        onOpen={setPage}
       />
     </div>
   );
-  const settings = section === 'settings' && props.renderSettings?.(close);
   const done = pages.filter((p) => p.transcript.state === 'done');
   const pending = pages.some((p) => p.transcript.state === 'pending');
   const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
-  const notices = setupNotices({ access, consented, untranslated });
+  const notices = setupNotices({ access, consented, untranslated, hostedHint: props.hostedHint });
   const consentCard = notices.consentCard && <DataConsentCard onAccept={props.onAcceptConsent} />;
-  const openSettings = () => setSection('settings');
   const useOwnKey = () => {
     props.onUseOwnKey();
-    openSettings();
+    setPage('settings');
   };
   if (!running)
     return (
@@ -420,7 +497,6 @@ export function SidePanel(props: SidePanelProps) {
           {header}
           {consentCard}
           <p>請點外掛圖示啟動</p>
-          {settings}
         </main>
       </div>
     );
@@ -434,10 +510,13 @@ export function SidePanel(props: SidePanelProps) {
         {header}
         {consentCard}
         <PageModeSwitch mode={pageMode} choose={props.onPageModeChange} />
-        {settings}
-        {section === 'notes' && props.renderNotes?.(close)}
         <ModelStatusLine status={modelStatus} onRetry={onScan} />
-        <SetupNoticeCallout notice={notices.notice} onSignIn={openSettings} onUseOwnKey={useOwnKey} />
+        <SetupNoticeCallout
+          notice={notices.notice}
+          onSignIn={props.onSignIn}
+          onUseOwnKey={useOwnKey}
+          onDismissHostedHint={() => props.onDismissHostedHint?.()}
+        />
         {quota.exhausted && <QuotaExhaustedCallout onSubscribe={props.onSubscribe} onUseOwnKey={useOwnKey} />}
         {done.length > 0 && <DisplaySwitch display={display} onLevel={setLevel} onFurigana={setFurigana} />}
         <ul aria-label="Page">

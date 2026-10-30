@@ -124,6 +124,7 @@ export function Demo({ copy }: { copy: DemoCopy }) {
         onLineHover={(line) => overlay.current?.highlight(line)}
         onAcceptConsent={noop}
         onUseOwnKey={noop}
+        onSignIn={noop}
         quota={{ plan: 'free', remaining: view.remaining }}
       />,
       mount,

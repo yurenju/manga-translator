@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { indexedDbApiKeyStore, lastFour } from '../shared/api-key-store.ts';
-import { grantDataConsent, revokeDataConsent, watchDataConsent } from '../shared/data-consent.ts';
+import { grantDataConsent, watchDataConsent, type DataConsent } from '../shared/data-consent.ts';
 import type { BackupFile } from '../background/backup.ts';
 import type {
   ImportResponse,
@@ -17,13 +17,13 @@ import type {
   TestConnectionResponse,
 } from '../shared/messages.ts';
 import { createHostedAuth } from '../shared/hosted-auth.ts';
-import type { Quota } from '../shared/hosted-api.ts';
-import { HOSTED_API_URL, loadHostedSession, saveHostedSession, type HostedSession } from '../shared/hosted-session.ts';
+import { FREE_PAGES, type Quota } from '../shared/hosted-api.ts';
+import { HOSTED_API_URL, loadHostedSession, type HostedSession } from '../shared/hosted-session.ts';
+import { dismissHostedHint, onboardingUrl, watchHostedHint, watchOnboarding, type OnboardingProgress } from '../shared/onboarding.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
 import { saveTranslationMode, watchTranslationMode, type TranslationMode } from '../shared/translation-mode.ts';
-import { Button, SegmentedControl, Switch, type SegmentOption } from '../ui/components.tsx';
+import { Badge, Button, RadioCard, Switch } from '../ui/components.tsx';
 import { SidePanel } from '../ui/side-panel.tsx';
-import { SignIn } from '../ui/sign-in.tsx';
 import { SeriesNotesSection } from './series-notes.tsx';
 
 /**
@@ -90,52 +90,69 @@ function Backup() {
   );
 }
 
-/** undefined＝還在讀。 */
-function useDataConsent(): boolean | undefined {
-  const [consented, setConsented] = useState<boolean | undefined>(undefined);
-  useEffect(() => watchDataConsent(setConsented), []);
-  return consented;
+/** 每種翻譯模式的資料使用同意；undefined＝還在讀。 */
+function useDataConsent(): DataConsent | undefined {
+  const [consent, setConsent] = useState<DataConsent | undefined>(undefined);
+  useEffect(() => watchDataConsent(setConsent), []);
+  return consent;
 }
 
+/** onboarding 的進度；undefined＝還在讀。 */
+function useOnboarding(): OnboardingProgress | undefined {
+  const [progress, setProgress] = useState<OnboardingProgress | undefined>(undefined);
+  useEffect(() => watchOnboarding(setProgress), []);
+  return progress;
+}
+
+/** 內建翻譯提示還沒關掉（從舊版更新、仍用自備金鑰）。 */
+function useHostedHint(): boolean {
+  const [show, setShow] = useState(false);
+  useEffect(() => watchHostedHint(setShow), []);
+  return show;
+}
+
+/** 用新分頁打開 onboarding（#93）；signIn＝從第 2 步開始。 */
+const openOnboarding = (step?: 'signIn') => void chrome.tabs.create({ url: onboardingUrl(step) });
+
 /**
- * 內建翻譯的帳號（#91）：沒登入時是「同意並登入」，按「同意並寄送驗證碼」就記下資料使用同意；登入後顯示 email。
- * 登出、刪除帳號與方案狀態在設定頁改版（#95）時加。
+ * 設定頁「內建翻譯」卡片展開的內容（#93 畫面定案）：已登入時是 email＋方案、剩餘頁數與「訂閱」（#94 接上）；
+ * 沒登入時是「登入」，打開 onboarding 的第 2 步。登出與刪除帳號在 #95 加。
  */
-function HostedAccount({ session, onSignedIn }: { session: HostedSession | null; onSignedIn: (session: HostedSession) => void }) {
-  if (session) return <p>已登入：{session.email}</p>;
+function HostedAccount({ session, quota }: { session: HostedSession | null; quota: Quota | undefined }) {
+  if (!session)
+    return (
+      <>
+        <p>尚未登入。</p>
+        <Button variant="primary" onClick={() => openOnboarding('signIn')}>
+          登入
+        </Button>
+      </>
+    );
   return (
-    <SignIn
-      auth={hostedAuth}
-      onConsent={grantDataConsent}
-      onSignedIn={async (signedIn) => {
-        await saveHostedSession(signedIn);
-        void send({ type: 'session:changed' }).catch(() => {});
-        onSignedIn(signedIn);
-      }}
-    />
+    <>
+      <p class="naru-row">
+        {session.email}
+        <Badge>免費</Badge>
+      </p>
+      {quota && (
+        <p class="hint">
+          免費額度剩 {quota.remaining} / {FREE_PAGES} 頁
+        </p>
+      )}
+      <div class="actions">
+        <Button variant="primary" disabled>
+          訂閱
+        </Button>
+      </div>
+    </>
   );
 }
 
 /**
- * 設定區（spec #27 第 5 節）：API key 存在外掛 origin 的 IndexedDB，只顯示末四碼。
- * side panel 自己讀寫 key；「測試連線」由 offscreen 讀 key 呼叫 API，訊息裡不帶 key。從 ⚙ 選單打開（#77）。
- * 內建翻譯時改顯示帳號（HostedAccount）。
+ * 設定頁「自備金鑰」卡片展開的內容（spec #27 第 5 節）：API key 存在外掛 origin 的 IndexedDB，只顯示末四碼。
+ * side panel 自己讀寫 key；「測試連線」由 offscreen 讀 key 呼叫 API，訊息裡不帶 key。
  */
-function Settings({
-  consented,
-  mode,
-  session,
-  onKeyChanged,
-  onSignedIn,
-  onClose,
-}: {
-  consented: boolean | undefined;
-  mode: TranslationMode;
-  session: HostedSession | null;
-  onKeyChanged: (hasKey: boolean) => void;
-  onSignedIn: (session: HostedSession) => void;
-  onClose: () => void;
-}) {
+function OwnKey({ session, onKeyChanged }: { session: HostedSession | null; onKeyChanged: (hasKey: boolean) => void }) {
   /** undefined＝還在讀；''＝沒有 key */
   const [suffix, setSuffix] = useState<string | undefined>(undefined);
   const [draft, setDraft] = useState('');
@@ -169,17 +186,8 @@ function Settings({
   }
 
   return (
-    <section aria-label="API key 與模型" class="settings">
-      <div class="section-head">
-        <h2>API key 與模型</h2>
-        <Button variant="ghost" onClick={onClose}>
-          關閉
-        </Button>
-      </div>
-      <SegmentedControl label="翻譯方式" options={TRANSLATION_MODES} value={mode} onChange={(value) => void saveTranslationMode(value)} />
-      {mode === 'hosted' ? (
-        <HostedAccount session={session} onSignedIn={onSignedIn} />
-      ) : suffix === undefined ? null : suffix ? (
+    <>
+      {suffix === undefined ? null : suffix ? (
         <>
           <p>已設定 Claude API key（末四碼 {suffix}）</p>
           <div class="actions">
@@ -210,24 +218,58 @@ function Settings({
         </form>
       )}
       {connection && <p class="connection">{connection}</p>}
-      {consented && (
-        <div class="actions">
-          <Button onClick={() => void revokeDataConsent()}>撤回資料使用同意</Button>
-        </div>
-      )}
-      <Backup />
       <p class="hint">
         建議在 Anthropic Console 為這個外掛建立專用的 API key，並為它的 workspace 設定花費上限。key 只存在這台電腦的外掛裡，不會交給網頁，也不會出現在匯出檔。
       </p>
-    </section>
+      {session && <p class="hint">帳號 {session.email} 仍然登入著；切回內建翻譯就能接著用。</p>}
+    </>
   );
 }
 
-/** 翻譯方式（spec #86）：讀者明確選，不會自動切換。設定頁改版（#95）前先放在「API key 與模型」最上面。 */
-const TRANSLATION_MODES = [
-  { value: 'hosted', label: '內建翻譯' },
-  { value: 'ownKey', label: '自備 API key' },
-] as const satisfies readonly SegmentOption<TranslationMode>[];
+/**
+ * 設定頁（#93 畫面定案）：從 ⚙ 選單的「設定」打開，整個 side panel 換成這一頁。
+ * 翻譯方式是明確的二選一（不會自動切換；切到自備金鑰不會登出），下面是匯出／匯入。
+ */
+function Settings({
+  mode,
+  session,
+  quota,
+  onKeyChanged,
+}: {
+  mode: TranslationMode;
+  session: HostedSession | null;
+  quota: Quota | undefined;
+  onKeyChanged: (hasKey: boolean) => void;
+}) {
+  return (
+    <section aria-label="設定" class="settings">
+      <h2>翻譯方式</h2>
+      <div role="radiogroup" aria-label="翻譯方式" class="mode-cards">
+        <RadioCard
+          name="translation-mode"
+          title="內建翻譯"
+          description="用 email 帳號，Naruhodo 代為翻譯，有頁數限制"
+          checked={mode === 'hosted'}
+          onSelect={() => void saveTranslationMode('hosted')}
+        >
+          <HostedAccount session={session} quota={quota} />
+        </RadioCard>
+        <RadioCard
+          name="translation-mode"
+          title="自備金鑰"
+          description="用你自己的 Anthropic API key，費用直接付給 Anthropic，沒有頁數限制"
+          checked={mode === 'ownKey'}
+          onSelect={() => void saveTranslationMode('ownKey')}
+        >
+          <OwnKey session={session} onKeyChanged={onKeyChanged} />
+        </RadioCard>
+      </div>
+      <h2>資料</h2>
+      <p class="hint">在兩台電腦之間搬 Series、Series Notes 與翻譯快取（不含 API key 與帳號）。</p>
+      <Backup />
+    </section>
+  );
+}
 
 /** undefined＝還在讀。 */
 function useTranslationMode(): TranslationMode | undefined {
@@ -238,9 +280,9 @@ function useTranslationMode(): TranslationMode | undefined {
 
 /**
  * Hosted Translation 的 session（IndexedDB）；undefined＝還在讀，null＝沒登入。
- * 別的 side panel 登入、或 SW 發現 token 失效而清掉時，收到 session:changed 重新讀；自己登入時用回傳的 setter 更新。
+ * onboarding 頁登入、或 SW 發現 token 失效而清掉時，收到 session:changed 重新讀。
  */
-function useHostedSession(): [HostedSession | null | undefined, (session: HostedSession) => void] {
+function useHostedSession(): HostedSession | null | undefined {
   const [session, setSession] = useState<HostedSession | null | undefined>(undefined);
   useEffect(() => {
     const refresh = () => void loadHostedSession().then((s) => setSession(s ?? null));
@@ -251,7 +293,7 @@ function useHostedSession(): [HostedSession | null | undefined, (session: Hosted
     refresh();
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, []);
-  return [session, setSession];
+  return session;
 }
 
 /**
@@ -449,7 +491,8 @@ function SeriesPicker({ tabId }: { tabId: number }) {
 
 /**
  * 外掛的 container（#108）：接 chrome 訊息、API key、同意狀態與 Page Mode 的 store，把資料交給純畫面的 SidePanel。
- * 會讀寫 store 的區塊（設定、Series Notes、系列、自動翻譯開關）也在這裡，以 slot 交給 SidePanel。
+ * 會讀寫 store 的區塊（設定頁、Series Notes 頁、系列、自動翻譯開關）也在這裡，以 slot 交給 SidePanel。
+ * 沒做完 onboarding（#93）時 SidePanel 只顯示「完成設定」；「登入」「完成設定」用新分頁打開 onboarding。
  */
 function App({ tabId }: { tabId: number | undefined }) {
   // undefined＝還在問 SW
@@ -459,10 +502,12 @@ function App({ tabId }: { tabId: number | undefined }) {
   const [hasKey, setHasKey] = useState(true);
   const [pageMode, choosePageMode] = usePageMode();
   const [hovered, setHovered] = useState<LineRef | undefined>(undefined);
-  const consented = useDataConsent();
+  const consent = useDataConsent();
   const translationMode = useTranslationMode();
-  const [session, setSession] = useHostedSession();
+  const session = useHostedSession();
   const quota = useHostedQuota(session);
+  const onboarding = useOnboarding();
+  const hostedHint = useHostedHint();
 
   useEffect(() => {
     void apiKeys.get().then((key) => setHasKey(Boolean(key)));
@@ -484,7 +529,7 @@ function App({ tabId }: { tabId: number | undefined }) {
     return () => chrome.runtime.onMessage.removeListener(onMessage);
   }, [tabId]);
 
-  if (active === undefined || translationMode === undefined || session === undefined) return null;
+  if (active === undefined || translationMode === undefined || session === undefined || onboarding === undefined) return null;
   const running = active && tabId !== undefined;
   // 停止、擷取、翻譯、逐字稿 hover 只在 running（有 tabId）時出現，所以 tabId! 是安全的
   return (
@@ -493,7 +538,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       pages={pages}
       modelStatus={modelStatus}
       access={translationMode === 'hosted' ? { mode: 'hosted', signedIn: session !== null } : { mode: 'ownKey', hasKey }}
-      consented={consented}
+      consented={consent?.[translationMode]}
       pageMode={pageMode}
       hovered={hovered}
       logoSrc="icons/naruhodo.svg"
@@ -504,15 +549,19 @@ function App({ tabId }: { tabId: number | undefined }) {
       onLineHover={(line) => {
         chrome.tabs.sendMessage(tabId!, { type: 'content:highlight', line } satisfies Message).catch(() => {});
       }}
-      onAcceptConsent={() => void grantDataConsent()}
+      // 說明卡只在自備金鑰時出現；同意後已啟動的分頁由 SW 直接開始翻譯
+      onAcceptConsent={() => void grantDataConsent('ownKey')}
       onUseOwnKey={() => void saveTranslationMode('ownKey')}
+      onSignIn={() => openOnboarding('signIn')}
+      setupComplete={onboarding === 'done'}
+      onFinishSetup={() => openOnboarding()}
+      hostedHint={hostedHint}
+      onDismissHostedHint={() => void dismissHostedHint()}
       quota={translationMode === 'hosted' ? quota : undefined}
       autoTranslate={running && <AutoTranslateToggle tabId={tabId} />}
       series={running && <SeriesPicker tabId={tabId} />}
-      renderSettings={(close) => (
-        <Settings consented={consented} mode={translationMode} session={session} onKeyChanged={setHasKey} onSignedIn={setSession} onClose={close} />
-      )}
-      renderNotes={(close) => tabId !== undefined && <SeriesNotesSection tabId={tabId} onClose={close} />}
+      renderSettings={() => <Settings mode={translationMode} session={session} quota={quota} onKeyChanged={setHasKey} />}
+      renderNotes={() => tabId !== undefined && <SeriesNotesSection tabId={tabId} />}
     />
   );
 }

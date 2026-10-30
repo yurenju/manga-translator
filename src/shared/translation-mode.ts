@@ -2,8 +2,8 @@
  * 翻譯模式（spec #86）：全域設定，Hosted Translation（送到 Naruhodo 的 Worker）或 Own API Key（讀者自己的 key 直接打 Anthropic）。
  * 由讀者明確選，不會自動切換。存在 chrome.storage.local；SW 每次排 LLM 工作前讀，side panel 的設定區讀寫。
  *
- * 還沒有值時是 Own API Key：#90 還沒有登入與 onboarding。全新安裝預設 Hosted Translation、
- * 從舊版更新沿用 Own API Key 的規則由 onboarding（#93）決定。
+ * 安裝或更新時 SW 寫入（background/install.ts）：全新安裝是 Hosted Translation、從舊版更新而且有 key 的是 Own API Key。
+ * 還沒有值＝#93 以前裝的、還沒處理過更新（e2e build 不處理安裝事件，也是這樣）：當作 Own API Key，跟舊版一樣。
  */
 export type TranslationMode = 'hosted' | 'ownKey';
 
@@ -16,6 +16,11 @@ const parse = (value: unknown): TranslationMode => (value === 'hosted' ? 'hosted
 export async function loadTranslationMode(): Promise<TranslationMode> {
   const stored = await chrome.storage.local.get(KEY);
   return parse(stored[KEY]);
+}
+
+/** 安裝或更新時已經決定過翻譯模式了沒（決定過就不再動，讀者自己選的不會被更新蓋掉）。 */
+export async function isTranslationModeSet(): Promise<boolean> {
+  return (await chrome.storage.local.get(KEY))[KEY] !== undefined;
 }
 
 export function saveTranslationMode(mode: TranslationMode): Promise<void> {

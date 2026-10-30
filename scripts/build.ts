@@ -4,7 +4,7 @@
  *   debug build → dist/debug（多印除錯記錄，src/shared/trace.ts；平常由 scripts/debug-chrome.ts 建到固定位置）
  *
  * 每個入口各自用 esbuild 打包，因為格式不同：
- *   - background（SW）、sidepanel、offscreen：ES module
+ *   - background（SW）、sidepanel、onboarding、offscreen：ES module
  *   - content：IIFE。scripting.executeScript({files}) 只能注入傳統 script，不能有 import。
  */
 import { copyFile, cp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -27,6 +27,9 @@ const STATIC_FILES: [string, string][] = [
   ['src/ui/components.css', 'components.css'],
   ['src/ui/side-panel.css', 'side-panel.css'],
   ['src/sidepanel/sidepanel.css', 'sidepanel.css'],
+  // 全新安裝時打開的全頁 onboarding（#93）：跟 side panel 共用 tokens.css、components.css
+  ['src/onboarding/onboarding.html', 'onboarding.html'],
+  ['src/onboarding/onboarding.css', 'onboarding.css'],
   ['src/offscreen/offscreen.html', 'offscreen.html'],
   // onnxruntime-web 不打包進 offscreen.js，執行時動態 import（見 src/offscreen/ort-engine.ts）。
   // webgpu bundle 同時支援 WebGPU 與 wasm，只會載入 asyncify 這一份 wasm（與它的 .mjs，多執行緒 worker 用）。
@@ -111,6 +114,7 @@ export async function build({ e2e, debug = false, outDir }: { e2e: boolean; debu
       entryPoints: {
         background: 'src/background/index.ts',
         sidepanel: 'src/sidepanel/main.tsx',
+        onboarding: 'src/onboarding/main.tsx',
         offscreen: 'src/offscreen/index.ts',
         ...(e2e ? { 'test-pipeline': 'src/test-pipeline/main.ts', 'test-overlay': 'src/test-overlay/main.ts' } : {}),
       },

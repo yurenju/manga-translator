@@ -107,26 +107,43 @@ export function sidePanelView(pages: PageView[], mode: TranslationMode): SidePan
 /** 能不能翻譯取決於翻譯模式（spec #86）：內建翻譯看有沒有登入，自備金鑰看有沒有 key。 */
 export type TranslationAccess = { mode: 'hosted'; signedIn: boolean } | { mode: 'ownKey'; hasKey: boolean };
 
-/** 逐字稿上方的提示：signedOut＝「尚未登入」（內建翻譯），noKey＝「尚未設定 API key」（自備金鑰）。 */
-export type SetupNotice = 'signedOut' | 'noKey' | undefined;
+/**
+ * 逐字稿上方的提示：signedOut＝「尚未登入」（內建翻譯），noKey＝「尚未設定 API key」（自備金鑰），
+ * hostedHint＝「現在也可以改用內建翻譯」（從舊版更新、仍用自備金鑰，只出現一次，#93）。
+ */
+export type SetupNotice = 'signedOut' | 'noKey' | 'hostedHint' | undefined;
 
 /**
- * 翻譯前的設定提示（#91）。資料使用同意只在自備金鑰時用說明卡問；內建翻譯的同意在登入時取得（按「同意並寄送驗證碼」），
- * 所以有 token 但同意被撤回時也算「尚未登入」。consented 還在讀（undefined）時什麼都不顯示。
+ * 翻譯前的設定提示（#91）。同意依翻譯模式各自記（shared/data-consent.ts），consented 是目前模式的。
+ * 自備金鑰用說明卡問；內建翻譯的同意在登入時取得（按「同意並寄送驗證碼」），所以有 token 但同意失效時也算「尚未登入」。
+ * consented 還在讀（undefined）時什麼都不顯示。
  */
 export function setupNotices({
   access,
   consented,
   untranslated,
+  hostedHint = false,
 }: {
   access: TranslationAccess;
   consented: boolean | undefined;
   /** 有沒翻譯的頁（自備金鑰的提示只在這時出現）。 */
   untranslated: boolean;
+  /** 內建翻譯提示還沒關掉。 */
+  hostedHint?: boolean;
 }): { consentCard: boolean; notice: SetupNotice } {
   if (consented === undefined) return { consentCard: false, notice: undefined };
   if (access.mode === 'hosted') return { consentCard: false, notice: access.signedIn && consented ? undefined : 'signedOut' };
-  return { consentCard: !consented, notice: untranslated && !access.hasKey ? 'noKey' : undefined };
+  const notice = untranslated && !access.hasKey ? 'noKey' : hostedHint ? 'hostedHint' : undefined;
+  return { consentCard: !consented, notice };
+}
+
+/** 從 ⚙ 選單打開、整個取代 side panel 內容的一頁（頂部是「← 返回」＋標題，#93）。 */
+export type PanelPage = 'settings' | 'notes';
+
+/** side panel 這時顯示哪一個畫面：沒做完 onboarding 時只有「完成設定」（沒有頂部的狀態與 ⚙）。 */
+export function sidePanelScreen({ setupComplete, page }: { setupComplete: boolean; page: PanelPage | undefined }): 'finishSetup' | 'transcript' | PanelPage {
+  if (!setupComplete) return 'finishSetup';
+  return page ?? 'transcript';
 }
 
 /** 剩這麼多頁以下，底部那一行改用警告色（不另外跳 Callout）。 */

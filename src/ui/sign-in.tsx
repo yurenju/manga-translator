@@ -1,13 +1,14 @@
 /**
  * 「同意並登入」：email 驗證碼登入（#91 畫面定案）。先列資料流向，按「同意並寄送驗證碼」就代表同意；寄出後換成輸入驗證碼。
- * 純畫面：寄送與驗證交給注入的 HostedAuth，同意與存 session 交給 callback。現在放在 side panel 的設定區，
- * onboarding（#93）的第 2 步直接搬這個元件。
+ * 純畫面：寄送與驗證交給注入的 HostedAuth，同意與存 session 交給 callback。用在 onboarding（#93）的第 2 步；
+ * 資料流向的文字在 data-flow.tsx。
  */
+import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import type { HostedErrorReason } from '../shared/hosted-api.ts';
 import type { HostedAuth } from '../shared/hosted-auth.ts';
 import { Button, Callout } from './components.tsx';
-import { PRIVACY_URL, TERMS_URL } from './links.ts';
+import { HostedDataFlow, PolicyLinks } from './data-flow.tsx';
 
 /** 寄出後 30 秒內不能重新寄送（Worker 另外依 IP 與 email 限制頻率）。 */
 const RESEND_COOLDOWN_S = 30;
@@ -60,9 +61,11 @@ export interface SignInProps {
   onConsent: () => void | Promise<void>;
   /** 驗證成功：存 session。 */
   onSignedIn: (session: { token: string; email: string }) => void | Promise<void>;
+  /** 只在輸入 email 時顯示的內容（onboarding 的「← 上一步」；輸入驗證碼時沒有）。 */
+  emailFooter?: ComponentChildren;
 }
 
-export function SignIn({ auth, onConsent, onSignedIn }: SignInProps) {
+export function SignIn({ auth, onConsent, onSignedIn, emailFooter }: SignInProps) {
   /** undefined＝還在輸入 email；有值＝驗證碼寄到這個 email 了。 */
   const [sentTo, setSentTo] = useState<string | undefined>(undefined);
   const [email, setEmail] = useState('');
@@ -98,21 +101,9 @@ export function SignIn({ auth, onConsent, onSignedIn }: SignInProps) {
       <section aria-label="同意並登入" class="sign-in">
         <h3>同意並登入</h3>
         <p>翻譯前，先確認資料怎麼使用：</p>
-        <ul>
-          <li>對話框偵測與文字辨識都在這台電腦上進行，不會上傳圖片，也不會送出網址。</li>
-          <li>辨識出的日文文字、同一部作品前幾頁的原文與譯文、作品的譯名表，會傳到 Naruhodo 的服務，再交給 Anthropic 翻譯。</li>
-          <li>Naruhodo 的服務不保存這些文字，只記錄你的 email、訂閱狀態與每頁的用量。</li>
-        </ul>
+        <HostedDataFlow />
         <p class="hint">
-          詳見
-          <a href={PRIVACY_URL} target="_blank" rel="noreferrer">
-            隱私權政策
-          </a>
-          、
-          <a href={TERMS_URL} target="_blank" rel="noreferrer">
-            服務條款
-          </a>
-          。
+          <PolicyLinks />
         </p>
         <ErrorCallout text={failure && errorText(failure, '寄送失敗')} />
         <form
@@ -132,6 +123,7 @@ export function SignIn({ auth, onConsent, onSignedIn }: SignInProps) {
           </Button>
         </form>
         <p class="hint">不用設定密碼：每次登入都用寄到信箱的驗證碼，登入後會一直保持登入。</p>
+        {emailFooter}
       </section>
     );
 

@@ -40,9 +40,10 @@
 :where(.naru-side-panel) .panel-menu__desc { font-size: var(--naru-text-caption); color: var(--naru-ink-3); }
 :where(.naru-side-panel) .panel-menu__switch { padding: 10px; border-radius: var(--naru-radius-sm); }
 
-/* 從 ⚙ 選單打開的區塊的標題列：標題＋關閉 */
-:where(.naru-side-panel) .section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--naru-space-2); }
-:where(.naru-side-panel) .section-head h2 { margin: 0; font-size: var(--naru-text-label); }
+/* 沒做完 onboarding（#93）：置中的大 logo、名稱、說明與「完成設定」 */
+:where(.naru-side-panel) .finish-setup { display: flex; flex-direction: column; align-items: center; gap: var(--naru-space-2); padding: 96px var(--naru-space-4); text-align: center; }
+:where(.naru-side-panel) .finish-setup h1 { margin: 0; font-size: var(--naru-text-body); }
+:where(.naru-side-panel) .finish-setup p { margin: 0; color: var(--naru-ink-2); }
 :where(.naru-side-panel) main { padding-bottom: var(--naru-space-3); }
 :where(.naru-side-panel) input:not([type]), :where(.naru-side-panel) input[type='password'], :where(.naru-side-panel) select {
   box-sizing: border-box; min-height: 32px; padding: 0 var(--naru-space-2);
@@ -75,17 +76,15 @@
 :where(.naru-side-panel) .translation-status { margin: 0; color: var(--naru-ink-3); font-size: var(--naru-text-caption); }
 :where(.naru-side-panel) .hint { color: var(--naru-ink-3); font-size: var(--naru-text-caption); }
 
-/* 設定、Series Notes 區塊 */
-:where(.naru-side-panel) .settings, :where(.naru-side-panel) .notes {
-  margin: var(--naru-space-2) 0; padding: var(--naru-space-3);
-  border: 1px solid var(--naru-line); border-radius: var(--naru-radius-md);
-}
+/* 設定、Series Notes 頁（#93：從 ⚙ 選單打開、整個取代 side panel） */
+:where(.naru-side-panel) .settings, :where(.naru-side-panel) .notes { margin: var(--naru-space-2) 0; }
+/* 設定頁的小標（翻譯方式、資料） */
+:where(.naru-side-panel) .settings > h2 { margin: var(--naru-space-4) 0 var(--naru-space-1); font-size: var(--naru-text-caption); font-weight: 700; color: var(--naru-ink-3); letter-spacing: 0.04em; }
+:where(.naru-side-panel) .settings > h2:first-child { margin-top: 0; }
+:where(.naru-side-panel) .mode-cards { display: flex; flex-direction: column; gap: var(--naru-space-2); }
+:where(.naru-side-panel) .settings p { margin: 0 0 var(--naru-space-1); }
 :where(.naru-side-panel) .settings form, :where(.naru-side-panel) .settings .actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--naru-space-2); }
-:where(.naru-side-panel) .settings label { display: flex; flex-direction: column; gap: var(--naru-space-1); }
-:where(.naru-side-panel) .settings h3 { margin: var(--naru-space-3) 0 var(--naru-space-1); font-size: var(--naru-text-label); }
-:where(.naru-side-panel) .sign-in ul { margin: var(--naru-space-1) 0; padding-left: var(--naru-space-5); }
-:where(.naru-side-panel) .sign-in li { margin-bottom: var(--naru-space-1); }
-:where(.naru-side-panel) .sign-in__code { letter-spacing: 0.2em; }
+:where(.naru-side-panel) .settings form label { display: flex; flex-direction: column; gap: var(--naru-space-1); }
 :where(.naru-side-panel) .notes { overflow-x: auto; }
 :where(.naru-side-panel) .notes table { border-collapse: collapse; width: 100%; font-size: var(--naru-text-small); }
 :where(.naru-side-panel) .notes td, :where(.naru-side-panel) .notes th { border-bottom: 1px solid var(--naru-line); padding: var(--naru-space-1); text-align: left; }

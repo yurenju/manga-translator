@@ -80,6 +80,7 @@ globalThis.__testUi = {
         onLineHover={noop}
         onAcceptConsent={noop}
         onUseOwnKey={noop}
+        onSignIn={noop}
       />,
       mount,
     );
