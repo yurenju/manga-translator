@@ -1,13 +1,14 @@
 /**
  * Hosted Translation 的後端（ADR 0006）：讀者用 email 驗證碼登入（auth.ts），外掛帶 session token 送這一頁的結構化輸入，
  * Worker 用共用模組 claude-request.ts 組 prompt、用公司的 key 呼叫 Anthropic。只收文字、不保存任何漫畫內容。
- * 路徑與錯誤格式在 src/shared/hosted-api.ts；額度、Paddle 由 #92 起接上。
+ * 路徑與錯誤格式在 src/shared/hosted-api.ts；額度在 quota.ts，Paddle 由 #94 接上。
  */
 import { SYNTHETIC_GROUND_TRUTH } from '../../src/background/synthetic-ground-truth.ts';
 import { createClaudeTranslator } from '../../src/offscreen/claude-translator.ts';
 import { createFakeTranslator } from '../../src/shared/fake-translator.ts';
 import {
   ACCOUNT_PATH,
+  DEV_FREE_PAGES_PATH,
   DEV_OUTBOX_PATH,
   NOTES_PATH,
   SEND_CODE_PATH,
@@ -19,8 +20,9 @@ import {
   type HostedErrorReason,
   type VerifyCodeResponse,
 } from '../../src/shared/hosted-api.ts';
-import type { Translator } from '../../src/shared/translator.ts';
+import type { CallInfo, Translator } from '../../src/shared/translator.ts';
 import { accountEmail, authenticate, revokeSession, sendCode, verifyCode } from './auth.ts';
+import { deductPage, quota, recordUsage, setFreePages, type UsageKind } from './quota.ts';
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
 
@@ -70,21 +72,31 @@ const authed =
     return accountId ? handler(ctx, accountId) : signedOut();
   };
 
+const freePagesExhausted = () => error(402, '免費額度已用完', 'freePagesExhausted');
+
 /**
  * 翻譯與 Notes：先把 body 整理成只含已知欄位的輸入（client 送的 model、max_tokens、system 之類一律不看），
  * 再交給 Translator；request body 由 Translator 裡的 claude-request.ts 組。
+ * 翻譯（spec #86「額度規則」）：送出前先看還有沒有額度，成功後才用條件式 UPDATE 扣一頁；同時送來的兩頁搶最後一頁時，
+ * 扣不到的那個回 402（譯文丟掉）。Notes 不扣。成功的呼叫都寫一筆用量紀錄，扣不到的那次也算（Anthropic 的錢已經花了）。
  */
 const llm =
-  (call: (body: unknown, t: Translator) => Promise<object> | undefined): Handler =>
-  async ({ request, env }) => {
-    const pending = call(await request.json().catch(() => undefined), translator(env));
-    if (!pending) return invalid();
+  <I,>(kind: UsageKind, parse: (body: unknown) => I | undefined, run: (t: Translator, input: I) => Promise<CallInfo>): AuthedHandler =>
+  async ({ request, env, now }, accountId) => {
+    const input = parse(await request.json().catch(() => undefined));
+    if (input === undefined) return invalid();
+    const charged = kind === 'translate';
+    if (charged && (await quota(env.DB, accountId)).remaining === 0) return freePagesExhausted();
+    let output: CallInfo;
     try {
-      return Response.json(await pending);
+      output = await run(translator(env), input);
     } catch (e) {
       // Anthropic 重試後仍失敗，或回答不符合 schema
       return error(502, e instanceof Error ? e.message : String(e));
     }
+    await recordUsage(env.DB, accountId, kind, output.usage, now);
+    if (charged && !(await deductPage(env.DB, accountId))) return freePagesExhausted();
+    return Response.json(output);
   };
 
 const VERIFY_ERRORS = {
@@ -94,18 +106,8 @@ const VERIFY_ERRORS = {
 } as const;
 
 const ROUTES: Record<string, Handler> = {
-  [`POST ${TRANSLATE_PATH}`]: authed(
-    llm((body, t) => {
-      const input = parseTranslateInput(body);
-      return input && t.translatePage(input);
-    }),
-  ),
-  [`POST ${NOTES_PATH}`]: authed(
-    llm((body, t) => {
-      const input = parseNotesInput(body);
-      return input && t.proposeNotes(input);
-    }),
-  ),
+  [`POST ${TRANSLATE_PATH}`]: authed(llm('translate', parseTranslateInput, (t, input) => t.translatePage(input))),
+  [`POST ${NOTES_PATH}`]: authed(llm('notes', parseNotesInput, (t, input) => t.proposeNotes(input))),
   [`POST ${SEND_CODE_PATH}`]: async ({ request, env, now }) => {
     const email = parseEmail(field(await request.json().catch(() => undefined), 'email'));
     if (!email) return invalid();
@@ -131,13 +133,21 @@ const ROUTES: Record<string, Handler> = {
   }),
   [`GET ${ACCOUNT_PATH}`]: authed(async ({ env }, accountId) => {
     const email = await accountEmail(env.DB, accountId);
-    return email ? Response.json({ email } satisfies AccountResponse) : signedOut();
+    return email ? Response.json({ email, quota: await quota(env.DB, accountId) } satisfies AccountResponse) : signedOut();
   }),
   [`GET ${DEV_OUTBOX_PATH}`]: async ({ request, env }) => {
     if (env.FAKE_MAIL !== 'true') return error(404, '沒有這個端點');
     const email = parseEmail(new URL(request.url).searchParams.get('email'));
     const code = email && lastSentCode(email);
     return code ? Response.json({ code }) : error(404, '沒有寄給這個 email 的驗證碼');
+  },
+  [`POST ${DEV_FREE_PAGES_PATH}`]: async ({ request, env }) => {
+    if (env.DEV_ENDPOINTS !== 'true') return error(404, '沒有這個端點');
+    const body = await request.json().catch(() => undefined);
+    const email = parseEmail(field(body, 'email'));
+    const remaining = field(body, 'remaining');
+    if (!email || !Number.isInteger(remaining) || (remaining as number) < 0) return invalid();
+    return (await setFreePages(env.DB, email, remaining as number)) ? new Response(null, { status: 204 }) : error(404, '沒有這個 Account');
   },
 };
 

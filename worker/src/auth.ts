@@ -2,7 +2,9 @@
  * Account 與 email 驗證碼登入（spec #86、#91）。D1 schema 在 worker/migrations/0001_accounts.sql。
  * OTP 與 session token 只存 SHA-256 hash；時間一律是 Unix 毫秒。
  */
+import { sha256 } from './hash.ts';
 import type { Mailer } from './mailer.ts';
+import { grantFreePages } from './quota.ts';
 
 /** 驗證碼 10 分鐘內有效。 */
 const CODE_TTL_MS = 10 * 60 * 1000;
@@ -12,9 +14,6 @@ const MAX_ATTEMPTS = 5;
 
 /** session token 閒置超過 180 天才失效；每次使用都重新起算。 */
 const SESSION_IDLE_MS = 180 * 24 * 60 * 60 * 1000;
-
-const sha256 = async (text: string) =>
-  [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 /** 6 位數驗證碼的空間很小，hash 帶上 email，不同 email 的同一組數字 hash 不同。 */
 const codeHash = (email: string, code: string) => sha256(`${email}:${code}`);
@@ -71,8 +70,14 @@ export async function verifyCode(db: D1Database, email: string, code: string, no
   return { ok: true, token };
 }
 
+/** 第一次登入時建立 Account，並發放 Free Pages（這個 email 沒領過才有）。 */
 async function ensureAccount(db: D1Database, email: string, now: number): Promise<string> {
-  await db.prepare('INSERT INTO accounts (id, email, created_at) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING').bind(crypto.randomUUID(), email, now).run();
+  const id = crypto.randomUUID();
+  const created = await db.prepare('INSERT INTO accounts (id, email, created_at) VALUES (?, ?, ?) ON CONFLICT (email) DO NOTHING').bind(id, email, now).run();
+  if (created.meta.changes === 1) {
+    await grantFreePages(db, id, email, now);
+    return id;
+  }
   const row = await db.prepare('SELECT id FROM accounts WHERE email = ?').bind(email).first<{ id: string }>();
   return row!.id;
 }
