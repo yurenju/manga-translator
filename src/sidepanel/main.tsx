@@ -16,13 +16,15 @@ import type {
   StatusResponse,
   TestConnectionResponse,
 } from '../shared/messages.ts';
+import { deleteAccount, signOut, type AccountExitDeps } from '../shared/account-exit.ts';
 import { createHostedAuth } from '../shared/hosted-auth.ts';
 import type { Quota } from '../shared/hosted-api.ts';
-import { HOSTED_API_URL, loadHostedSession, type HostedSession } from '../shared/hosted-session.ts';
+import { clearHostedSession, HOSTED_API_URL, loadHostedSession, type HostedSession } from '../shared/hosted-session.ts';
 import { dismissHostedHint, onboardingUrl, watchHostedHint, watchOnboarding, type OnboardingProgress } from '../shared/onboarding.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
 import { saveTranslationMode, watchTranslationMode, type TranslationMode } from '../shared/translation-mode.ts';
 import { Badge, Button, RadioCard, Switch } from '../ui/components.tsx';
+import { DeleteAccount } from '../ui/delete-account.tsx';
 import { SidePanel } from '../ui/side-panel.tsx';
 import { accountPlanView } from '../ui/view.ts';
 import { SeriesNotesSection } from './series-notes.tsx';
@@ -130,11 +132,32 @@ async function managePlan(session: HostedSession): Promise<void> {
   else console.error('打開 customer portal 失敗', result.message);
 }
 
+/** 這個 side panel 自己改了 session：runtime 訊息不會送回給發送的一方，自己的 useHostedSession 另外通知。 */
+const sessionChangedHere = new EventTarget();
+
+/** 登出、刪除帳號之後：清掉本機的 session，廣播給 SW 與其他 side panel，也通知自己。 */
+const accountExit: AccountExitDeps = {
+  auth: hostedAuth,
+  clearSession: () => clearHostedSession().then(() => {}),
+  broadcast: () => {
+    sessionChangedHere.dispatchEvent(new Event('change'));
+    void chrome.runtime.sendMessage({ type: 'session:changed' } satisfies Message).catch(() => {});
+  },
+};
+
 /**
- * 設定頁「內建翻譯」卡片展開的內容（#93、#94 畫面定案）：已登入時是 email＋方案 Badge、剩餘說明，免費是「訂閱」、訂閱者是「管理訂閱」；
- * 沒登入時是「登入」，打開 onboarding 的第 2 步。登出與刪除帳號在 #95 加。
+ * 設定頁「內建翻譯」卡片展開的內容（#93、#94、#95 畫面定案）：已登入時是 email＋方案 Badge、剩餘說明，免費是「訂閱」、訂閱者是「管理訂閱」，
+ * 再來是「登出」（直接登出，不確認）與 ghost 紅字「刪除帳號」（換到確認頁）；沒登入時是「登入」，打開 onboarding 的第 2 步。
  */
-function HostedAccount({ session, quota }: { session: HostedSession | null; quota: Quota | undefined }) {
+function HostedAccount({
+  session,
+  quota,
+  onDeleteAccount,
+}: {
+  session: HostedSession | null;
+  quota: Quota | undefined;
+  onDeleteAccount: () => void;
+}) {
   if (!session)
     return (
       <>
@@ -169,9 +192,36 @@ function HostedAccount({ session, quota }: { session: HostedSession | null; quot
             訂閱
           </Button>
         )}
+        <Button onClick={() => void signOut(accountExit, session.token)}>登出</Button>
+        <Button variant="ghost" class="naru-text-danger" onClick={onDeleteAccount}>
+          刪除帳號
+        </Button>
       </div>
     </>
   );
+}
+
+/** 刪除帳號的確認頁（#95）：刪除成功後回到設定頁，那時已經是未登入。 */
+function DeleteAccountPage({ session, onDone }: { session: HostedSession | null; onDone: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  const [failed, setFailed] = useState(false);
+  // 別的 side panel 已經登出、或刪除成功之後：這一頁沒有帳號可以刪了
+  useEffect(() => {
+    if (!session) onDone();
+  }, [session]);
+  if (!session) return null;
+
+  async function confirm(token: string) {
+    setDeleting(true);
+    setFailed(false);
+    const result = await deleteAccount(accountExit, token);
+    setDeleting(false);
+    if (result.ok) return;
+    console.error('刪除帳號失敗', result.message);
+    setFailed(true);
+  }
+
+  return <DeleteAccount email={session.email} deleting={deleting} failed={failed} onConfirm={() => void confirm(session.token)} onCancel={onDone} />;
 }
 
 /**
@@ -261,11 +311,13 @@ function Settings({
   session,
   quota,
   onKeyChanged,
+  onDeleteAccount,
 }: {
   mode: TranslationMode;
   session: HostedSession | null;
   quota: Quota | undefined;
   onKeyChanged: (hasKey: boolean) => void;
+  onDeleteAccount: () => void;
 }) {
   return (
     <section aria-label="設定" class="settings">
@@ -278,7 +330,7 @@ function Settings({
           checked={mode === 'hosted'}
           onSelect={() => void saveTranslationMode('hosted')}
         >
-          <HostedAccount session={session} quota={quota} />
+          <HostedAccount session={session} quota={quota} onDeleteAccount={onDeleteAccount} />
         </RadioCard>
         <RadioCard
           name="translation-mode"
@@ -306,7 +358,7 @@ function useTranslationMode(): TranslationMode | undefined {
 
 /**
  * Hosted Translation 的 session（IndexedDB）；undefined＝還在讀，null＝沒登入。
- * onboarding 頁登入、或 SW 發現 token 失效而清掉時，收到 session:changed 重新讀。
+ * onboarding 頁登入、或 SW 發現 token 失效而清掉時，收到 session:changed 重新讀；這個 side panel 自己登出、刪除帳號時也重新讀。
  */
 function useHostedSession(): HostedSession | null | undefined {
   const [session, setSession] = useState<HostedSession | null | undefined>(undefined);
@@ -316,8 +368,12 @@ function useHostedSession(): HostedSession | null | undefined {
       if (message.type === 'session:changed') refresh();
     };
     chrome.runtime.onMessage.addListener(onMessage);
+    sessionChangedHere.addEventListener('change', refresh);
     refresh();
-    return () => chrome.runtime.onMessage.removeListener(onMessage);
+    return () => {
+      chrome.runtime.onMessage.removeListener(onMessage);
+      sessionChangedHere.removeEventListener('change', refresh);
+    };
   }, []);
   return session;
 }
@@ -596,7 +652,10 @@ function App({ tabId }: { tabId: number | undefined }) {
       onSubscribe={session ? () => void subscribe(session) : undefined}
       autoTranslate={running && <AutoTranslateToggle tabId={tabId} />}
       series={running && <SeriesPicker tabId={tabId} />}
-      renderSettings={() => <Settings mode={translationMode} session={session} quota={quota} onKeyChanged={setHasKey} />}
+      renderSettings={(_close, openDeleteAccount) => (
+        <Settings mode={translationMode} session={session} quota={quota} onKeyChanged={setHasKey} onDeleteAccount={openDeleteAccount} />
+      )}
+      renderDeleteAccount={(back) => <DeleteAccountPage session={session} onDone={back} />}
       renderNotes={() => tabId !== undefined && <SeriesNotesSection tabId={tabId} />}
     />
   );

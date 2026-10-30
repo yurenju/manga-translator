@@ -1,6 +1,7 @@
 /**
- * email 驗證碼登入與帳號狀態的 client（#91、#92、#94）：onboarding 的登入步驟呼叫 Worker 寄送與驗證驗證碼；side panel 讀目前的
- * 帳號狀態（剩餘額度）；「訂閱」建立 checkout、「管理訂閱」建立 customer portal session，拿到網址由呼叫的一方用新分頁打開。
+ * email 驗證碼登入與帳號狀態的 client（#91、#92、#94、#95）：onboarding 的登入步驟呼叫 Worker 寄送與驗證驗證碼；side panel 讀目前的
+ * 帳號狀態（剩餘額度）；「訂閱」建立 checkout、「管理訂閱」建立 customer portal session，拿到網址由呼叫的一方用新分頁打開；
+ * 設定頁的登出與刪除帳號（之後清掉本機 session 的流程在 account-exit.ts）。
  * 回傳 Worker 給的錯誤原因，畫面依原因換文案；連不上 Worker 時 reason 是 undefined。
  */
 import {
@@ -8,6 +9,7 @@ import {
   CHECKOUT_PATH,
   PORTAL_PATH,
   SEND_CODE_PATH,
+  SIGN_OUT_PATH,
   VERIFY_CODE_PATH,
   type AccountResponse,
   type CheckoutLocale,
@@ -29,6 +31,10 @@ export interface HostedAuth {
   checkout(token: string, locale: CheckoutLocale): Promise<{ ok: true; url: string } | AuthFailure>;
   /** 建立 Paddle customer portal session，回傳網址。 */
   portal(token: string): Promise<{ ok: true; url: string } | AuthFailure>;
+  /** 撤銷這個 session token。 */
+  signOut(token: string): Promise<{ ok: true } | AuthFailure>;
+  /** 刪除這個 Account（Worker 先取消訂閱）。 */
+  deleteAccount(token: string): Promise<{ ok: true } | AuthFailure>;
 }
 
 export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (url: string, init: RequestInit) => Promise<Response> }): HostedAuth {
@@ -75,5 +81,13 @@ export function createHostedAuth({ apiUrl, fetch }: { apiUrl: string; fetch: (ur
     },
     checkout: (token, locale) => url(CHECKOUT_PATH, { locale }, token),
     portal: (token) => url(PORTAL_PATH, {}, token),
+    async signOut(token) {
+      const result = await post(SIGN_OUT_PATH, {}, token);
+      return result.ok ? { ok: true } : result;
+    },
+    async deleteAccount(token) {
+      const result = await send(ACCOUNT_PATH, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
+      return result.ok ? { ok: true } : result;
+    },
   };
 }

@@ -23,6 +23,12 @@ export function get(path: string, token?: string): Promise<Response> {
   );
 }
 
+export function del(path: string, token?: string): Promise<Response> {
+  return exports.default.fetch(
+    new Request(`https://api.test${path}`, { method: 'DELETE', headers: token === undefined ? {} : { authorization: `Bearer ${token}` } }),
+  );
+}
+
 /** 假的寄信實作最後寄給這個 email 的驗證碼。 */
 export async function lastCode(email: string): Promise<string> {
   const response = await get(`${DEV_OUTBOX_PATH}?email=${encodeURIComponent(email)}`);

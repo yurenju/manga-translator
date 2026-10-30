@@ -28,7 +28,7 @@ import {
   type VerifyCodeResponse,
 } from '../../src/shared/hosted-api.ts';
 import type { CallInfo, Translator } from '../../src/shared/translator.ts';
-import { accountEmail, authenticate, revokeSession, sendCode, verifyCode } from './auth.ts';
+import { accountEmail, authenticate, deleteAccount, revokeSession, sendCode, verifyCode } from './auth.ts';
 import { deductPage, monthlyLimit, quota, recordUsage, setFreePages, type QuotaClock, type UsageKind } from './quota.ts';
 import { parseNotesInput, parseTranslateInput } from './input.ts';
 import { lastSentCode, mailer } from './mailer.ts';
@@ -164,6 +164,16 @@ const ROUTES: Record<string, Handler> = {
     const email = await accountEmail(env.DB, accountId);
     return email ? Response.json({ email, quota: await quota(env.DB, accountId, clock(env, now)) } satisfies AccountResponse) : signedOut();
   }),
+  // 刪除帳號：先取消 Paddle 訂閱，失敗就 502、什麼都不刪（帳號刪了訂閱卻還在扣款就沒有人能取消了）。
+  // 已經排定取消的不再送（Paddle 會回錯誤）；刪除後 Paddle 送來的事件找不到 Account，applyPaddleEvent 會忽略
+  [`DELETE ${ACCOUNT_PATH}`]: authed(async ({ env }, accountId) =>
+    viaPaddle(async () => {
+      const subscription = await activeSubscription(env.DB, accountId);
+      if (subscription && !subscription.cancelScheduled) await paddle(env).cancelSubscription(subscription.paddleSubscriptionId);
+      await deleteAccount(env.DB, accountId);
+      return new Response(null, { status: 204 });
+    }),
+  ),
   [`POST ${CHECKOUT_PATH}`]: authed(async ({ request, env }, accountId) => {
     const requested = field(await request.json().catch(() => undefined), 'locale');
     const locale = CHECKOUT_LOCALES.find((l) => l === requested) ?? 'zh-tw';

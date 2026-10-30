@@ -96,6 +96,19 @@ export async function revokeSession(db: D1Database, token: string, now: number):
   await db.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL').bind(now, await sha256(token)).run();
 }
 
+/**
+ * 刪除 Account（spec #86「Worker API」、#95）：Account、所有 session（所以每個 token 都失效）、額度、用量紀錄、訂閱一次刪掉。
+ * Free Pages 領取紀錄（email hash）不刪，同一個 email 重新註冊不會再領；paddle_events 只有事件 id，不屬於任何 Account。
+ * 子資料表先刪，最後才刪 accounts（D1 會檢查 foreign key）。
+ */
+export async function deleteAccount(db: D1Database, accountId: string): Promise<void> {
+  await db.batch(
+    ['sessions', 'quotas', 'usage_records', 'subscriptions', 'accounts'].map((table) =>
+      db.prepare(`DELETE FROM ${table} WHERE ${table === 'accounts' ? 'id' : 'account_id'} = ?`).bind(accountId),
+    ),
+  );
+}
+
 export async function accountEmail(db: D1Database, accountId: string): Promise<string | undefined> {
   const row = await db.prepare('SELECT email FROM accounts WHERE id = ?').bind(accountId).first<{ email: string }>();
   return row?.email;
