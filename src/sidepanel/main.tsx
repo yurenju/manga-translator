@@ -17,6 +17,7 @@ import type {
   TestConnectionResponse,
 } from '../shared/messages.ts';
 import { createHostedAuth } from '../shared/hosted-auth.ts';
+import type { Quota } from '../shared/hosted-api.ts';
 import { HOSTED_API_URL, loadHostedSession, saveHostedSession, type HostedSession } from '../shared/hosted-session.ts';
 import { DEFAULT_PAGE_MODE, savePageMode, watchPageMode, type PageMode } from '../shared/page-mode.ts';
 import { saveTranslationMode, watchTranslationMode, type TranslationMode } from '../shared/translation-mode.ts';
@@ -253,6 +254,34 @@ function useHostedSession(): [HostedSession | null | undefined, (session: Hosted
   return [session, setSession];
 }
 
+/**
+ * 內建翻譯的剩餘額度（#92）：登入後向 Worker 讀；SW 說額度變了（翻譯扣了一頁、Worker 說用完）就重新讀。
+ * 沒登入或讀不到時是 undefined（token 失效由 SW 的 Hosted Translator 處理，這裡不管）。
+ */
+function useHostedQuota(session: HostedSession | null | undefined): Quota | undefined {
+  const [quota, setQuota] = useState<Quota | undefined>(undefined);
+  const token = session?.token;
+  useEffect(() => {
+    setQuota(undefined);
+    if (!token) return;
+    let current = true;
+    const refresh = () =>
+      void hostedAuth.account(token).then((r) => {
+        if (current && r.ok) setQuota(r.account.quota);
+      });
+    const onMessage = (message: Message) => {
+      if (message.type === 'quota:changed') refresh();
+    };
+    chrome.runtime.onMessage.addListener(onMessage);
+    refresh();
+    return () => {
+      current = false;
+      chrome.runtime.onMessage.removeListener(onMessage);
+    };
+  }, [token]);
+  return quota;
+}
+
 /** 目前的 Page Mode 與切換函式；別的 side panel 切了也跟著變。只在 App 訂閱一次，往下傳。 */
 function usePageMode(): [PageMode, (mode: PageMode) => void] {
   const [mode, setMode] = useState<PageMode>(DEFAULT_PAGE_MODE);
@@ -433,6 +462,7 @@ function App({ tabId }: { tabId: number | undefined }) {
   const consented = useDataConsent();
   const translationMode = useTranslationMode();
   const [session, setSession] = useHostedSession();
+  const quota = useHostedQuota(session);
 
   useEffect(() => {
     void apiKeys.get().then((key) => setHasKey(Boolean(key)));
@@ -476,6 +506,7 @@ function App({ tabId }: { tabId: number | undefined }) {
       }}
       onAcceptConsent={() => void grantDataConsent()}
       onUseOwnKey={() => void saveTranslationMode('ownKey')}
+      quota={translationMode === 'hosted' ? quota : undefined}
       autoTranslate={running && <AutoTranslateToggle tabId={tabId} />}
       series={running && <SeriesPicker tabId={tabId} />}
       renderSettings={(close) => (

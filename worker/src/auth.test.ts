@@ -36,7 +36,7 @@ describe('登入', () => {
     const { token } = (await verified.json()) as { token: string };
     const account = await get(ACCOUNT_PATH, token);
     expect(account.status).toBe(200);
-    expect(await account.json()).toEqual({ email });
+    expect(await account.json()).toMatchObject({ email });
   });
 
   it('驗證碼錯誤回 400 wrongCode；之後輸入正確的仍然可以登入', async () => {

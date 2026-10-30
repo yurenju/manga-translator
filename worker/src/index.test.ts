@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAUDE_MODEL, notesRequest, translateRequest } from '../../src/shared/claude-request.ts';
 import { NOTES_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
 import type { NotesInput, TranslateInput } from '../../src/shared/translator.ts';
+import { fakeAnthropic, reply } from './test/anthropic.ts';
 import { post as postAs, signIn } from './test/http.ts';
 
 const input: TranslateInput = {
@@ -23,24 +24,9 @@ beforeEach(async () => {
 /** 帶這個測試登入拿到的 token；token: null＝不帶。 */
 const post = (path: string, body: unknown, as: string | null = token) => postAs(path, body, as === null ? {} : { token: as });
 
-const usage = { input_tokens: 300, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 700 };
-
 const answer = { items: [{ id: 'b1', reading: 'おはよう！きょうははやいね', zh: '早安！今天好早喔', unreadable: false }] };
 
-const ok = () =>
-  Response.json({ model: CLAUDE_MODEL, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(answer) }], usage });
-
-/** 假的 Anthropic：依序回傳 responses，記下每次送出的網址、init 與 body。 */
-function fakeAnthropic(responses: (() => Response)[]) {
-  const calls: { url: string; init: RequestInit; body: unknown }[] = [];
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init = {}) => {
-    calls.push({ url: String(url), init, body: JSON.parse(init.body as string) });
-    const next = responses.shift();
-    if (!next) throw new Error('no more responses');
-    return next();
-  });
-  return { calls };
-}
+const ok = reply(answer);
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -137,9 +123,7 @@ describe('Notes', () => {
     const notesAnswer = {
       notes_changes: { added: [{ ja: 'パン屋', reading: 'ぱんや', zh: '麵包店', category: '地名', note: '' }], filled: [], suggestions: [] },
     };
-    const anthropic = fakeAnthropic([
-      () => Response.json({ model: CLAUDE_MODEL, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(notesAnswer) }], usage }),
-    ]);
+    const anthropic = fakeAnthropic([reply(notesAnswer)]);
     const notesInput: NotesInput = { seriesNotes: [], items: [{ kind: 'balloon', 原文: '湊、パン屋に行こう', 譯文: '湊，去麵包店吧' }] };
 
     const response = await post(NOTES_PATH, { ...notesInput, model: 'claude-opus-5-5' });

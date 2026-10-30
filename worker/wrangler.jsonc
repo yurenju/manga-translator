@@ -2,6 +2,7 @@
 //   npx wrangler dev -c worker/wrangler.jsonc --env dev   真的 Anthropic（key 放 worker/.dev.vars 的 CLAUDE_API_KEY）
 //   npx wrangler dev -c worker/wrangler.jsonc --env test  假的 Anthropic（FakeTranslator），browser test 用
 // 兩個本機 env 的寄信都是假的（FAKE_MAIL）：驗證碼印在終端機，也能從 /v1/dev/outbox 取得。
+// 兩個本機 env 也開放開發用的端點（DEV_ENDPOINTS）：/v1/dev/free-pages 直接設定免費額度。
 // define 與 vars、d1_databases、ratelimits 都不會從最上層繼承，每個 env 各寫一次。
 // 寄送驗證碼的頻率限制：同一個 IP 每分鐘 10 次、同一個 email 每分鐘 3 次（畫面上 30 秒後才能重新寄送）。
 {
@@ -18,7 +19,7 @@
   "define": { "__FAKE_ANTHROPIC__": "false" },
   "env": {
     "dev": {
-      "vars": { "FAKE_MAIL": "true" },
+      "vars": { "FAKE_MAIL": "true", "DEV_ENDPOINTS": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "naruhodo", "database_id": "local", "migrations_dir": "migrations" }],
       "ratelimits": [
         { "name": "SEND_CODE_BY_IP", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
@@ -27,7 +28,7 @@
       "define": { "__FAKE_ANTHROPIC__": "false" }
     },
     "test": {
-      "vars": { "FAKE_MAIL": "true" },
+      "vars": { "FAKE_MAIL": "true", "DEV_ENDPOINTS": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "naruhodo", "database_id": "local", "migrations_dir": "migrations" }],
       "ratelimits": [
         { "name": "SEND_CODE_BY_IP", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },

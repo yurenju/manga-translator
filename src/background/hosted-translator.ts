@@ -5,11 +5,24 @@
  *
  * 重試：429／503 是 Worker 本身忙，等一下再送；502 是 Anthropic 失敗，Worker 已經重試過，這裡不再重試。
  * 401 是 token 已失效（撤銷或閒置太久）：呼叫 onSignedOut 讓外掛回到未登入。
+ * 402 是額度用完：丟出 QuotaExhaustedError，pipeline 把這頁當成沒翻譯（顯示原文與讀音），不當成失敗。
+ * 翻譯成功（扣了一頁）與額度用完都呼叫 onQuotaChanged，side panel 重新讀剩餘頁數。
  */
-import { NOTES_PATH, TRANSLATE_PATH, type HostedError } from '../shared/hosted-api.ts';
+import { NOTES_PATH, TRANSLATE_PATH, type HostedError, type HostedErrorReason } from '../shared/hosted-api.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 
 const MAX_RETRIES = 3;
+
+/** Worker 說額度用完（402）；reason 是原因（目前只有免費額度用完，#94 加本月額度）。 */
+export class QuotaExhaustedError extends Error {
+  readonly reason: HostedErrorReason;
+
+  constructor(message: string, reason: HostedErrorReason) {
+    super(message);
+    this.name = 'QuotaExhaustedError';
+    this.reason = reason;
+  }
+}
 
 export interface HostedDeps {
   /** Worker 的網址（scripts/build.ts 依 build 決定）。 */
@@ -21,6 +34,8 @@ export interface HostedDeps {
   now(): number;
   /** Worker 說這個 token 已經不能用（401）。 */
   onSignedOut(): void;
+  /** 剩餘額度可能變了：翻譯成功扣了一頁，或 Worker 說額度用完。 */
+  onQuotaChanged(): void;
 }
 
 export function createHostedTranslator(deps: HostedDeps): Translator {
@@ -37,22 +52,38 @@ export function createHostedTranslator(deps: HostedDeps): Translator {
       if (response.ok) return { ...((await response.json()) as T), latencyMs: deps.now() - started };
       if (response.status === 401) deps.onSignedOut();
       const retryable = response.status === 429 || response.status === 503;
-      if (!retryable || attempt >= MAX_RETRIES) throw new Error(`Hosted Translation ${response.status}：${await errorMessage(response)}`);
-      const retryAfter = Number(response.headers.get('retry-after'));
-      await deps.sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2 ** attempt * 2000, signal);
+      if (retryable && attempt < MAX_RETRIES) {
+        const retryAfter = Number(response.headers.get('retry-after'));
+        await deps.sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2 ** attempt * 2000, signal);
+        continue;
+      }
+      const error = await hostedError(response);
+      const message = `Hosted Translation ${response.status}：${error.error}`;
+      if (response.status === 402 && error.reason) {
+        deps.onQuotaChanged();
+        throw new QuotaExhaustedError(message, error.reason);
+      }
+      throw new Error(message);
     }
   }
 
+  async function translatePage(input: TranslateInput, signal?: AbortSignal): Promise<TranslateOutput> {
+    const output = await call<TranslateOutput>(TRANSLATE_PATH, input, signal);
+    deps.onQuotaChanged();
+    return output;
+  }
+
   return {
-    translatePage: (input: TranslateInput, signal?: AbortSignal) => call<TranslateOutput>(TRANSLATE_PATH, input, signal),
+    translatePage,
     proposeNotes: (input: NotesInput, signal?: AbortSignal) => call<NotesOutput>(NOTES_PATH, input, signal),
   };
 }
 
-async function errorMessage(response: Response): Promise<string> {
+async function hostedError(response: Response): Promise<HostedError> {
   try {
-    return ((await response.json()) as HostedError).error ?? response.statusText;
+    const body = (await response.json()) as Partial<HostedError>;
+    return { error: body.error ?? response.statusText, ...(body.reason ? { reason: body.reason } : {}) };
   } catch {
-    return response.statusText;
+    return { error: response.statusText };
   }
 }

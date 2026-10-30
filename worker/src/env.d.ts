@@ -9,6 +9,8 @@ declare namespace Cloudflare {
     SEND_CODE_BY_EMAIL: RateLimit;
     /** "true"：寄信用假的實作，並開放 DEV_OUTBOX_PATH（只有 env.dev／env.test 設）。 */
     FAKE_MAIL?: string;
+    /** "true"：開放開發用的端點（DEV_FREE_PAGES_PATH）；只有 env.dev／env.test 設。 */
+    DEV_ENDPOINTS?: string;
     /** Resend 的 key 與寄件地址：production 用 wrangler secret／vars（#97）。 */
     RESEND_API_KEY?: string;
     MAIL_FROM?: string;

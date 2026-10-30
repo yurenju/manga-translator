@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput } from '../shared/translator.ts';
-import { createHostedTranslator, type HostedDeps } from './hosted-translator.ts';
+import { createHostedTranslator, QuotaExhaustedError, type HostedDeps } from './hosted-translator.ts';
 
 const input: TranslateInput = {
   seriesNotes: [{ seriesId: 's1', 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文: '霧島湊', 類別: '人名', locked: false }],
@@ -50,6 +50,7 @@ function setup(responses: (() => Response)[]) {
     sleep: vi.fn(async () => {}),
     now: () => clock,
     onSignedOut: vi.fn(),
+    onQuotaChanged: vi.fn(),
   };
   return { translator: createHostedTranslator(deps), calls, deps };
 }
@@ -105,6 +106,26 @@ describe('Hosted Translation：回應', () => {
     await expect(translator.translatePage(input)).rejects.toThrow('Hosted Translation 401：請先登入');
     expect(calls).toHaveLength(1);
     expect(deps.onSignedOut).toHaveBeenCalledOnce();
+  });
+
+  it('免費額度用完（402 freePagesExhausted）：丟出 QuotaExhaustedError 並通知額度變了，不重試', async () => {
+    const { translator, calls, deps } = setup([() => response({ error: '免費額度已用完', reason: 'freePagesExhausted' }, { status: 402 })]);
+
+    const error = await translator.translatePage(input).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(QuotaExhaustedError);
+    expect(error).toMatchObject({ reason: 'freePagesExhausted', message: 'Hosted Translation 402：免費額度已用完' });
+    expect(calls).toHaveLength(1);
+    expect(deps.onQuotaChanged).toHaveBeenCalledOnce();
+  });
+
+  it('翻譯成功通知額度變了（扣了一頁）；Notes 不扣，不通知', async () => {
+    const { translator, deps } = setup([() => response(translated), () => response(notesOutput)]);
+
+    await translator.translatePage(input);
+    await translator.proposeNotes(notesInput);
+
+    expect(deps.onQuotaChanged).toHaveBeenCalledOnce();
   });
 
   it('Anthropic 失敗（502）：Worker 已經重試過，外掛不再重試', async () => {

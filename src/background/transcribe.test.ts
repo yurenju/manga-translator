@@ -4,6 +4,7 @@ import type { PageText, PageTranslation } from '../shared/page-text.ts';
 import { editEntry, type NotesSuggestion, type SeriesNotes } from '../shared/series-notes.ts';
 import type { NotesChanges, NotesEntry, NotesInput, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { createClaudeTranslator } from '../offscreen/claude-translator.ts';
+import { QuotaExhaustedError } from './hosted-translator.ts';
 import { createTranscriber, type NotesStore, type PageCache, type TranscriberDeps } from './transcribe.ts';
 
 const rect = { x: 0, y: 0, w: 1, h: 1 };
@@ -281,6 +282,18 @@ describe('翻譯此頁', () => {
     await transcriber.translate(1);
 
     expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false, translateError: 'Claude API 500：boom' });
+  });
+
+  it('額度用完（QuotaExhaustedError）不算翻譯失敗：顯示原文與 kuromoji 讀音，不帶錯誤', async () => {
+    const translator: Translator = {
+      ...noNotes,
+      translatePage: async () => Promise.reject(new QuotaExhaustedError('Hosted Translation 402：免費額度已用完', 'freePagesExhausted')),
+    };
+    const { transcriber } = setup({ getTranslator: () => translator });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(transcriber.get(1)[0]!.transcript).toEqual({ state: 'done', text: pageText, translated: false });
   });
 
   it('還沒設定 key 時按「翻譯此頁」不改變逐字稿', async () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PageView } from '../shared/messages.ts';
 import type { RatioRect } from '../shared/page-text.ts';
-import { setupNotices, sidePanelView } from './view.ts';
+import type { TranslationMode } from '../shared/translation-mode.ts';
+import { quotaView, setupNotices, sidePanelView } from './view.ts';
 
 type Transcript = PageView['transcript'];
 type Done = Extract<Transcript, { state: 'done' }>;
@@ -34,7 +35,7 @@ function page(pageHash: string, anchorId: string, extra: { subRect?: RatioRect; 
 const LEFT_HALF: RatioRect = { x: 0, y: 0, w: 0.5, h: 1 };
 const RIGHT_HALF: RatioRect = { x: 0.5, y: 0, w: 0.5, h: 1 };
 
-const listed = (pages: PageView[]) => sidePanelView(pages).pages.map((p) => [p.page.pageHash, p.side, p.heading]);
+const listed = (pages: PageView[]) => sidePanelView(pages, 'ownKey').pages.map((p) => [p.page.pageHash, p.side, p.heading]);
 
 describe('side panel 的 Page 清單', () => {
   it('單頁照 SW 的順序，頁首是「第 N 頁」、不標左右', () => {
@@ -70,7 +71,7 @@ describe('side panel 的 Page 清單', () => {
   });
 });
 
-const pageStatus = (transcript: Transcript) => sidePanelView([page('p1', 'a1', { transcript })]).pages[0]!.translationStatus;
+const pageStatus = (transcript: Transcript, mode: TranslationMode = 'ownKey') => sidePanelView([page('p1', 'a1', { transcript })], mode).pages[0]!.translationStatus;
 
 describe('單頁的翻譯狀態列', () => {
   it('新翻譯：「已翻譯」・模型・秒數・費用', () => {
@@ -81,6 +82,11 @@ describe('單頁的翻譯狀態列', () => {
     expect(pageStatus(translated({ model: 'claude-y', latencyMs: 800, costUsd: 0.002, source: 'cache' }))).toBe('快取・claude-y・0.8 秒・$0.0020');
   });
 
+  it('內建翻譯：只有「已翻譯」或「快取」與秒數，不顯示模型與費用', () => {
+    expect(pageStatus(translated({ model: 'claude-x', latencyMs: 2345 }), 'hosted')).toBe('已翻譯・2.3 秒');
+    expect(pageStatus(translated({ latencyMs: 800, source: 'cache' }), 'hosted')).toBe('快取・0.8 秒');
+  });
+
   it('還在辨識、正在翻譯、翻譯失敗時不顯示', () => {
     expect(pageStatus({ state: 'analyzing' })).toBeUndefined();
     expect(pageStatus({ ...translated(), translating: true })).toBeUndefined();
@@ -88,13 +94,18 @@ describe('單頁的翻譯狀態列', () => {
   });
 });
 
-const overall = (transcripts: Transcript[]) => sidePanelView(transcripts.map((transcript, i) => page(`p${i}`, `a${i}`, { transcript }))).status;
+const overall = (transcripts: Transcript[], mode: TranslationMode = 'ownKey') =>
+  sidePanelView(transcripts.map((transcript, i) => page(`p${i}`, `a${i}`, { transcript })), mode).status;
 
 describe('底部的整體狀態列', () => {
   it('多個 Page 時加總頁數、秒數、費用', () => {
     expect(
       overall([translated({ latencyMs: 1200, costUsd: 0.00123 }), translated({ latencyMs: 2300, costUsd: 0.00456 })]),
     ).toEqual({ kind: 'summary', text: '已翻譯 2 頁 · claude-x · 3.5 秒 · $0.00579' });
+  });
+
+  it('內建翻譯：只有頁數與秒數，不顯示模型與費用', () => {
+    expect(overall([translated({ latencyMs: 3000 }), translated({ latencyMs: 4700 })], 'hosted')).toEqual({ kind: 'summary', text: '已翻譯 2 頁 · 7.7 秒' });
   });
 
   it('多個模型用「、」列出，同一個模型只列一次', () => {
@@ -168,5 +179,44 @@ describe('翻譯前的設定提示', () => {
       notice: undefined,
     });
     expect(setupNotices({ access: { mode: 'ownKey', hasKey: false }, consented: undefined, untranslated: false }).consentCard).toBe(false);
+  });
+});
+
+const signedIn = { mode: 'hosted', signedIn: true } as const;
+const free = (remaining: number) => ({ plan: 'free', remaining }) as const;
+
+describe('內建翻譯的額度（底部那一行）', () => {
+  it('剩 37 頁：「免費額度剩 37 頁」，旁邊有「訂閱」連結，不用警告色', () => {
+    expect(quotaView(signedIn, free(37)).line).toEqual({ text: '免費額度剩 37 頁', warn: false, subscribeLink: true });
+  });
+
+  it('剩 5 頁以下改用警告色', () => {
+    expect(quotaView(signedIn, free(6)).line).toMatchObject({ warn: false });
+    expect(quotaView(signedIn, free(5)).line).toMatchObject({ text: '免費額度剩 5 頁', warn: true });
+    expect(quotaView(signedIn, free(1)).line).toMatchObject({ warn: true });
+  });
+
+  it('自備金鑰、沒登入、額度還在讀時不顯示', () => {
+    expect(quotaView({ mode: 'ownKey', hasKey: true }, undefined).line).toBeUndefined();
+    expect(quotaView({ mode: 'hosted', signedIn: false }, undefined).line).toBeUndefined();
+    expect(quotaView(signedIn, undefined).line).toBeUndefined();
+  });
+});
+
+describe('內建翻譯的免費額度用完', () => {
+  it('底部那一行改成「免費額度已用完」（警告色、沒有「訂閱」小字），逐字稿上方顯示用完的 Callout，底部按鈕換成「訂閱」', () => {
+    expect(quotaView(signedIn, free(0))).toEqual({
+      line: { text: '免費額度已用完', warn: true, subscribeLink: false },
+      exhausted: 'freePagesExhausted',
+      subscribeButton: true,
+    });
+  });
+
+  it('還有額度時沒有 Callout，底部照常是翻譯按鈕', () => {
+    expect(quotaView(signedIn, free(3))).toMatchObject({ exhausted: undefined, subscribeButton: false });
+  });
+
+  it('自備金鑰時不看額度', () => {
+    expect(quotaView({ mode: 'ownKey', hasKey: true }, free(0))).toEqual({ line: undefined, exhausted: undefined, subscribeButton: false });
   });
 });
