@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PageView } from '../shared/messages.ts';
 import type { RatioRect } from '../shared/page-text.ts';
-import { sidePanelView } from './view.ts';
+import { setupNotices, sidePanelView } from './view.ts';
 
 type Transcript = PageView['transcript'];
 type Done = Extract<Transcript, { state: 'done' }>;
@@ -128,5 +128,45 @@ describe('底部的整體狀態列', () => {
 
   it('費用算不出來時顯示「費用未知」', () => {
     expect(overall([translated({ costUsd: Number.NaN })])).toMatchObject({ text: expect.stringMatching(/ · 費用未知$/) });
+  });
+});
+
+describe('翻譯前的設定提示', () => {
+  it('內建翻譯、沒登入：顯示「尚未登入」，即使還沒有頁；不顯示資料使用說明卡（同意在登入時取得）', () => {
+    expect(setupNotices({ access: { mode: 'hosted', signedIn: false }, consented: false, untranslated: false })).toEqual({
+      consentCard: false,
+      notice: 'signedOut',
+    });
+  });
+
+  it('內建翻譯、已登入而且同意了：什麼都不顯示', () => {
+    expect(setupNotices({ access: { mode: 'hosted', signedIn: true }, consented: true, untranslated: true })).toEqual({
+      consentCard: false,
+      notice: undefined,
+    });
+  });
+
+  it('內建翻譯、有 token 但同意被撤回：也是「尚未登入」，重新登入就會再同意', () => {
+    expect(setupNotices({ access: { mode: 'hosted', signedIn: true }, consented: false, untranslated: false }).notice).toBe('signedOut');
+  });
+
+  it('自備金鑰：沒同意顯示資料使用說明卡；沒有 key 而且有未翻譯的頁才提示設定 key', () => {
+    expect(setupNotices({ access: { mode: 'ownKey', hasKey: false }, consented: false, untranslated: false })).toEqual({
+      consentCard: true,
+      notice: undefined,
+    });
+    expect(setupNotices({ access: { mode: 'ownKey', hasKey: false }, consented: true, untranslated: true })).toEqual({
+      consentCard: false,
+      notice: 'noKey',
+    });
+    expect(setupNotices({ access: { mode: 'ownKey', hasKey: true }, consented: true, untranslated: true }).notice).toBeUndefined();
+  });
+
+  it('同意狀態還在讀：什麼都不顯示，不會閃一下', () => {
+    expect(setupNotices({ access: { mode: 'hosted', signedIn: false }, consented: undefined, untranslated: true })).toEqual({
+      consentCard: false,
+      notice: undefined,
+    });
+    expect(setupNotices({ access: { mode: 'ownKey', hasKey: false }, consented: undefined, untranslated: false }).consentCard).toBe(false);
   });
 });

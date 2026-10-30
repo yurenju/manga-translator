@@ -49,6 +49,7 @@ function setup(responses: (() => Response)[]) {
     }),
     sleep: vi.fn(async () => {}),
     now: () => clock,
+    onSignedOut: vi.fn(),
   };
   return { translator: createHostedTranslator(deps), calls, deps };
 }
@@ -90,11 +91,20 @@ describe('Hosted Translation：回應', () => {
     expect(output).toEqual({ ...translated, latencyMs: 2300 });
   });
 
-  it('Worker 回錯誤（例如 token 錯誤）：丟出 Worker 的訊息，不重試', async () => {
-    const { translator, calls } = setup([() => response({ error: '請先登入' }, { status: 401 })]);
+  it('Worker 回錯誤：丟出 Worker 的訊息，不重試', async () => {
+    const { translator, calls, deps } = setup([() => response({ error: '輸入格式不符' }, { status: 400 })]);
+
+    await expect(translator.translatePage(input)).rejects.toThrow('Hosted Translation 400：輸入格式不符');
+    expect(calls).toHaveLength(1);
+    expect(deps.onSignedOut).not.toHaveBeenCalled();
+  });
+
+  it('token 已失效（401 signedOut）：通知外掛已登出，丟出 Worker 的訊息，不重試', async () => {
+    const { translator, calls, deps } = setup([() => response({ error: '請先登入', reason: 'signedOut' }, { status: 401 })]);
 
     await expect(translator.translatePage(input)).rejects.toThrow('Hosted Translation 401：請先登入');
     expect(calls).toHaveLength(1);
+    expect(deps.onSignedOut).toHaveBeenCalledOnce();
   });
 
   it('Anthropic 失敗（502）：Worker 已經重試過，外掛不再重試', async () => {

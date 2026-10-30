@@ -3,7 +3,8 @@
  * - 正式 build（沒有 host_permissions）：設定區「測試連線」成功＝offscreen 直接 fetch 的 CORS 在真的外掛裡也過得去
  *   （#15 只用 curl 模擬過 chrome-extension:// origin）。
  * - e2e build：仿 Jump+ 的 p01 經過本機 OCR 後送給 Haiku 5.5，逐字稿出現譯文，狀態列顯示模型・秒數・費用。
- *   自備 API key 直接打 Anthropic 一次；內建翻譯經過本機 Worker（wrangler dev --env dev，用同一把 key）一次（#90）。
+ *   自備 API key 直接打 Anthropic 一次；內建翻譯經過本機 Worker（wrangler dev --env dev，用同一把 key）一次（#90），
+ *   先用 email 驗證碼登入（env.dev 的寄信是假的實作，#91）。
  * 沒有 key 時跳過並印出「已跳過」。key 只在這個測試程序裡讀，不印出。
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -13,6 +14,7 @@ import type { Page } from '@playwright/test';
 import { build } from '../../scripts/build.ts';
 import { readTestApiKey, TEST_API_KEY_FILE } from '../../src/testing/test-api-key.ts';
 import { activateOnJumpPlus, chooseFromPanelMenu, expect, launchWithExtension, openSidePanel, test } from '../fixtures.ts';
+import { signInWithEmail } from '../sign-in.ts';
 import { startWorker } from '../worker.ts';
 
 const apiKey = readTestApiKey();
@@ -71,9 +73,10 @@ test.describe('e2e build', () => {
         async beforeActivate(panel) {
           await chooseFromPanelMenu(panel, 'API key 與模型');
           await panel.getByRole('group', { name: '翻譯方式' }).getByRole('button', { name: '內建翻譯' }).click();
+          // 登入時就取得資料使用同意，不另外按說明卡
+          await signInWithEmail(panel.getByRole('region', { name: 'API key 與模型' }), `smoke-${Date.now()}@example.com`);
         },
       });
-      await acceptConsent(panel);
 
       await expectTranslatedP01(panel);
     } finally {

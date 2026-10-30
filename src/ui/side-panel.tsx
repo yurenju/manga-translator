@@ -9,8 +9,9 @@ import type { LineRef, ModelStatus, PageView } from '../shared/messages.ts';
 import type { PageMode } from '../shared/page-mode.ts';
 import type { StaleReason } from '../shared/series-notes.ts';
 import { Badge, Button, Callout, PageHeader, Progress, SegmentedControl, type SegmentOption } from './components.tsx';
+import { PRIVACY_URL } from './links.ts';
 import { DEFAULT_LEVEL, DisplaySwitch, Transcript, type Display, type Level } from './transcript.tsx';
-import { sidePanelView, type OverallStatus, type PageEntry } from './view.ts';
+import { setupNotices, sidePanelView, type OverallStatus, type PageEntry, type SetupNotice, type TranslationAccess } from './view.ts';
 
 const mb = (bytes: number) => (bytes / 2 ** 20).toFixed(1);
 
@@ -115,8 +116,6 @@ function PageItem({
   );
 }
 
-const PRIVACY_URL = 'https://github.com/yurenju/naruhodo-manga-translator/blob/main/PRIVACY.md';
-
 /**
  * 資料使用說明（shared/data-consent.ts）：還沒同意就固定顯示在最上面，啟動前、從內建選單打開時都一樣。
  * 內容要跟 PRIVACY.md 一致；資料處理方式改了，兩邊一起改，並把 DATA_CONSENT_VERSION 加一。
@@ -145,6 +144,31 @@ function DataConsentCard({ onAccept }: { onAccept: () => void }) {
         </Button>
       </Callout>
     </section>
+  );
+}
+
+/**
+ * 逐字稿上方的設定提示（view.ts 的 setupNotices 決定顯示哪一個）。「尚未登入」的版面與文案照 #91 畫面定案；
+ * 「登入」與「使用自備金鑰」都打開設定區（全頁 onboarding 在 #93 才有）。
+ */
+function SetupNoticeCallout({ notice, onSignIn, onUseOwnKey }: { notice: SetupNotice; onSignIn: () => void; onUseOwnKey: () => void }) {
+  if (notice === 'noKey')
+    return <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在 ⚙ 選單的「API key 與模型」輸入 key。</Callout>;
+  if (notice !== 'signedOut') return null;
+  return (
+    <Callout tone="warn" class="naru-callout--stack" role="group" aria-label="尚未登入">
+      <p>
+        <strong>尚未登入</strong>：只顯示原文與讀音。
+      </p>
+      <div class="naru-row">
+        <Button variant="primary" onClick={onSignIn}>
+          登入
+        </Button>
+        <Button variant="link" onClick={onUseOwnKey}>
+          使用自備金鑰
+        </Button>
+      </div>
+    </Callout>
   );
 }
 
@@ -268,9 +292,9 @@ export interface SidePanelProps {
   running: boolean;
   pages: PageView[];
   modelStatus: ModelStatus;
-  /** 沒有 API key 而且有未翻譯的頁：顯示提示。 */
-  hasKey: boolean;
-  /** 資料使用同意；false＝顯示說明卡，undefined＝還在讀（不顯示）。 */
+  /** 翻譯模式與能不能翻（內建翻譯有沒有登入、自備金鑰有沒有 key）；不能翻時顯示提示。 */
+  access: TranslationAccess;
+  /** 資料使用同意；自備金鑰時 false＝顯示說明卡，undefined＝還在讀（不顯示）。內建翻譯的同意在登入時取得。 */
   consented: boolean | undefined;
   pageMode: PageMode;
   /** 頁面上滑鼠所在的那句（逐字稿那行高亮）。 */
@@ -286,6 +310,8 @@ export interface SidePanelProps {
   /** 滑過逐字稿的某行；null＝離開。 */
   onLineHover: (line: LineRef | null) => void;
   onAcceptConsent: () => void;
+  /** 「尚未登入」的「使用自備金鑰」：切到自備金鑰（設定區同時打開）。 */
+  onUseOwnKey: () => void;
   /** 以下是只有外掛 container 才有的區塊（會讀寫 store、送 chrome 訊息）；沒給就不顯示，⚙ 選單也沒有那一項。 */
   /** ⚙ 選單裡的自動翻譯開關。 */
   autoTranslate?: ComponentChildren;
@@ -298,7 +324,7 @@ export interface SidePanelProps {
 }
 
 export function SidePanel(props: SidePanelProps) {
-  const { running, pages, modelStatus, hasKey, consented, pageMode, hovered, onScan, onTranslate } = props;
+  const { running, pages, modelStatus, access, consented, pageMode, hovered, onScan, onTranslate } = props;
   const [level, setLevel] = useState<Level>(DEFAULT_LEVEL);
   const [furigana, setFurigana] = useState(true);
   const display: Display = pageMode === 'learn' ? { mode: 'learn', furigana } : { mode: 'read', level };
@@ -326,7 +352,12 @@ export function SidePanel(props: SidePanelProps) {
     </div>
   );
   const settings = section === 'settings' && props.renderSettings?.(close);
-  const consentCard = consented === false && <DataConsentCard onAccept={props.onAcceptConsent} />;
+  const done = pages.filter((p) => p.transcript.state === 'done');
+  const pending = pages.some((p) => p.transcript.state === 'pending');
+  const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
+  const notices = setupNotices({ access, consented, untranslated });
+  const consentCard = notices.consentCard && <DataConsentCard onAccept={props.onAcceptConsent} />;
+  const openSettings = () => setSection('settings');
   if (!running)
     return (
       <div class="naru-side-panel">
@@ -338,9 +369,6 @@ export function SidePanel(props: SidePanelProps) {
         </main>
       </div>
     );
-  const done = pages.filter((p) => p.transcript.state === 'done');
-  const pending = pages.some((p) => p.transcript.state === 'pending');
-  const untranslated = pending || done.some((p) => p.transcript.state === 'done' && !p.transcript.translated);
   const translate = () => onTranslate();
   const view = sidePanelView(pages);
   const sync: TranscriptSync = { display, hovered, onLineHover: props.onLineHover };
@@ -353,9 +381,14 @@ export function SidePanel(props: SidePanelProps) {
         {settings}
         {section === 'notes' && props.renderNotes?.(close)}
         <ModelStatusLine status={modelStatus} onRetry={onScan} />
-        {untranslated && !hasKey && (
-          <Callout tone="warn">尚未設定 API key：只顯示原文與讀音（kuromoji 推測），未翻譯。請在 ⚙ 選單的「API key 與模型」輸入 key。</Callout>
-        )}
+        <SetupNoticeCallout
+          notice={notices.notice}
+          onSignIn={openSettings}
+          onUseOwnKey={() => {
+            props.onUseOwnKey();
+            openSettings();
+          }}
+        />
         {done.length > 0 && <DisplaySwitch display={display} onLevel={setLevel} onFurigana={setFurigana} />}
         <ul aria-label="Page">
           {view.pages.map((entry) => (

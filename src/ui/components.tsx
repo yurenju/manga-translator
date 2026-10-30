@@ -8,10 +8,13 @@ import type { PageHeading, SpreadSide } from './view.ts';
 
 const cx = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(' ');
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'icon';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'icon' | 'link';
 
 type ButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'class' | 'className'> & {
-  /** primary：主要動作（一區最多一個）；secondary：預設；ghost：次要、工具列；icon：只有圖示，要給 aria-label。 */
+  /**
+   * primary：主要動作（一區最多一個）；secondary：預設；ghost：次要、工具列；icon：只有圖示，要給 aria-label；
+   * link：小字、底線，比較不顯眼的替代選項（例如「使用自備金鑰」）。
+   */
   variant?: ButtonVariant;
   class?: string;
 };

@@ -30,6 +30,8 @@ export type Message =
   | ({ type: 'offscreen:analyze' } & AnalyzeRequest)
   /** offscreen → 全部：模型下載／載入狀態。 */
   | { type: 'models:status'; status: ModelStatus }
+  /** 登入、或 Worker 說 token 已失效（SW 清掉）→ 全部：Hosted Translation 的 session 變了，重新讀（shared/hosted-session.ts）。 */
+  | { type: 'session:changed' }
   /** side panel → SW：目前的模型狀態。回應 ModelStatusResponse。 */
   | { type: 'panel:getModelStatus' }
   /**
