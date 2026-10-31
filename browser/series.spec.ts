@@ -56,6 +56,26 @@ test('選 Series 後重新整理再啟動，自動預選同一部 Series', async
   await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
 });
 
+// #145：換不換、對不上就沿用是 activation 與 series-catalog 的 unit；這裡確認真的導航會經過 SW 換掉 Series，side panel 跟著顯示
+test('同分頁導航回記住了另一部 Series 的網址：side panel 換成那部 Series', async ({ context, sw, extensionId, mockSite }) => {
+  const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite });
+  await createSeries(panel, '作品甲');
+  const first = await currentSeries(panel, tabId);
+
+  // 另一部作品：對不上網址模式就沿用作品甲，讀者在這裡新增作品乙（記住這個網址）
+  const otherWork = new URL('other-work/', mockSite.canvasSiteUrl).href;
+  await page.goto(otherWork);
+  await page.locator('body[data-ready="true"]').waitFor();
+  await expect(seriesRow(panel)).toContainText('作品甲');
+  await createSeries(panel, '作品乙');
+
+  await page.goto(mockSite.canvasSiteUrl);
+  await page.locator('body[data-ready="true"]').waitFor();
+
+  await expect(seriesRow(panel)).toContainText('作品甲');
+  expect(await currentSeries(panel, tabId)).toBe(first);
+});
+
 test('Provisional Series 在 side panel 改名：顯示新名稱，也寫進 store', async ({ context, sw, extensionId, mockSite }) => {
   const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   await expect(seriesRow(panel)).toContainText(/未歸類（/);
