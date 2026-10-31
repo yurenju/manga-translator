@@ -24,6 +24,7 @@ import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared
 import { findSamePage } from '../shared/page-hash.ts';
 import { pageLines, type PageText } from '../shared/page-text.ts';
 import type { SeriesNotes, TranslatorVersion } from '../shared/series-notes.ts';
+import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { TranslatedLine, PriorPage, Translator } from '../shared/translator.ts';
 import { createNotesLedger, newSnapshotGroup, type NotesStore, type SnapshotGroup } from './notes-ledger.ts';
@@ -49,6 +50,8 @@ export interface TranscriberDeps {
   translatorVersion?(): TranslatorVersion | undefined | Promise<TranslatorVersion | undefined>;
   /** 這個 tab 啟動時選定的 Series（或 Provisional Series）；沒有就不查也不寫快取。 */
   getSeriesId(tabId: number): Promise<string | undefined>;
+  /** 送出翻譯時讀 Series 的名稱（讀者在這之間可能改名）。 */
+  getSeries(seriesId: string): Promise<Series | undefined>;
   cache: PageCache;
   notes: NotesStore;
   publish(tabId: number, pages: PageView[]): void;
@@ -135,7 +138,7 @@ interface JobSpec {
 
 export function createTranscriber(deps: TranscriberDeps) {
   const ledger = createNotesLedger({ store: deps.notes });
-  const pageTranslation = createPageTranslation({ cache: deps.cache, ledger, translatorVersion: deps.translatorVersion });
+  const pageTranslation = createPageTranslation({ cache: deps.cache, ledger, getSeries: deps.getSeries, translatorVersion: deps.translatorVersion });
   const tabs = new Map<number, TabState>();
   const views = new Map<number, PageView[]>();
   const autoTranslate = new Map<number, boolean>();

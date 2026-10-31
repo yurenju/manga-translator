@@ -198,6 +198,7 @@ async function translatorVersion(): Promise<TranslatorVersion | undefined> {
 }
 
 const notesStore = indexedDbNotesStore();
+const seriesRepo = indexedDbSeriesRepo();
 
 const transcriber = createTranscriber({
   async analyze(request) {
@@ -213,6 +214,7 @@ const transcriber = createTranscriber({
   getTranslator,
   translatorVersion,
   getSeriesId: (tabId) => activation.getSeriesId(tabId),
+  getSeries: (seriesId) => seriesRepo.getSeries(seriesId),
   cache: indexedDbPageCache(),
   notes: {
     ...notesStore,
@@ -302,7 +304,7 @@ async function changeNotes(tabId: number, action: string, detail: Record<string,
   trace(action, { tabId, seriesId, ...detail });
 }
 
-const seriesCatalog = createSeriesCatalog({ repo: indexedDbSeriesRepo(), now: () => new Date(), newId: () => crypto.randomUUID() });
+const seriesCatalog = createSeriesCatalog({ repo: seriesRepo, now: () => new Date(), newId: () => crypto.randomUUID() });
 
 async function seriesResponse(tabId: number): Promise<SeriesResponse> {
   const [current, options] = await Promise.all([activation.getSeriesId(tabId), seriesCatalog.menu()]);

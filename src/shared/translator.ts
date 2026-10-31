@@ -34,6 +34,8 @@ export interface TranslatedLine {
 export type PriorPage = TranslatedLine[];
 
 export interface TranslateInput {
+  /** 讀者為 Series 取的名稱；Provisional Series 的名稱是自動產生的，不送。 */
+  seriesName?: string;
   /** v1 整份送。 */
   seriesNotes: NotesEntry[];
   /** 只用來理解前後文，不翻譯（ADR 0005）。 */
