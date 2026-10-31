@@ -19,14 +19,15 @@ import type {
   ProposeNotesResponse,
 } from '../shared/messages.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
-import type { PageText } from '../shared/page-text.ts';
+import type { BalloonText, PageText, RatioRect } from '../shared/page-text.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
 import { subImageRect, thumbnailSize, toImageRect, toSubRect } from './crop.ts';
 import { eraseLuminance } from './erase-color.ts';
+import { eraseImage, type RgbaImage } from './erase-image.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
-import { createPageImage } from './page-image.ts';
+import { pageRgba } from './page-image.ts';
 import { cropImage, splitSpread } from './spread.ts';
 
 const trace = createTrace('offscreen');
@@ -113,13 +114,18 @@ async function analyze({ screenshot, viewport, candidate, subRect, pipeline: con
     const candidateRect = toImageRect(candidate.rect, viewport, bitmap);
     const rect = subRect ? subImageRect(candidateRect, subRect) : candidateRect;
     const startedAt = performance.now();
-    const text = await pipeline.analyze(bitmap, rect);
+    const analyzed = await pipeline.analyze(bitmap, rect);
+    const eraseStartedAt = performance.now();
+    const text = { ...analyzed, balloons: eraseBalloons(analyzed.balloons, pageRgba(bitmap, rect)) };
     if (__DEBUG__) {
       trace('analyze', {
         anchorId: candidate.anchorId,
         subRect,
         imageRect: rect,
         ms: Math.round(performance.now() - startedAt),
+        // 擦除小圖（#149）佔的時間，已含在 ms 裡
+        eraseMs: Math.round(performance.now() - eraseStartedAt),
+        eraseFallbacks: text.balloons.filter((b) => !b.erase).map((b) => b.id),
         balloons: text.balloons.map(({ id, order, orientation, 原文, ocrConfidence, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, ocrConfidence, balloonBbox, textBbox })),
         looseText: text.looseText.map(({ id, order, orientation, 原文, ocrConfidence, bbox }) => ({ id, order, orientation, 原文, ocrConfidence, bbox })),
         // 這時還沒翻譯，unreadable 只會來自 OCR 信心門檻（ADR 0009）
@@ -127,16 +133,35 @@ async function analyze({ screenshot, viewport, candidate, subRect, pipeline: con
         detections: detectionImage(bitmap, rect, text),
       });
     }
-    const image = createPageImage(bitmap, rect).gray();
-    const balloons = text.balloons.map((b) => {
-      const box = { x: b.textBbox.x * image.width, y: b.textBbox.y * image.height, w: b.textBbox.w * image.width, h: b.textBbox.h * image.height };
-      const pad = ERASE_PADDING;
-      return { ...b, eraseLuminance: eraseLuminance(image, { x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad }) };
-    });
-    return { ...text, balloons };
+    return text;
   } finally {
     bitmap.close();
   }
+}
+
+/**
+ * 每個 Balloon 的擦除底色（文字色與矩形退路用）與擦除小圖（#149）。小圖編成 PNG data URL 才能隨 PageText
+ * 走 messaging、存進快取；中央找不到底色時沒有小圖，覆蓋層退回矩形。
+ */
+function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] {
+  const gray = grayOfRgba(page);
+  const px = (r: RatioRect) => ({ x: r.x * page.width, y: r.y * page.height, w: r.w * page.width, h: r.h * page.height });
+  return balloons.map((b) => {
+    const text = px(b.textBbox);
+    const pad = ERASE_PADDING;
+    const luminance = eraseLuminance(gray, { x: text.x - pad, y: text.y - pad, w: text.w + 2 * pad, h: text.h + 2 * pad });
+    const erase = eraseImage(page, px(b.balloonBbox), text);
+    if (!erase) return { ...b, eraseLuminance: luminance };
+    const [x, y, w, h] = erase.box;
+    const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(erase.rgba, w, h), 0, 0));
+    return { ...b, eraseLuminance: luminance, erase: { box: { x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height }, image } };
+  });
+}
+
+function grayOfRgba({ data, width, height }: RgbaImage): GrayImage {
+  const gray = new Uint8Array(width * height);
+  for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
+  return { gray, width, height };
 }
 
 /**

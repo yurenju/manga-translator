@@ -37,6 +37,12 @@ export interface BalloonText {
   ocrConfidence?: number;
   /** 原地覆蓋的擦除底色：文字框（外擴 3px）裡最常出現的亮度 0～255，取自截圖（#32）。沒有時當白底。 */
   eraseLuminance?: number;
+  /**
+   * 擦除小圖（#149）：沿泡泡內緣的擦除範圍，顏色從背景內插。image 是 box 大小的 PNG data URL（alpha＝擦除範圍），
+   * content script 原樣貼在 box 上。只存在本機快取，不送給 LLM 或 Worker。舊快取沒有、擦除退回矩形時也沒有：
+   * 用文字框外擴 3px 的矩形加 eraseLuminance。
+   */
+  erase?: { box: RatioRect; image: string };
 }
 
 export interface LooseText {

@@ -1,3 +1,17 @@
+import type { RgbaImage } from './erase-image.ts';
+
+/** Page 的全解析度 RGBA（擦除小圖用；畫法跟 createPageImage 一樣，空白處當白底）。 */
+export function pageRgba(source: ImageBitmap, rect: { x: number; y: number; width: number; height: number }): RgbaImage {
+  const width = Math.round(rect.width);
+  const height = Math.round(rect.height);
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(source, rect.x, rect.y, width, height, 0, 0, width, height);
+  return { data: ctx.getImageData(0, 0, width, height).data, width, height };
+}
+
 /** 瀏覽器版的 PageImage：用 OffscreenCanvas 縮放、裁切、轉灰階（跟 #7 的 browser.html 一致）。 */
 import type { PixelBox } from './pipeline/boxes.ts';
 import type { PageImage } from './pipeline/analyze.ts';
