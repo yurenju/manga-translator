@@ -1,6 +1,6 @@
 # Real-site debugging
 
-How to debug the extension on a real manga site (Jump+, Kindle), where the e2e mock site cannot reproduce the problem. You drive the browser over CDP and read a **trace** of everything the pipeline did; the user only sets up the profile once, and steps in for the exceptions below. Windows only.
+How to debug the extension on a real manga site, where the e2e mock site cannot reproduce the problem. You drive the browser over CDP and read a **trace** of everything the pipeline did; the user only sets up the profile once, and steps in for the exceptions below. Windows only.
 
 Local flows that need no real site (the mock site, a local Worker, Paddle sandbox) are not debugged here: write them as Playwright tests on the e2e build, which already opens the side panel and activates without a click (`openSidePanel`, `testActivate` in `browser/fixtures.ts`).
 
@@ -42,7 +42,7 @@ Timing and performance bugs need measuring in the debug Chrome: e2e runs Playwri
 | `OffscreenCanvas.convertToBlob` in the offscreen document | ~1 s | ~55 ms |
 | `requestAnimationFrame` in the offscreen document | never fires | — |
 
-`captureVisibleTab` waits for a new compositor frame, and a still page produces none until a timeout. So every capture runs a repaint animation the screenshot cannot see (`src/content/repaint.ts`, #60): Jump+ went from ~1.6 s to ~0.25 s, while Kindle's reader repaints on its own and was already ~0.25 s. To time captures by hand, call `captureVisibleTab` from the SW at least 500 ms apart (Chrome allows two per second), and send the tab `content:prepareCapture` before and `content:finishCapture` after each one; without them you measure the still-page timeout. Any change to what the page draws during capture must leave the screenshot byte-identical: compare captures with and without it.
+`captureVisibleTab` waits for a new compositor frame, and a still page produces none until a timeout. So every capture runs a repaint animation the screenshot cannot see (`src/content/repaint.ts`, #60): a canvas-per-Page site went from ~1.6 s to ~0.25 s, while an e-book reader that repaints on its own was already ~0.25 s. To time captures by hand, call `captureVisibleTab` from the SW at least 500 ms apart (Chrome allows two per second), and send the tab `content:prepareCapture` before and `content:finishCapture` after each one; without them you measure the still-page timeout. Any change to what the page draws during capture must leave the screenshot byte-identical: compare captures with and without it.
 
 `npm run debug:eval -- <sw|offscreen|page|content> <file.js>` (or `-e "<expression>"`) runs an awaitable expression in that context of the open debug Chrome and prints the result as JSON. `content` is the content script's isolated world in the manga tab; `page` is that tab's main world. It picks this extension's SW and offscreen document by manifest name, defines `activeTab()` in the SW (the manga tab: the extension has no `tabs` permission, so `chrome.tabs.query` shows no URLs), and gives up after `--timeout` seconds (default 30). The offscreen document exists only after the extension's first detection or translation, and the SW only while awake: click the icon first.
 

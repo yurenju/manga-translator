@@ -1,6 +1,6 @@
 # 真實網站手動驗收清單（#40）
 
-在真實的 Jump+ 與 Kindle 上各走一次。這是唯一會走到真正 `activeTab` 授權路徑（點工具列圖示）的驗收；e2e 的 mock site 測不到。用語見 `GLOSSARY.md`，spec 見 #27 第 9、12 節。
+在兩種真實網站上各走一次：**canvas 網站**（每頁一個 canvas 的漫畫網站）與**電子書閱讀器**（寬視窗時把跨頁合成一張 img）。這是唯一會走到真正 `activeTab` 授權路徑（點工具列圖示）的驗收；e2e 的 mock site 測不到。用語見 `GLOSSARY.md`，spec 見 #27 第 9、12 節。
 
 ## 分工
 
@@ -17,14 +17,14 @@
 
 1. Terminal panel 開 `npm run debug:chrome`（第一次要在那個 Chrome 載入 `%LOCALAPPDATA%\naruhodo\extension`、在 side panel 設 API key、登入網站）。
 2. 每個網站開始前：重新整理漫畫 tab。中途用 `npm run debug:reload` 改過 code，就要重新整理 tab 再點一次圖示。
-3. 準備兩部作品各一話：Jump+ 一話（直向捲動或翻頁皆可）、Kindle 一本有跨頁的書（試閱本即可）。各自都要能讀到至少 6 個 Page。
+3. 準備兩部作品各一話：canvas 網站一話（直向捲動或翻頁皆可）、電子書閱讀器一本有跨頁的書（試閱本即可）。各自都要能讀到至少 6 個 Page。
 4. 第一次驗收建議清空舊資料（side panel 的快取／Notes），讓「第一次翻譯 → 快取命中」的對照乾淨。要保留就先匯出備份。
 
 **不保存、不 commit 任何真實頁面的截圖或內容。** 截圖只留在 `%LOCALAPPDATA%` 的 session 資料夾，驗收結束、問題都處理完後刪掉。回報給 Claude 的截圖也不要放進 repo。
 
 ## 清單
 
-以下 A–L 兩個網站都要走；開頭標「Kindle：」或「Jump+：」的項目只在那個網站走。
+以下 A–L 兩個網站都要走；開頭標「電子書閱讀器：」或「canvas 網站：」的項目只在那個網站走。
 
 ### A. 點圖示啟動
 
@@ -52,11 +52,11 @@
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
-| C1 | Kindle：視窗橫長，顯示跨頁 | trace：一個 `candidates` 候選切成兩個 `crop` Page（同一個 `anchorId`，各有 `subRect`），兩頁的 `pageHash` 不同 |
+| C1 | 電子書閱讀器：視窗橫長，顯示跨頁 | trace：一個 `candidates` 候選切成兩個 `crop` Page（同一個 `anchorId`，各有 `subRect`），兩頁的 `pageHash` 不同 |
 | C2 | 同上 | trace：job 佇列先右頁後左頁：`job` 的 `enqueue`／`start`／`llm` 依序是右頁 `pageHash` 再左頁 |
-| C3 | Kindle：封面或章節首頁（跨頁模式只顯示一頁） | trace：只切出一個 Page，沒切出空白頁（看 `crop` 縮圖） |
-| C4 | Kindle：深色或滿版出血的頁面 | trace：`crop` 縮圖沒有把頁面本身的深色邊當黑邊切掉 |
-| C5 | Jump+：一般閱讀 | trace：每個 Page 都是整個 anchor，`crop` 沒有 `subRect`（Jump+ 不用切） |
+| C3 | 電子書閱讀器：封面或章節首頁（跨頁模式只顯示一頁） | trace：只切出一個 Page，沒切出空白頁（看 `crop` 縮圖） |
+| C4 | 電子書閱讀器：深色或滿版出血的頁面 | trace：`crop` 縮圖沒有把頁面本身的深色邊當黑邊切掉 |
+| C5 | canvas 網站：一般閱讀 | trace：每個 Page 都是整個 anchor，`crop` 沒有 `subRect`（canvas 網站不用切） |
 | C6 | 跨頁兩頁都翻完 | 使用者回報：兩頁的覆蓋層各自落在自己那一頁，中縫附近沒有錯位 |
 
 ### D. 翻頁自動翻譯
@@ -73,13 +73,13 @@
 
 | # | 使用者操作 | 判斷 |
 |---|---|---|
-| E1 | Jump+ 預設縮放閱讀 | trace：`overlay:show` 的 `screenScale` 約 0.49（Jump+ 的 canvas 764×1200 縮在畫面上的比例） |
+| E1 | canvas 網站預設縮放閱讀 | trace：`overlay:show` 的 `screenScale` 約 0.49（canvas 764×1200 縮在畫面上的比例，依網站而定） |
 | E2 | 同上 | trace：`overlay:show` 的 `fits` 裡沒有 truncated、`skipped` 裡沒有不該跳過的 Balloon |
 | E3 | 看 3 頁以上 | **使用者回報**：譯文都落在對應的 Balloon 內、沒有蓋到別的 Balloon 或圖 |
 | E4 | 同上 | **使用者回報**：字級讀得清楚、在同一頁裡大小一致；直排／橫排符合原本的方向 |
-| E5 | Kindle 跨頁與單頁各看一次 | **使用者回報**：同 E3、E4 |
+| E5 | 電子書閱讀器跨頁與單頁各看一次 | **使用者回報**：同 E3、E4 |
 | E6 | 滑鼠移到譯文上 | **使用者回報**：tooltip 與 highlight 出現在滑鼠指的那句，side panel 對應的 Line 同步標示 |
-| E7 | 在 Jump+ 用網站的「拡大」 | trace：`overlay:show` 重新排版（新的 `screenScale`）或 `overlay:reattach`。使用者回報：放大後位置仍對 |
+| E7 | 在 canvas 網站用網站自己的放大功能 | trace：`overlay:show` 重新排版（新的 `screenScale`）或 `overlay:reattach`。使用者回報：放大後位置仍對 |
 | E8 | 滑鼠移到有振り仮名的那句，再看 side panel 的逐字稿 | **使用者回報**（design tokens，#71）：tooltip 是深色底、ルビ淺朱色；side panel 的ルビ是朱色、按鈕與選取是藍染色，兩邊看起來是同一個產品；網站的 CSS 沒有把 tooltip 的顏色或字型蓋掉 |
 
 ### F. 快取
@@ -88,9 +88,9 @@
 |---|---|---|
 | F1 | D 翻過的頁往回翻 | trace：回到已翻過的 Page 是 `cache:hit`（或同一個 tab 內直接認得、沒有新的 `analyze`），沒有新的 `translate:request` |
 | F2 | 重新整理 tab、再點圖示、回到同一頁 | trace：`cache:hit`，`cachedHash` 與這次 `pageHash` 接近（同一頁）。使用者回報：狀態列顯示「快取」 |
-| F3 | Kindle：同一跨頁，換 3 種視窗大小（橫長、更寬、直式單頁），每次停到譯文出現 | trace：每種大小切出的 Page 都 `cache:hit`；`crop` 的 `pageHash` 跟第一次相近（#35 量測：同頁距離 ≤ 4，不同頁 ≥ 98） |
+| F3 | 電子書閱讀器：同一跨頁，換 3 種視窗大小（橫長、更寬、直式單頁），每次停到譯文出現 | trace：每種大小切出的 Page 都 `cache:hit`；`crop` 的 `pageHash` 跟第一次相近（#35 量測：同頁距離 ≤ 4，不同頁 ≥ 98） |
 | F4 | 同上 | **使用者回報**：換視窗大小後覆蓋層位置仍對（快取的座標是相對 Page 的比例） |
-| F5 | Jump+：換視窗大小 | trace：`cache:hit`（Jump+ 的 canvas 固定大小，距離應該是 0） |
+| F5 | canvas 網站：換視窗大小 | trace：`cache:hit`（canvas 固定大小時距離應該是 0） |
 | F6 | 全程 | trace：沒有 `cache:noSeries`（有就代表那次啟動沒有 Series） |
 
 ### G. Series 預選
@@ -154,7 +154,7 @@
 使用者每個網站填一份，貼回給 Claude：
 
 ```
-網站：Jump+ / Kindle
+網站：canvas 網站 / 電子書閱讀器
 session：<YYYYMMDD-HHmmss>
 時間段：A–B 約 hh:mm、D 約 hh:mm、……
 使用者回報：
