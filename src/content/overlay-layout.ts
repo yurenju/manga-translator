@@ -324,7 +324,8 @@ export interface LayoutTarget extends FitTarget {
 
 /**
  * 行數和字級一起挑（#129）：lineCandidates 的每個候選行數各自跑 fitText，取字級最大的；字級差在 SIZE_TIE 內就看扣分。
- * 截斷的候選排在沒截斷的後面。量完把選中的斷法與字級套回 target。
+ * 截斷的候選排在沒截斷的後面（刻意的）：截斷的字只在 tooltip 看得到，寧可字小一點也要整句排得下；
+ * 每個候選都截斷時才取字級最大的。量完把選中的斷法與字級套回 target。
  */
 export function layoutText(
   target: LayoutTarget,

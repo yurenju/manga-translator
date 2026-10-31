@@ -101,7 +101,10 @@ export function withoutEraseData<T extends PageText>(page: T): T {
   return { ...page, balloons: page.balloons.map(strip), looseText: page.looseText.map(strip) };
 }
 
-/** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */
+/**
+ * 已翻譯的一頁依閱讀順序的原文與譯文（Prior Pages 與 ② 的輸入，ADR 0005）。刻意跳過 unreadable（LLM 判斷亂碼或 OCR 信心
+ * 低於門檻）：OCR 讀錯的字當上下文會誤導下一頁的翻譯，進 ② 會被整理成錯的 Notes 條目。
+ */
 export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
   return [
     ...balloons.map((b) => ({ ...b, kind: 'balloon' as const })),
