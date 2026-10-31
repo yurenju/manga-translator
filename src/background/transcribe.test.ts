@@ -676,6 +676,7 @@ describe('翻譯佇列（#34）', () => {
     expect(transcriber.isAutoTranslate(1)).toBe(false);
   });
 
+  // 同一批的頁依閱讀順序一頁一頁送 ①（Prior Pages），併發要用不同 tab 的頁來看（佇列跨 tab 共用）
   it('LLM 段併發 2；等 LLM 時本機段繼續做下一頁', async () => {
     const llmCalls: (() => void)[] = [];
     const translator: Translator = {
@@ -685,7 +686,7 @@ describe('翻譯佇列（#34）', () => {
     };
     const { transcriber, deps } = setup({ getTranslator: () => translator });
 
-    const running = transcriber.update(1, [thumb('a1'), thumb('a2'), thumb('a3')], capture);
+    const running = Promise.all([1, 2, 3].map((tabId) => transcriber.update(tabId, [thumb(`a${tabId}`)], capture)));
     await vi.waitFor(() => expect(deps.analyze).toHaveBeenCalledTimes(3));
     await flush();
     expect(llmCalls).toHaveLength(2);
@@ -695,7 +696,7 @@ describe('翻譯佇列（#34）', () => {
     llmCalls[1]!();
     llmCalls[2]!();
     await running;
-    expect(transcriber.get(1).every((p) => p.transcript.state === 'done' && p.transcript.translated)).toBe(true);
+    expect([1, 2, 3].every((tabId) => transcriber.get(tabId).every((p) => p.transcript.state === 'done' && p.transcript.translated))).toBe(true);
   });
 
   it('LLM 段同時最多 2 個，本機段同時最多 1 個', async () => {
@@ -721,11 +722,12 @@ describe('翻譯佇列（#34）', () => {
     };
     const { transcriber } = setup({ analyze, getTranslator: () => translator });
 
-    await transcriber.update(1, ['a1', 'a2', 'a3', 'a4', 'a5'].map((a) => thumb(a)), capture);
+    const tabIds = [1, 2, 3, 4, 5];
+    await Promise.all(tabIds.map((tabId) => transcriber.update(tabId, [thumb(`a${tabId}`)], capture)));
 
     expect(localMax).toBe(1);
     expect(llmMax).toBe(2);
-    expect(transcriber.get(1).every((p) => p.transcript.state === 'done' && p.transcript.translated)).toBe(true);
+    expect(tabIds.every((tabId) => transcriber.get(tabId).every((p) => p.transcript.state === 'done' && p.transcript.translated))).toBe(true);
   });
 
   it('429：依 retry-after 等待後重試，最多 3 次；等待期間這頁仍是「辨識中」，之後顯示錯誤', async () => {
@@ -925,33 +927,6 @@ describe('Series Notes 累積（#37、ADR 0005）', () => {
     expect(cache.saved).toHaveLength(1);
   });
 
-  it('Spread 的第二頁先翻完：馬上顯示，不必等第一頁', async () => {
-    let releaseFirst!: () => void;
-    const firstReturns = new Promise<void>((resolve) => (releaseFirst = resolve));
-    const translator: Translator = {
-      ...noNotes,
-      async translatePage(input) {
-        if (input.items[0]!.原文 === '右') await firstReturns;
-        return translatorReturning('譯').translatePage(input);
-      },
-    };
-    const { transcriber, published } = setup({
-      getTranslator: () => translator,
-      analyze: async (request) => {
-        const text = structuredClone(pageText);
-        text.balloons[0]!.原文 = request.candidate.anchorId === 'a1' ? '右' : '左';
-        return text;
-      },
-    });
-
-    const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
-    await vi.waitFor(() => expect(published.at(-1)![1]!.transcript).toMatchObject({ state: 'done', translated: true }));
-    expect(published.at(-1)![0]!.transcript).toEqual({ state: 'analyzing' });
-
-    releaseFirst();
-    await running;
-  });
-
   it('依 ② 送出的順序套用：後送出的先回來也要等，同一個原文先送出的那頁先贏', async () => {
     const notes = memoryNotes();
     const sent: Parameters<typeof gatedNotes>[0] = [];
@@ -1044,14 +1019,88 @@ describe('Prior Pages（ADR 0005）', () => {
     expect(priorOf(inputs)).toEqual([[], ['a3'], ['a3', 'a2']]);
   });
 
-  it('同一批（Spread 的兩頁）互相不當 Prior Pages', async () => {
+  it('同一批裡閱讀順序在前的頁也算：Spread 的左頁帶同一個 Spread 的右頁＋上一個 Spread 的左頁', async () => {
     const inputs: TranslateInput[] = [];
     const { transcriber } = setup({ analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
 
-    await transcriber.update(1, [thumb('a1')], capture);
-    await transcriber.update(1, [thumb('a2'), thumb('a3')], capture);
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await transcriber.update(1, [thumb('a3'), thumb('a4')], capture);
 
-    expect(priorOf(inputs)).toEqual([[], ['a1'], ['a1']]);
+    expect(priorOf(inputs)).toEqual([[], ['a1'], ['a1', 'a2'], ['a2', 'a3']]);
+  });
+
+  it('同一批裡在後的頁等前頁的 ① 回來才送出', async () => {
+    const inputs: TranslateInput[] = [];
+    let releaseFirst!: () => void;
+    const firstReturns = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const translator = translatorWithNotes([], inputs);
+    const { transcriber, published } = setup({
+      analyze: analyzeByAnchor,
+      getTranslator: () => ({
+        ...translator,
+        async translatePage(input) {
+          const output = await translator.translatePage(input);
+          if (input.items[0]!.原文 === 'a1') await firstReturns;
+          return output;
+        },
+      }),
+    });
+
+    const running = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await vi.waitFor(() => expect(inputs).toHaveLength(1));
+    await flush();
+    await flush();
+    expect(inputs).toHaveLength(1);
+
+    releaseFirst();
+    await running;
+    expect(priorOf(inputs)).toEqual([[], ['a1']]);
+    expect(published.at(-1)!.map((p) => p.transcript)).toMatchObject([
+      { state: 'done', translated: true },
+      { state: 'done', translated: true },
+    ]);
+  });
+
+  it('前頁翻譯失敗：後頁照樣送出，不帶它', async () => {
+    const inputs: TranslateInput[] = [];
+    const translator = translatorWithNotes([], inputs);
+    const { transcriber } = setup({
+      analyze: analyzeByAnchor,
+      getTranslator: () => ({
+        ...translator,
+        async translatePage(input) {
+          if (input.items[0]!.原文 === 'a1') throw new Error('Claude API 500');
+          return translator.translatePage(input);
+        },
+      }),
+    });
+
+    await transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+
+    expect(priorOf(inputs)).toEqual([[]]);
+    expect(transcriber.get(1)[1]!.transcript).toMatchObject({ state: 'done', translated: true });
+  });
+
+  it('前頁還沒開始就被丟掉（讀者翻走它）：還在畫面上的後頁照樣送出', async () => {
+    const inputs: TranslateInput[] = [];
+    const gate = gatedAnalyze();
+    const { transcriber } = setup({ analyze: gate.analyze, getTranslator: () => translatorWithNotes([], inputs) });
+
+    void transcriber.update(1, [thumb('a3')], capture);
+    await vi.waitFor(() => expect(gate.calls).toEqual(['a3']));
+    const spread = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await flush();
+    // a1、a2 都還在本機段排隊；a1 捲出畫面被丟掉，a2 還在
+    const turned = transcriber.update(1, [thumb('a2')], capture);
+    await flush();
+    await gate.finishNext();
+    await gate.finishNext();
+    await Promise.all([spread, turned]);
+
+    expect(gate.calls).toEqual(['a3', 'a2']);
+    // a2 帶 a3（a1 沒翻）
+    expect(inputs.map((i) => i.priorPages.length)).toEqual([0, 1]);
+    expect(transcriber.get(1)[0]!.transcript).toMatchObject({ state: 'done', translated: true });
   });
 
   it('命中快取的頁也算看過', async () => {
@@ -1151,7 +1200,7 @@ describe('Prior Pages（ADR 0005）', () => {
     expect(priorOf(inputs)).toEqual([[], []]);
   });
 
-  it('重新翻譯：同樣帶畫面上這一批之前最近看過的頁', async () => {
+  it('重新翻譯：同樣帶這頁之前最近看過的頁，含同一批裡在前的頁', async () => {
     const inputs: TranslateInput[] = [];
     const { transcriber } = setup({ analyze: analyzeByAnchor, getTranslator: () => translatorWithNotes([], inputs) });
     await transcriber.update(1, [thumb('a1')], capture);
@@ -1159,7 +1208,7 @@ describe('Prior Pages（ADR 0005）', () => {
 
     await transcriber.translate(1, HASHES.a3);
 
-    expect(priorOf(inputs).at(-1)).toEqual(['a1']);
+    expect(priorOf(inputs).at(-1)).toEqual(['a1', 'a2']);
   });
 });
 

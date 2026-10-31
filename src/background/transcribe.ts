@@ -17,8 +17,9 @@
  * 接著在背景整理 Notes（②），依 ② 送出順序套用。同一次排程裡同一個 anchor 的 Page（Spread 的兩頁）是一個
  * SnapshotGroup，共用 ② 的快照。沒有 Series 時不帶 Notes 也不整理。
  *
- * Prior Pages（ADR 0005）：每個 tab 記住讀者依序看過的頁（命中快取的也算），① 帶這一批之前最近看過的 2 頁中
- * 已經翻好的。不等還沒翻完的頁。Series 換了就清空；同 origin 重新整理（換話）保留，停止或關 tab 才忘掉。
+ * Prior Pages（ADR 0005）：每個 tab 記住讀者依序看過的頁（命中快取的也算），① 帶這頁之前最近看過的 2 頁中
+ * 已經翻好的，同一批裡閱讀順序在前的頁也算（Spread 的左頁帶同一個 Spread 的右頁）。同一批裡在後的頁等前頁的 ①
+ * 結束（翻好、失敗或被丟掉）才送；前一批的頁不等。Series 換了就清空；同 origin 重新整理（換話）保留，停止或關 tab 才忘掉。
  */
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
@@ -110,7 +111,7 @@ interface Job extends QueuedJob {
   translator?: Translator;
   /** 共用 ② 的 Notes 快照的那一組（同一次排程裡同一個 anchor）。 */
   group: SnapshotGroup;
-  /** 排程時這一批之前最近看過的頁；送出 ① 時才看哪些已經翻好。 */
+  /** 排程時這頁之前最近看過的頁（含同一批裡閱讀順序在前的頁）；送出 ① 時才看哪些已經翻好。 */
   prior: SeenPage[];
   resolve(): void;
 }
@@ -133,7 +134,6 @@ interface JobSpec {
   batch: number;
   index: number;
   group: SnapshotGroup;
-  prior: SeenPage[];
 }
 
 export function createTranscriber(deps: TranscriberDeps) {
@@ -176,10 +176,28 @@ export function createTranscriber(deps: TranscriberDeps) {
     history.pages = history.pages.slice(-SEEN_LIMIT);
   }
 
-  /** 畫面上這一批之前最近看過的頁（還沒翻好的也算位置，送出時才略過）。 */
-  function priorOf(tab: TabState): SeenPage[] {
+  /** 畫面上這一批裡，閱讀順序在這頁之前的頁。 */
+  function earlierInBatch(tab: TabState, record: PageRecord): PageThumb[] {
+    const page = findSamePage(tab.pages, record.pageHash);
+    return page ? tab.pages.slice(0, tab.pages.indexOf(page)) : [];
+  }
+
+  /**
+   * 這頁的 Prior Pages 位置：這一批之前最近看過的頁，接著同一批裡閱讀順序在前的頁，取最後 2 頁
+   * （還沒翻好的也算位置，送出時才略過）。
+   */
+  function priorOf(tab: TabState, record: PageRecord): SeenPage[] {
     const pages = seen.get(tab.tabId)?.pages ?? [];
-    return pages.filter((p) => findSamePage(tab.pages, p.pageHash) === undefined).slice(-PRIOR_PAGES);
+    const before = pages.filter((p) => findSamePage(tab.pages, p.pageHash) === undefined);
+    const earlier = earlierInBatch(tab, record).flatMap((p) => findSamePage(pages, p.pageHash) ?? []);
+    return [...before, ...earlier].slice(-PRIOR_PAGES);
+  }
+
+  /** 同一批裡閱讀順序在前的頁，目前的工作都結束（翻好、失敗或被丟掉）時 resolve；前面沒有頁（單頁 viewer）就不等。 */
+  function earlierSettled(tab: TabState, record: PageRecord): Promise<unknown> | undefined {
+    const earlier = earlierInBatch(tab, record);
+    if (earlier.length === 0) return undefined;
+    return Promise.all(earlier.map((p) => findSamePage(tab.records, p.pageHash)?.settled));
   }
 
   /** 送出 ① 的這一刻已經翻好的 Prior Pages。 */
@@ -202,11 +220,14 @@ export function createTranscriber(deps: TranscriberDeps) {
     deps.publish(tab.tabId, current);
   }
 
+  /** 排程時決定 Prior Pages 的位置，並讓這頁的 ① 等同一批裡閱讀順序在前的頁（換掉 settled 之前先取）。 */
   function newJob(spec: JobSpec): Job {
-    const { record } = spec;
+    const { tab, record } = spec;
+    const prior = priorOf(tab, record);
+    const after = earlierSettled(tab, record);
     let resolve!: () => void;
     record.settled = new Promise<void>((r) => (resolve = r));
-    const job: Job = { ...spec, priority: PRIORITY_VISIBLE, resolve };
+    const job: Job = { ...spec, priority: PRIORITY_VISIBLE, prior, after, resolve };
     record.job = job;
     return job;
   }
@@ -334,14 +355,13 @@ export function createTranscriber(deps: TranscriberDeps) {
     publish(tab);
 
     const seriesId = await deps.getSeriesId(tabId);
-    // 先記下這一批（Series 換了就清空），Prior Pages 本來就不含畫面上的頁
+    // 先記下這一批（Series 換了就清空），排程時才看得到同一批裡在前的頁
     if (isCurrent(tab)) see(tab, seriesId, pages);
-    const prior = priorOf(tab);
     // 查快取期間佔住這頁，同一頁又出現時不會重複排
     const groupOf = snapshotGroups();
     const jobs = newPages.map(({ record, index }) => {
       record.seriesId = seriesId;
-      return newJob({ tab, record, batch, index, group: groupOf(record), prior });
+      return newJob({ tab, record, batch, index, group: groupOf(record) });
     });
     const lookups = await Promise.all(jobs.map((job) => pageTranslation.lookup(seriesId, job.record.pageHash)));
     // 快取都查完才依閱讀順序排：佇列一有工作就開始跑，Spread 的左頁先查完也不能比右頁先送出 LLM（spec 第 3.4 節）
@@ -398,16 +418,15 @@ export function createTranscriber(deps: TranscriberDeps) {
   async function start(tab: TabState, visible: PageRecord[], translator: Translator | undefined): Promise<void> {
     const batch = ++batches;
     const groupOf = snapshotGroups();
-    const prior = priorOf(tab);
     const started: PageRecord[] = [];
     for (const [index, record] of visible.entries()) {
       if (record.job) continue;
       if (record.transcript.state === 'pending') {
         record.transcript = { state: 'analyzing' };
-        enqueueLocal(newJob({ tab, record, batch, index, group: groupOf(record), prior }));
+        enqueueLocal(newJob({ tab, record, batch, index, group: groupOf(record) }));
       } else if (translator && record.transcript.state === 'done' && record.text) {
         record.transcript = { ...record.transcript, translating: true };
-        const job = newJob({ tab, record, batch, index, group: groupOf(record), prior });
+        const job = newJob({ tab, record, batch, index, group: groupOf(record) });
         job.translator = translator;
         queue.enqueueLlm(job);
       } else continue;
