@@ -11,7 +11,7 @@
  * Page Mode（#73）只決定擦字＋譯文那一層要不要顯示：學習時藏起來、保留日文原稿；hover hit-test、tooltip、
  * 高亮框兩種模式都照常運作。
  */
-import type { LineRef } from '../shared/messages.ts';
+import type { LineRef, Rect } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageMode } from '../shared/page-mode.ts';
 import { overlaidTexts, type PageText, type RatioRect } from '../shared/page-text.ts';
@@ -76,6 +76,8 @@ const STYLE = `${TOKENS}
 .hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: var(--naru-highlight);
   background: var(--naru-highlight-fill); }
 .hl.on { display: block; }
+/* 長 Page 截圖時擦除與譯文不藏，tooltip 與高亮框藏（hideForCapture） */
+:host([data-capturing]) .tip, :host([data-capturing]) .hl { visibility: hidden; }
 `;
 
 const WHOLE_PAGE: RatioRect = { x: 0, y: 0, w: 1, h: 1 };
@@ -636,14 +638,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /**
    * 截圖前：隱藏 host（學習時也藏，tooltip 與高亮框不能進截圖），等兩個 rAF（確定已重繪）。
-   * keep 裡的 anchor（長 Page，spec #142）不藏：截圖裡跟已收 Line 重疊的框本來就會丟掉，藏了反而每次捲動停下都閃回日文。
+   * keep 裡的 anchor（長 Page，spec #142）的擦除與譯文不藏：截圖裡跟已收 Line 重疊的框本來就會丟掉，藏了反而每次捲動停下
+   * 都閃回日文。它的 tooltip 與高亮框照樣藏：它們不在已收 Line 的框裡，會被偵測成新的字、弄髒橫條指紋。
    */
   async function hideForCapture(keep: ReadonlySet<Element> = new Set()): Promise<void> {
     capturing = true;
     keptDuringCapture = keep;
     entries.forEach(applyVisibility);
-    if (![...entries.keys()].some((anchor) => !keep.has(anchor))) return;
-    hiddenAt = performance.now();
+    const kept = [...entries.values()].filter((entry) => keep.has(entry.anchor));
+    for (const entry of kept) entry.host.dataset.capturing = '';
+    const hidesHost = [...entries.keys()].some((anchor) => !keep.has(anchor));
+    const hidesHover = kept.some((entry) => [...entry.layers.values()].some((l) => l.tip.classList.contains('on') || l.highlight.classList.contains('on')));
+    if (!hidesHost && !hidesHover) return;
+    // 只藏了 tooltip／高亮框不算「覆蓋層被藏」
+    if (hidesHost) hiddenAt = performance.now();
     await untilRepainted();
   }
 
@@ -651,6 +659,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   function restoreAfterCapture(): number | undefined {
     capturing = false;
     keptDuringCapture = new Set();
+    for (const entry of entries.values()) delete entry.host.dataset.capturing;
     entries.forEach(applyVisibility);
     const ms = hiddenAt === undefined ? undefined : performance.now() - hiddenAt;
     hiddenAt = undefined;
@@ -662,6 +671,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     const entry = entries.get(anchor as HTMLElement);
     if (!entry || pageMode === 'learn' || stopped || !entry.host.isConnected) return [];
     return [...entry.layers.values()].map((layer) => layer.pageHash);
+  }
+
+  /** 這個 anchor 上會出現在截圖裡的擦除與譯文（畫面 CSS px）；學習時它們藏著，是空的。長 Page 算橫條指紋時避開。 */
+  function coveredRects(anchor: Element): Rect[] {
+    const entry = entries.get(anchor as HTMLElement);
+    if (!entry || pageMode === 'learn' || stopped || !entry.host.isConnected) return [];
+    return [...entry.root.querySelectorAll('.er, .tx')].map((el) => {
+      const { x, y, width, height } = el.getBoundingClientRect();
+      return { x, y, width, height };
+    });
   }
 
   /** 停止：拿掉所有 host、還原被改成 relative 的父元素。 */
@@ -685,7 +704,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return changedParents.has(element as HTMLElement);
   }
 
-  return { show, highlight, setPageMode, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
+  return { show, highlight, setPageMode, hideForCapture, restoreAfterCapture, shownPages, coveredRects, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;

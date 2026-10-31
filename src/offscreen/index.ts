@@ -78,9 +78,12 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
  */
 function longPageThumb(bitmap: ImageBitmap, viewport: Size, candidate: PageCandidate, visible: Rect): PageThumb {
   const src = toImageRect(visible, viewport, bitmap);
+  const scale = bitmap.height / viewport.height;
   // Page 的上緣在截圖裡的位置（可能在截圖外面，不夾）
-  const pageTop = (candidate.rect.y * bitmap.height) / viewport.height;
-  const stripes = stripeFingerprint(grayOf(bitmap, src), src.y - pageTop);
+  const pageTop = candidate.rect.y * scale;
+  // 自己的覆蓋層蓋住的列，換成 Page 裡的像素
+  const covered = (candidate.covered ?? []).map((r) => ({ top: r.y * scale - pageTop, bottom: (r.y + r.height) * scale - pageTop }));
+  const stripes = stripeFingerprint(grayOf(bitmap, src), src.y - pageTop, covered);
   const size = thumbnailSize(src, THUMBNAIL_WIDTH);
   const thumbnail = pngDataUrl(size, (ctx) => {
     ctx.imageSmoothingQuality = 'high';

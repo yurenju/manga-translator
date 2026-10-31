@@ -36,6 +36,16 @@ describe('長 Page 的橫條指紋', () => {
     expect(stripeFingerprint(image, offset).map((s) => s.index)).toEqual([2, 3, 4, 5]);
   });
 
+  it('跟自己的覆蓋層有交集的橫條不算（蓋著中文的 hash 跟原稿對不上）', () => {
+    // 同上：完整的是第 2～5 條（440～1320）；覆蓋層在 Page 第 700～750 px（第 3 條）與 1310～1400 px（擦過第 5 條的底）
+    const { image, offset } = shownSlice(longPage, 1, 300 / 3840, 1500 / 3840);
+    const covered = [
+      { top: 700, bottom: 750 },
+      { top: 1310, bottom: 1400 },
+    ];
+    expect(stripeFingerprint(image, offset, covered).map((s) => s.index)).toEqual([2, 4]);
+  });
+
   it('改變縮放後仍對得上（同一條橫條的 hash 在門檻內）', () => {
     const before = shownSlice(longPage, 0.49, 0.1, 0.4);
     const after = shownSlice(longPage, 0.75, 0.2, 0.5);

@@ -206,6 +206,8 @@ export interface PageCandidate {
    * 截圖只裁這一截、本機流水線只跑這一截，截圖時也不藏它的覆蓋層。
    */
   visible?: Rect;
+  /** 長 Page 才有：截圖裡會出現的自己的擦除與譯文（畫面 CSS px）；跟它們有交集的橫條不算指紋。沒有覆蓋層時省略。 */
+  covered?: Rect[];
   /** 這個 anchor 上正顯示著覆蓋層的 Page（pageHash）；沒有覆蓋層時省略。 */
   overlaid?: string[];
 }

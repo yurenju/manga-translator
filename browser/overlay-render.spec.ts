@@ -5,6 +5,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import type { Rect } from '../src/shared/messages.ts';
 import type { PageMode } from '../src/shared/page-mode.ts';
 import type { PageText, RatioRect } from '../src/shared/page-text.ts';
 import { eraseImage } from '../src/offscreen/erase-image.ts';
@@ -19,6 +20,8 @@ const PAGE_WIDTH = 430;
 
 declare global {
   var __renderOverlay: (input: { image: string; width: number; pages: { sub: RatioRect; text: PageText }[]; pageMode?: PageMode }) => Promise<void>;
+  var __overlayCapture: (phase: 'hide' | 'restore', long: boolean) => Promise<void>;
+  var __overlayCovered: () => Rect[];
 }
 
 async function render(page: Page, id: string, width: number, pages = groundTruthPageTexts(id), pageMode?: PageMode): Promise<void> {
@@ -286,6 +289,34 @@ test.describe('覆蓋渲染（ground truth）', () => {
     await expect(tooltip).toContainText('讀音為推測');
     await page.mouse.move(1, 1);
     await expect(tooltip).toBeHidden();
+  });
+
+  // unit 測不到的：真的 DOM 上截圖時哪些元素看得到，以及 coveredRects 量到的是畫面上的擦除與譯文
+  test('長 Page 截圖時擦除與譯文留著、tooltip 與高亮框藏起來；covered 是畫面上的擦除與譯文', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);
+    await render(page, 'p01-basic', PAGE_WIDTH);
+    const [text] = await overlayTexts(page);
+    const tooltip = page.locator('[data-naruhodo-overlay] .tip');
+    const highlight = page.locator('[data-naruhodo-overlay] .hl');
+    await page.mouse.move(text!.rect.x + text!.rect.width / 2, text!.rect.y + text!.rect.height / 2);
+    await expect(tooltip).toBeVisible();
+    await expect(highlight).toBeVisible();
+
+    await page.evaluate(() => globalThis.__overlayCapture('hide', true));
+    await expect(tooltip).toBeHidden();
+    await expect(highlight).toBeHidden();
+    await expect(page.locator('[data-naruhodo-overlay] .tx').first()).toBeVisible();
+    const covered = await page.evaluate(() => globalThis.__overlayCovered());
+    expect(covered).toHaveLength(await page.locator('[data-naruhodo-overlay] .er, [data-naruhodo-overlay] .tx').count());
+    const anchor = await anchorRect(page);
+    for (const r of covered) {
+      expect(r.y).toBeGreaterThanOrEqual(anchor.y - 1);
+      expect(r.y + r.height).toBeLessThanOrEqual(anchor.y + anchor.height + 1);
+    }
+
+    await page.evaluate(() => globalThis.__overlayCapture('restore', true));
+    await expect(tooltip).toBeVisible();
   });
 
   test('學習時 Loose Text 的 tooltip 也有「譯」區塊、滑進才揭露；unreadable 的句子沒有「譯」區塊', async ({ context, extensionId }) => {

@@ -32,15 +32,24 @@ function contrast({ gray }: GrayImage): number {
   return Math.sqrt(Math.max(0, squares / gray.length - mean * mean));
 }
 
+/** Page 裡的一段列（像素，跟 stripeFingerprint 的 offset 同一個縮放），上緣含、下緣不含。 */
+export interface RowSpan {
+  top: number;
+  bottom: number;
+}
+
 /**
  * 截到的一截（寬＝整個 Page 寬）裡完整看得到、有內容的橫條各算一個 hash。
  * offset：這一截的第一列在 Page 裡是第幾個像素（同一個縮放）。
+ * covered：自己的覆蓋層（擦除、譯文）蓋住的列。長 Page 截圖時不藏覆蓋層，跟它有交集的橫條算出來的是蓋著中文的樣子，
+ * 之後（例如重新整理後還沒蓋上時）對不上原稿，所以不算；只記乾淨的橫條。
  */
-export function stripeFingerprint(slice: GrayImage, offset: number): Stripe[] {
+export function stripeFingerprint(slice: GrayImage, offset: number, covered: readonly RowSpan[] = []): Stripe[] {
   const height = slice.width * STRIPE_HEIGHT;
   const stripes: Stripe[] = [];
   // 四捨五入留半個像素的餘裕：Page 的位置換算成截圖像素時有小數
   for (let index = Math.max(0, Math.ceil(offset / height - 0.01)); (index + 1) * height <= offset + slice.height + 0.5; index++) {
+    if (covered.some((c) => c.top < (index + 1) * height && c.bottom > index * height)) continue;
     const top = Math.max(0, Math.round(index * height - offset));
     const rows = Math.min(slice.height - top, Math.round(height));
     const stripe = { gray: slice.gray.subarray(top * slice.width, (top + rows) * slice.width), width: slice.width, height: rows };

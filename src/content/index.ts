@@ -66,7 +66,14 @@ if (!globalThis.__naruhodo) {
       if (reason === undefined) {
         const overlaid = overlay.shownPages(element);
         if (slice) longAnchors.add(element);
-        candidates.push({ anchorId: anchorIdOf(element), rect, ...(slice ? { visible: slice } : {}), ...(overlaid.length > 0 ? { overlaid } : {}) });
+        const covered = slice ? overlay.coveredRects(element) : [];
+        candidates.push({
+          anchorId: anchorIdOf(element),
+          rect,
+          ...(slice ? { visible: slice } : {}),
+          ...(covered.length > 0 ? { covered } : {}),
+          ...(overlaid.length > 0 ? { overlaid } : {}),
+        });
       }
       else if (__DEBUG__ && reason === 'small') small++;
       else if (__DEBUG__) rejected.push({ tag: element.tagName.toLowerCase(), rect, reason, clips });
