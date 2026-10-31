@@ -16,7 +16,7 @@ export interface Stripe {
 const STRIPE_HEIGHT = 1 / 4;
 
 /**
- * 亮度標準差至少這麼多才算「有內容」：空白（webtoon 格子之間的大片留白）的 hash 只是雜訊，
+ * 亮度標準差至少這麼多才算「有內容」：空白（直式捲動漫畫格子之間的大片留白）的 hash 只是雜訊，
  * 拿來比對會讓不同的頁互相認錯。合成頁一條有字的橫條約 40 以上，純白是 0。
  */
 const MIN_STRIPE_CONTRAST = 8;

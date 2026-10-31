@@ -4,7 +4,7 @@ import { cropGray, readGray } from '../testing/synthetic.ts';
 import { addLines, matchingStripe, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox, toPageText } from './long-page.ts';
 import type { BalloonText, LooseText, PageText, RatioRect } from './page-text.ts';
 
-/** 合成頁上下接成一張長圖（webtoon 式，接縫看不出來）。 */
+/** 合成頁上下接成一張長圖（像直式捲動漫畫那樣，接縫看不出來）。 */
 function stack(...ids: string[]): GrayImage {
   const parts = ids.map((id) => readGray(id));
   const width = parts[0]!.width;
