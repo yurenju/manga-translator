@@ -3,15 +3,9 @@
  * 結果是一張 RGBA 小圖（像素是顏色，alpha 是擦除範圍），content script 原樣貼回原位。
  */
 import { ERASE_PADDING, type Box } from '../content/overlay-layout.ts';
+import { luma, type RgbaImage } from '../shared/pixels.ts';
 import type { PixelBox } from './pipeline/boxes.ts';
 import { eraseLuminance } from './erase-color.ts';
-
-/** 彩色像素，跟 canvas 的 ImageData 同樣排法。 */
-export interface RgbaImage {
-  data: Uint8ClampedArray;
-  width: number;
-  height: number;
-}
 
 export interface EraseImage {
   /** 小圖在 Page 上的位置（Page 原始像素，整數）。 */
@@ -57,10 +51,8 @@ export function eraseImage(page: RgbaImage, balloon: Box, text: Box): BalloonEra
 
   const gray = new Uint8Array(w * h);
   for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const i = ((top + y) * page.width + left + x) * 4;
-      gray[y * w + x] = Math.round(0.299 * page.data[i]! + 0.587 * page.data[i + 1]! + 0.114 * page.data[i + 2]!);
-    }
+    for (let x = 0; x < w; x++)
+      gray[y * w + x] = Math.round(luma(page.data, ((top + y) * page.width + left + x) * 4));
   const local = (b: Box): Box => ({ x: b.x - left, y: b.y - top, w: b.w, h: b.h });
   const base = eraseLuminance({ gray, width: w, height: h }, local(clip));
 
@@ -218,13 +210,13 @@ export function meanLuminance({ rgba }: EraseImage): number {
   let count = 0;
   for (let i = 0; i < rgba.length; i += 4) {
     if (rgba[i + 3] === 0) continue;
-    sum += 0.299 * rgba[i]! + 0.587 * rgba[i + 1]! + 0.114 * rgba[i + 2]!;
+    sum += luma(rgba, i);
     count++;
   }
   return count > 0 ? sum / count : 255;
 }
 
-/** box 夾在 Page 內的灰階視窗（0.299/0.587/0.114，跟本機流水線一致）。 */
+/** box 夾在 Page 內的灰階視窗。 */
 function grayWindow(page: RgbaImage, box: Box): { gray: Uint8Array; left: number; top: number; w: number; h: number } {
   const left = Math.max(0, Math.floor(box.x));
   const top = Math.max(0, Math.floor(box.y));
@@ -232,10 +224,8 @@ function grayWindow(page: RgbaImage, box: Box): { gray: Uint8Array; left: number
   const h = Math.max(0, Math.min(page.height, Math.ceil(box.y + box.h)) - top);
   const gray = new Uint8Array(w * h);
   for (let y = 0; y < h; y++)
-    for (let x = 0; x < w; x++) {
-      const i = ((top + y) * page.width + left + x) * 4;
-      gray[y * w + x] = Math.round(0.299 * page.data[i]! + 0.587 * page.data[i + 1]! + 0.114 * page.data[i + 2]!);
-    }
+    for (let x = 0; x < w; x++)
+      gray[y * w + x] = Math.round(luma(page.data, ((top + y) * page.width + left + x) * 4));
   return { gray, left, top, w, h };
 }
 

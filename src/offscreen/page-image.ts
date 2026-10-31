@@ -1,4 +1,4 @@
-import type { RgbaImage } from './erase-image.ts';
+import { grayOfRgba, type RgbaImage } from '../shared/pixels.ts';
 
 /** Page 的全解析度 RGBA（擦除小圖用；畫法跟 createPageImage 一樣，空白處當白底）。 */
 export function pageRgba(source: ImageBitmap, rect: { x: number; y: number; width: number; height: number }): RgbaImage {
@@ -32,13 +32,6 @@ export function createPageImage(source: ImageBitmap, rect: { x: number; y: numbe
     ctx.drawImage(source, rect.x + sx, rect.y + sy, sw, sh, 0, 0, dw, dh);
     return ctx.getImageData(0, 0, dw, dh).data;
   };
-  const toGray = (data: Uint8ClampedArray): Uint8Array => {
-    const gray = new Uint8Array(data.length / 4);
-    for (let i = 0; i < gray.length; i++) {
-      gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
-    }
-    return gray;
-  };
   return {
     width,
     height,
@@ -48,7 +41,7 @@ export function createPageImage(source: ImageBitmap, rect: { x: number; y: numbe
       for (let i = 0; i < 640 * 640; i++) for (let c = 0; c < 3; c++) rgb[i * 3 + c] = data[i * 4 + c]!;
       return rgb;
     },
-    gray: () => ({ gray: toGray(draw(0, 0, width, height, width, height)), width, height }),
-    crop224: ([x, y, w, h]: PixelBox) => toGray(draw(x, y, w, h, 224, 224)),
+    gray: () => grayOfRgba(draw(0, 0, width, height, width, height), width, height),
+    crop224: ([x, y, w, h]: PixelBox) => grayOfRgba(draw(x, y, w, h, 224, 224), 224, 224).gray,
   };
 }

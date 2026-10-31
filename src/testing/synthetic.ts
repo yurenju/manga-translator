@@ -5,7 +5,9 @@
 import { readFileSync } from 'node:fs';
 import { deflateSync, inflateSync } from 'node:zlib';
 import { eraseLuminance } from '../offscreen/erase-color.ts';
+import type { GrayImage } from '../shared/page-hash.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
+import { grayOfRgba, type RgbaImage } from '../shared/pixels.ts';
 
 const OUT_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
 
@@ -50,13 +52,6 @@ export const SYNTHETIC_IDS = [
 
 export function readGroundTruth(id: string): GtPage {
   return JSON.parse(readFileSync(new URL(`${id}.json`, OUT_DIR), 'utf8')) as GtPage;
-}
-
-/** 彩色像素（RGBA，跟 canvas 的 ImageData 同樣排法）。 */
-export interface RgbaImage {
-  data: Uint8ClampedArray;
-  width: number;
-  height: number;
 }
 
 /** 解出 RGBA；name 是 out/ 裡的檔名（不含 .png），例如 p09-erase-blank。 */
@@ -143,14 +138,10 @@ export function pngDataUrl({ data, width, height }: RgbaImage): string {
   return `data:image/png;base64,${png.toString('base64')}`;
 }
 
-/** 解出灰階（0.299/0.587/0.114，跟 offscreen 的 canvas 版一致）。 */
-export function readGray(id: string): { gray: Uint8Array; width: number; height: number } {
+/** 解出灰階（跟 offscreen 的 canvas 版同一個公式）。 */
+export function readGray(id: string): GrayImage {
   const { data, width, height } = readRgba(id);
-  const gray = new Uint8Array(width * height);
-  for (let i = 0; i < width * height; i++) {
-    gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
-  }
-  return { gray, width, height };
+  return grayOfRgba(data, width, height);
 }
 
 /** 從灰階裁出一塊（Spread 切成單頁用）。 */

@@ -23,12 +23,13 @@ import type {
 import { rejectInSlice, sliceOf, stripeFingerprint, toPageText } from '../shared/long-page.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
 import type { BalloonText, LooseText, PageText, RatioRect } from '../shared/page-text.ts';
+import { grayOfRgba, type RgbaImage } from '../shared/pixels.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
 import { subImageRect, thumbnailSize, toImageRect, toSubRect } from './crop.ts';
 import { eraseLuminance } from './erase-color.ts';
-import { eraseImage, eraseLooseText, meanLuminance, type EraseImage, type RgbaImage } from './erase-image.ts';
+import { eraseImage, eraseLooseText, meanLuminance, type EraseImage } from './erase-image.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { pageRgba } from './page-image.ts';
 import type { PixelBox } from './pipeline/boxes.ts';
@@ -92,15 +93,12 @@ function longPageThumb(bitmap: ImageBitmap, viewport: Size, candidate: PageCandi
   return { ...candidate, thumbnail, pageHash: stripes[0]?.hash ?? '', stripes };
 }
 
-/** 全解析度的裁切轉灰階（0.299/0.587/0.114，跟本機流水線一致）。縮小交給 pageHash 自己做，Node 的單元測試才算得一樣。 */
+/** 全解析度的裁切轉灰階。縮小交給 pageHash 自己做，Node 的單元測試才算得一樣。 */
 function grayOf(bitmap: ImageBitmap, rect: Rect): GrayImage {
   const canvas = new OffscreenCanvas(rect.width, rect.height);
   const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
   ctx.drawImage(bitmap, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height);
-  const { data } = ctx.getImageData(0, 0, rect.width, rect.height);
-  const gray = new Uint8Array(rect.width * rect.height);
-  for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
-  return { gray, width: rect.width, height: rect.height };
+  return grayOfRgba(ctx.getImageData(0, 0, rect.width, rect.height).data, rect.width, rect.height);
 }
 
 /**
@@ -183,7 +181,7 @@ async function analyze({ screenshot, viewport, candidate, subRect, collected = [
  * 走 messaging、存進快取；中央找不到底色時沒有小圖，覆蓋層退回矩形。
  */
 function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] {
-  const gray = grayOfRgba(page);
+  const gray = grayOfRgba(page.data, page.width, page.height);
   const px = (r: RatioRect) => ({ x: r.x * page.width, y: r.y * page.height, w: r.w * page.width, h: r.h * page.height });
   return balloons.map((b) => {
     const text = px(b.textBbox);
@@ -216,11 +214,6 @@ function encodeErase({ box, rgba }: EraseImage, page: RgbaImage): { box: RatioRe
 
 const ratioRect = ([x, y, w, h]: PixelBox, page: RgbaImage): RatioRect => ({ x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height });
 
-function grayOfRgba({ data, width, height }: RgbaImage): GrayImage {
-  const gray = new Uint8Array(width * height);
-  for (let i = 0; i < gray.length; i++) gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
-  return { gray, width, height };
-}
 
 /**
  * debug build 才用：裁好的 Page 疊上偵測結果（藍＝Balloon 外框、紅＝文字框、綠＝Loose Text，數字是閱讀順序），
