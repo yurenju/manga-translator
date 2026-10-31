@@ -16,14 +16,14 @@ declare namespace Cloudflare {
     FAKE_MAIL?: string;
     /** "true"：開放開發用的端點（DEV_FREE_PAGES_PATH）；只有 env.dev／env.test 設。 */
     DEV_ENDPOINTS?: string;
-    /** Resend 的 key 與寄件地址：production 用 wrangler secret／vars（#97）。 */
+    /** Resend 的 key（production 用 wrangler secret）與寄件地址（wrangler.jsonc 的 vars）。 */
     RESEND_API_KEY?: string;
     MAIL_FROM?: string;
     /** 呼叫 Anthropic 的 key：production 用 wrangler secret，本機放 worker/.dev.vars。 */
     CLAUDE_API_KEY?: string;
     /** 訂閱者每月可翻的頁數（wrangler.jsonc 的 vars，起始 800）；調整不用發新版外掛。 */
     MONTHLY_PAGE_LIMIT: string;
-    /** checkout 頁所在的產品網站 origin（Worker 組 `<origin>/<locale>/checkout?_ptxn=…`）；production 在 #97 設定。 */
+    /** checkout 頁所在的產品網站 origin（Worker 組 `<origin>/<locale>/checkout?_ptxn=…`）。 */
     SITE_ORIGIN?: string;
     /** Paddle API：網址是 vars；key、年繳 price 與 webhook secret 用 wrangler secret，本機放 worker/.dev.vars。 */
     PADDLE_API_BASE_URL: string;

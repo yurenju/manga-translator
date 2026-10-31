@@ -1,0 +1,11 @@
+// 產品網站（#89）：Astro 輸出的純靜態頁面，用 Workers 的靜態資源部署，沒有 Worker 程式碼。
+//   npm run site:build && npx wrangler deploy -c site/wrangler.jsonc
+// 平常由 CI 在合併到 main 後部署（.github/workflows/ci.yml 的 deploy-site，ADR 0008）。
+// routes 的 custom_domain：部署時 Cloudflare 自動建 DNS 記錄與 HTTPS 憑證，不用到後台綁網域。
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "naruhodo-site",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" },
+  "routes": [{ "pattern": "naruhodo.page", "custom_domain": true }]
+}

@@ -9,13 +9,18 @@
 // Paddle（#94）：MONTHLY_PAGE_LIMIT 是訂閱者每月可翻的頁數。SITE_ORIGIN 是 checkout 頁所在的產品網站（Worker 自己組 checkout 網址）。
 //   env.dev 打 Paddle sandbox，PADDLE_API_KEY、PADDLE_PRICE_ID、PADDLE_WEBHOOK_SECRET 放 worker/.dev.vars
 //   （從 ~/.config/naruhodo/paddle-sandbox.env 複製）；env.test 的 __FAKE_PADDLE__ 換成假的 Paddle，webhook secret 是測試用的假值。
-//   production 的 SITE_ORIGIN、PADDLE_PRICE_ID 與 secrets 在開通時設定（#97）。
+// production（#97）：CI 在合併到 main 後部署（.github/workflows/ci.yml 的 deploy-worker，ADR 0008）。
+//   secrets（wrangler secret put，只存在 Cloudflare）：CLAUDE_API_KEY、RESEND_API_KEY、PADDLE_API_KEY、PADDLE_PRICE_ID、PADDLE_WEBHOOK_SECRET，
+//   由 scripts/production-wizard.sh 設定。PADDLE_PRICE_ID 不是秘密，但跟本機一樣當 secret，換價格不用改這個檔。
+//   routes 的 custom_domain：部署時 Cloudflare 自動建 api.naruhodo.page 的 DNS 記錄與 HTTPS 憑證。
+//   env.dev 有的 vars，最上層也要有（FAKE_MAIL、DEV_ENDPOINTS 除外），由 scripts/wrangler-config.test.ts 檢查。
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "naruhodo-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  // 正式的 database_id 在開通 production 時填（#97）；本機 D1 不看這個值
+  "routes": [{ "pattern": "api.naruhodo.page", "custom_domain": true }],
+  // 正式的 database_id 由 scripts/production-wizard.sh 建立 D1 後填入；本機 D1 不看這個值
   "d1_databases": [{ "binding": "DB", "database_name": "naruhodo", "database_id": "local", "migrations_dir": "migrations" }],
   "ratelimits": [
     { "name": "SEND_CODE_BY_IP", "namespace_id": "1001", "simple": { "limit": 10, "period": 60 } },
@@ -23,7 +28,13 @@
     { "name": "VERIFY_CODE_BY_IP", "namespace_id": "1003", "simple": { "limit": 30, "period": 60 } },
     { "name": "VERIFY_CODE_BY_EMAIL", "namespace_id": "1004", "simple": { "limit": 20, "period": 60 } }
   ],
-  "vars": { "MONTHLY_PAGE_LIMIT": "800", "PADDLE_API_BASE_URL": "https://api.paddle.com" },
+  "vars": {
+    "MONTHLY_PAGE_LIMIT": "800",
+    "SITE_ORIGIN": "https://naruhodo.page",
+    "PADDLE_API_BASE_URL": "https://api.paddle.com",
+    // 寄件網域用子網域：寄信的信譽跟主網域分開（Resend 的建議）
+    "MAIL_FROM": "Naruhodo <noreply@mail.naruhodo.page>"
+  },
   "define": { "__FAKE_ANTHROPIC__": "false", "__FAKE_PADDLE__": "false" },
   "env": {
     "dev": {

@@ -2,12 +2,13 @@
  * Worker 的 HTTP API（spec #86 接縫一）：送請求給真正的 Worker，看回應。Anthropic 用 vi.spyOn(fetch) 假的。
  * 每個測試先用 email 驗證碼登入（寄信是假的實作），帶 session token 呼叫翻譯與 Notes。
  */
+import { exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAUDE_MODEL, notesRequest, translateRequest } from '../../src/shared/claude-request.ts';
-import { NOTES_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
+import { bearerHeader, HEALTH_PATH, NOTES_PATH, TRANSLATE_PATH } from '../../src/shared/hosted-api.ts';
 import type { NotesInput, TranslateInput } from '../../src/shared/translator.ts';
 import { fakeAnthropic, reply } from './test/anthropic.ts';
-import { post as postAs, signIn } from './test/http.ts';
+import { get, post as postAs, signIn } from './test/http.ts';
 
 const input: TranslateInput = {
   seriesNotes: [],
@@ -115,6 +116,65 @@ describe('翻譯', () => {
 
   it('沒有這個端點回 404', async () => {
     expect((await post('/v1/messages', input)).status).toBe(404);
+  });
+});
+
+describe('請求大小', () => {
+  it('body 超過 256 KiB 回 413，不呼叫 Anthropic', async () => {
+    const anthropic = vi.spyOn(globalThis, 'fetch');
+    const huge = { ...input, items: [{ ...input.items[0], 原文: 'あ'.repeat(100_000) }] };
+
+    const response = await post(TRANSLATE_PATH, huge);
+
+    expect(response.status).toBe(413);
+    expect(anthropic).not.toHaveBeenCalled();
+  });
+});
+
+describe('CORS', () => {
+  const extension = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+
+  it('外掛的 preflight 放行 Authorization 與 JSON', async () => {
+    const response = await exports.default.fetch(
+      new Request(`https://api.test${TRANSLATE_PATH}`, {
+        method: 'OPTIONS',
+        headers: { origin: extension, 'access-control-request-method': 'POST', 'access-control-request-headers': 'authorization, content-type' },
+      }),
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe(extension);
+    expect(response.headers.get('access-control-allow-headers')).toBe('authorization, content-type');
+  });
+
+  it('外掛送來的請求，回應帶外掛的 origin', async () => {
+    fakeAnthropic([ok]);
+
+    const response = await exports.default.fetch(
+      new Request(`https://api.test${TRANSLATE_PATH}`, {
+        method: 'POST',
+        headers: { origin: extension, 'content-type': 'application/json', ...bearerHeader(token) },
+        body: JSON.stringify(input),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe(extension);
+  });
+
+  it('一般網頁的 origin 不放行', async () => {
+    const response = await exports.default.fetch(new Request(`https://api.test${HEALTH_PATH}`, { headers: { origin: 'https://evil.example' } }));
+
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
+});
+
+describe('健康檢查', () => {
+  it('Worker 與 D1 都能用就回 200', async () => {
+    const response = await get(HEALTH_PATH);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
   });
 });
 

@@ -11,6 +11,7 @@ import {
   CHECKOUT_PATH,
   DEV_FREE_PAGES_PATH,
   DEV_OUTBOX_PATH,
+  HEALTH_PATH,
   NOTES_PATH,
   PADDLE_WEBHOOK_PATH,
   PORTAL_PATH,
@@ -229,6 +230,11 @@ const ROUTES: Record<string, Handler> = {
     await applyPaddleEvent(env.DB, event, now);
     return new Response(null, { status: 200 });
   },
+  // 實際查一次 D1：database_id 填錯或 migrations 沒套用時，部署後的健康檢查就會失敗
+  [`GET ${HEALTH_PATH}`]: async ({ env }) => {
+    await env.DB.prepare('SELECT count(*) FROM accounts').first();
+    return Response.json({ ok: true });
+  },
   [`GET ${DEV_OUTBOX_PATH}`]: async ({ request, env }) => {
     if (env.FAKE_MAIL !== 'true') return error(404, '沒有這個端點');
     const email = parseEmail(new URL(request.url).searchParams.get('email'));
@@ -245,10 +251,52 @@ const ROUTES: Record<string, Handler> = {
   },
 };
 
+/**
+ * 請求 body 的上限：一整部作品的 Notes 加上前幾頁的譯文也遠小於這個。超過的回 413，不送 Anthropic
+ * （送進 prompt 的每個字都要花錢）。
+ */
+const MAX_BODY_BYTES = 256 * 1024;
+
+/** body 讀進記憶體後重新包成 Request，讓各端點照常 json()／text()；超過上限就是 undefined。 */
+async function withinBodyLimit(request: Request): Promise<Request | undefined> {
+  if (request.method !== 'POST') return request;
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return undefined;
+  const body = await request.arrayBuffer();
+  return body.byteLength > MAX_BODY_BYTES ? undefined : new Request(request, { body });
+}
+
+/**
+ * CORS：正式版外掛沒有 host_permissions（src/manifest.ts），呼叫 Worker 是跨網域請求，Worker 要放行外掛的 origin。
+ * 不限定外掛 id：GitHub Release 的 zip 解壓縮安裝時 id 依路徑而定，每個人都不一樣。身分靠 Bearer token，不靠 cookie，
+ * 所以 CORS 不是安全界線，只是不讓一般網頁讀到回應。Paddle 的 webhook 與 curl 沒有 Origin，不受影響。
+ */
+function corsHeaders(origin: string | null): Record<string, string> {
+  if (!origin?.startsWith('chrome-extension://')) return {};
+  return {
+    'access-control-allow-origin': origin,
+    'access-control-allow-methods': 'GET, POST, DELETE',
+    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-max-age': '86400',
+    vary: 'origin',
+  };
+}
+
+async function handle(request: Request, env: Env): Promise<Response> {
+  const route = ROUTES[`${request.method} ${new URL(request.url).pathname}`];
+  if (!route) return error(404, '沒有這個端點');
+  const limited = await withinBodyLimit(request);
+  if (!limited) return error(413, '請求太大');
+  return route({ request: limited, env, now: Date.now() });
+}
+
 export default {
   async fetch(request, env) {
-    const route = ROUTES[`${request.method} ${new URL(request.url).pathname}`];
-    if (!route) return error(404, '沒有這個端點');
-    return route({ request, env, now: Date.now() });
+    const cors = corsHeaders(request.headers.get('origin'));
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+    const response = await handle(request, env);
+    if (Object.keys(cors).length === 0) return response;
+    const withCors = new Response(response.body, response);
+    for (const [name, value] of Object.entries(cors)) withCors.headers.set(name, value);
+    return withCors;
   },
 } satisfies ExportedHandler<Env>;

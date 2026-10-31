@@ -70,10 +70,10 @@ export const E2E_WORKER_PORT = 8788;
 
 /**
  * Hosted Translation 的 Worker 網址（worker/）：e2e build 連測試啟動的 wrangler dev；debug build 連開發者自己跑的
- * `wrangler dev --env dev`（預設 port 8787）。正式 build 的網址在上線時填（#97），空字串＝Hosted Translation 不翻譯。
+ * `wrangler dev --env dev`（預設 port 8787）；正式 build 連 production 的 Worker（worker/wrangler.jsonc 的 routes）。
  */
 export function hostedApiUrl({ e2e, debug }: { e2e: boolean; debug: boolean }): string {
-  return e2e ? `http://localhost:${E2E_WORKER_PORT}` : debug ? 'http://localhost:8787' : '';
+  return e2e ? `http://localhost:${E2E_WORKER_PORT}` : debug ? 'http://localhost:8787' : 'https://api.naruhodo.page';
 }
 
 async function copyFonts(outDir: string): Promise<void> {
