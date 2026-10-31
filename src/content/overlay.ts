@@ -14,7 +14,7 @@
 import type { LineRef } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageMode } from '../shared/page-mode.ts';
-import type { PageText, RatioRect } from '../shared/page-text.ts';
+import { overlaidBalloons, type PageText, type RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
@@ -303,8 +303,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。pageHash＝hover 同步用的 Page 身分。 */
   async function show(anchor: HTMLElement, sub: RatioRect = WHOLE_PAGE, text: PageText, pageHash = ''): Promise<void> {
-    // unreadable 與 Loose Text 不覆蓋（spec 第 7.2 節）
-    const balloons = text.balloons.filter((b) => !b.unreadable && b.譯文 !== '');
+    const balloons = overlaidBalloons(text);
     const fontFamily = await loadFont(balloons.map((b) => b.譯文).join(''));
     if (stopped) return;
     const entry = entryFor(anchor);

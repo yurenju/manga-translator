@@ -57,7 +57,8 @@ function applyTranslation(text: PageText, output: TranslateOutput): PageText {
   const byId = new Map(output.items.map((item) => [item.id, item]));
   const merge = <T extends { id: string; 讀音: string; 讀音來源: 'llm' | 'kuromoji'; 譯文: string; unreadable: boolean }>(entry: T): T => {
     const item = byId.get(entry.id);
-    return item ? { ...entry, 讀音: item.讀音, 讀音來源: 'llm', 譯文: item.譯文, unreadable: item.unreadable } : entry;
+    // 本機流水線已判 unreadable（OCR 信心低於門檻，ADR 0009）的段，LLM 讀得懂也維持 unreadable
+    return item ? { ...entry, 讀音: item.讀音, 讀音來源: 'llm', 譯文: item.譯文, unreadable: entry.unreadable || item.unreadable } : entry;
   };
   return { balloons: text.balloons.map(merge), looseText: text.looseText.map(merge) };
 }

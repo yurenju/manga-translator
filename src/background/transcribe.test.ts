@@ -171,6 +171,19 @@ describe('逐字稿：本機流水線＋Translator', () => {
     expect(last.text.looseText[0]).toMatchObject({ 讀音: 'どん', 讀音來源: 'llm', 譯文: '咚', unreadable: true });
   });
 
+  it('OCR 信心低於門檻的段（本機已判 unreadable）：Translator 回 unreadable: false 也維持 unreadable', async () => {
+    const lowConfidence = structuredClone(pageText);
+    lowConfidence.balloons[0] = { ...lowConfidence.balloons[0]!, unreadable: true, ocrConfidence: 0.17 };
+    const { transcriber, published } = setup({ analyze: vi.fn(async () => structuredClone(lowConfidence)), getTranslator: () => translatorReturning('譯') });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    const last = published.at(-1)![0]!.transcript;
+    if (last.state !== 'done') throw new Error('還沒翻完');
+    expect(last.text.balloons[0]).toMatchObject({ 譯文: '譯-b1', unreadable: true, ocrConfidence: 0.17 });
+    expect(last.text.looseText[0]).toMatchObject({ unreadable: false });
+  });
+
   it('Translator 失敗時保留 kuromoji 讀音、標示未翻譯，並帶上錯誤訊息', async () => {
     const translator: Translator = { ...noNotes, translatePage: async () => Promise.reject(new Error('Claude API 429：slow down')) };
     const { transcriber, published } = setup({ getTranslator: () => translator });
