@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createActivation, type ActivationDeps, type TabState } from './activation.ts';
 
-const JUMP = 'https://shonenjumpplus.com/episode/123';
+const EPISODE = 'https://manga.example/episode/123';
 
 /** 用記憶體模擬 Chrome：tab 的網址、注入紀錄、side panel 紀錄。 */
 function fakeChrome(urls: Record<number, string>) {
@@ -39,7 +39,7 @@ function fakeChrome(urls: Record<number, string>) {
 
 describe('activate', () => {
   it('啟動後 tab 為已啟動、打開 side panel、注入 content script', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
 
     await activation.activate(1);
@@ -50,7 +50,7 @@ describe('activate', () => {
   });
 
   it('在任何 await 之前就同步打開 side panel（否則會失去 user gesture）', () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
 
     void activation.activate(1);
@@ -59,7 +59,7 @@ describe('activate', () => {
   });
 
   it('side panel 打不開（沒有 user gesture，例如測試入口）仍然會啟動', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     chrome.deps.openSidePanel = () =>
       Promise.reject(new Error('sidePanel.open() may only be called in response to a user gesture.'));
     const activation = createActivation(chrome.deps);
@@ -80,7 +80,7 @@ describe('activate', () => {
   });
 
   it('啟動成功會通知狀態改變', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
 
     await activation.activate(1);
@@ -91,7 +91,7 @@ describe('activate', () => {
 
 describe('stop', () => {
   it('停止後通知 content script 清理，之後重新整理不再注入', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
@@ -107,11 +107,11 @@ describe('stop', () => {
 
 describe('tab 生命週期', () => {
   it('同 origin 重新整理載入完成後自動重新注入', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
-    await activation.handleTabUpdated(1, { status: 'loading', url: JUMP });
+    await activation.handleTabUpdated(1, { status: 'loading', url: EPISODE });
     await activation.handleTabUpdated(1, { status: 'complete' });
 
     expect(chrome.calls.injected).toEqual([1, 1]);
@@ -119,11 +119,11 @@ describe('tab 生命週期', () => {
   });
 
   it('同 origin 換到另一頁仍維持啟動並重新注入', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
-    chrome.urls[1] = 'https://shonenjumpplus.com/episode/456';
+    chrome.urls[1] = 'https://manga.example/episode/456';
     await activation.handleTabUpdated(1, { status: 'loading', url: chrome.urls[1] });
     await activation.handleTabUpdated(1, { status: 'complete' });
 
@@ -131,7 +131,7 @@ describe('tab 生命週期', () => {
   });
 
   it('換 origin 就停止，之後載入完成也不注入', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
@@ -149,7 +149,7 @@ describe('tab 生命週期', () => {
 
   it('換 origin 的事件還沒處理完，載入完成的事件就到了，也不注入', async () => {
     // Chrome 不等上一個 listener 的 promise，兩個 onUpdated 事件會同時在處理
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
@@ -163,7 +163,7 @@ describe('tab 生命週期', () => {
   });
 
   it('沒啟動的 tab 載入完成不注入', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
 
     await activation.handleTabUpdated(1, { status: 'complete' });
@@ -172,7 +172,7 @@ describe('tab 生命週期', () => {
   });
 
   it('重新注入失敗（例如 activeTab 授權已失效）就停止', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
@@ -183,7 +183,7 @@ describe('tab 生命週期', () => {
   });
 
   it('關掉 tab 就清掉狀態', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
@@ -195,17 +195,17 @@ describe('tab 生命週期', () => {
 
 describe('Series', () => {
   it('啟動時沒有預選到 Series，就用這個網址建一個 Provisional Series 給這個 tab', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
 
     await activation.activate(1);
 
-    expect(chrome.createdSeries).toEqual([JUMP]);
+    expect(chrome.createdSeries).toEqual([EPISODE]);
     expect(await activation.getSeriesId(1)).toBe('provisional-1');
   });
 
   it('每次這樣的啟動各一個：停止後再啟動是新的 Provisional Series', async () => {
-    const chrome = fakeChrome({ 1: JUMP, 2: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE, 2: EPISODE });
     const activation = createActivation(chrome.deps);
 
     await activation.activate(1);
@@ -218,7 +218,7 @@ describe('Series', () => {
   });
 
   it('已啟動的 tab 重新整理、再點一次圖示，沿用同一個 Series', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
 
     await activation.activate(1);
@@ -230,8 +230,8 @@ describe('Series', () => {
   });
 
   it('網址模式預選到 Series 時用它，不建 Provisional Series', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
-    chrome.patterns.set(JUMP, 'series-a');
+    const chrome = fakeChrome({ 1: EPISODE });
+    chrome.patterns.set(EPISODE, 'series-a');
     const activation = createActivation(chrome.deps);
 
     await activation.activate(1);
@@ -241,7 +241,7 @@ describe('Series', () => {
   });
 
   it('切換 Series 後這個 tab 改用新的 Series ID', async () => {
-    const chrome = fakeChrome({ 1: JUMP });
+    const chrome = fakeChrome({ 1: EPISODE });
     const activation = createActivation(chrome.deps);
     await activation.activate(1);
 
@@ -252,7 +252,7 @@ describe('Series', () => {
   });
 
   it('沒啟動的 tab 不能切換 Series', async () => {
-    const activation = createActivation(fakeChrome({ 1: JUMP }).deps);
+    const activation = createActivation(fakeChrome({ 1: EPISODE }).deps);
 
     await activation.setSeriesId(1, 'series-b');
 
@@ -260,7 +260,7 @@ describe('Series', () => {
   });
 
   it('沒啟動的 tab 沒有 Series', async () => {
-    const activation = createActivation(fakeChrome({ 1: JUMP }).deps);
+    const activation = createActivation(fakeChrome({ 1: EPISODE }).deps);
 
     expect(await activation.getSeriesId(1)).toBeUndefined();
   });

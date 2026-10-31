@@ -16,7 +16,7 @@ globalThis.__renderOverlay = async ({ image, width, pages, pageMode = 'read' }) 
   overlay?.clear();
   overlay = createOverlay({ loadFont });
   overlay.setPageMode(pageMode);
-  // 父元素是 static：跟仿 Jump+ 一樣會被改成 relative
+  // 父元素是 static：跟仿 canvas 網站一樣會被改成 relative
   const slot = document.createElement('div');
   slot.className = 'slot';
   const img = document.createElement('img');

@@ -4,7 +4,7 @@
  * 認頁與快取命中的規則在 page-hash 與 transcribe 的 unit。
  */
 import type { Page, Worker } from '@playwright/test';
-import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test, testActivate } from './fixtures.ts';
+import { activateOnMockSite, chooseFromPanelMenu, expect, openSidePanel, test, testActivate } from './fixtures.ts';
 import { overlayTexts, pageMode, shownTranslations } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -14,7 +14,7 @@ const captureCount = (sw: Worker) => sw.evaluate(() => globalThis.__captureLog?.
 const statusLines = (panel: Page) => panel.getByRole('status', { name: '翻譯狀態' });
 
 test('Page Mode 在重開 side panel、新分頁啟動後沿用', async ({ context, sw, extensionId, mockSite }) => {
-  const first = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const first = await activateOnMockSite({ context, sw, extensionId, mockSite });
   // 先等第一個分頁翻好：之後換別的分頁到前景，它就截不到了
   await expect.poll(async () => (await overlayTexts(first.page)).length).toBeGreaterThan(0);
   await pageMode(first.panel, '學習').click();
@@ -27,7 +27,7 @@ test('Page Mode 在重開 side panel、新分頁啟動後沿用', async ({ conte
   await reopened.close();
 
   // 新分頁啟動：翻好後頁面上有覆蓋層（hover 要用），但看不到譯文
-  const second = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  const second = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.canvasSitePagedUrl });
   await expect(pageMode(second.panel, '學習')).toHaveAttribute('aria-pressed', 'true');
   await expect(statusLines(second.panel)).toHaveText([/^已翻譯・/]);
   await expect.poll(async () => (await overlayTexts(second.page)).length).toBeGreaterThan(0);
@@ -40,7 +40,7 @@ test('Page Mode 在重開 side panel、新分頁啟動後沿用', async ({ conte
 });
 
 test('學習時重新擷取：頁面上沒蓋東西的截圖也認得是同一頁，不重翻', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.canvasSitePagedUrl });
   await expect(statusLines(panel)).toHaveText([/^已翻譯・/]);
   await pageMode(panel, '學習').click();
   await expect(shownTranslations(page)).toHaveCount(0);
@@ -56,7 +56,7 @@ test('學習時重新擷取：頁面上沒蓋東西的截圖也認得是同一�
 });
 
 test('學習時重新整理再啟動（快取命中）：頁面上從頭到尾沒出現過譯文', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.canvasSitePagedUrl });
   await expect(statusLines(panel)).toHaveText([/^已翻譯・/]);
   await pageMode(panel, '學習').click();
   await expect(shownTranslations(page)).toHaveCount(0);

@@ -111,7 +111,7 @@ export function cropGray(
 }
 
 /**
- * 仿 Kindle 的合成圖：整頁等比例縮放（區塊平均）置中塞進 viewport 大小的畫面，周圍填 border（預設純黑）。
+ * 仿電子書閱讀器的合成圖：整頁等比例縮放（區塊平均）置中塞進 viewport 大小的畫面，周圍填 border（預設純黑）。
  * 回傳合成圖與內容在裡面的位置。
  */
 export function letterbox(

@@ -1,6 +1,6 @@
 /**
  * 覆蓋層的擦除底色（spec #27 第 7.2 節）：擦除範圍內「最常出現的亮度」，白底取白、黑底白字取黑。
- * 原圖像素取自截圖（Jump+ 是 tainted canvas，content script 讀不到），所以在 offscreen 算。
+ * 原圖像素取自截圖（canvas 網站的 canvas 是 tainted，content script 讀不到），所以在 offscreen 算。
  */
 import type { GrayImage } from './pipeline/reading-order.ts';
 

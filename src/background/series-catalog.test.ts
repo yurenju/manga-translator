@@ -5,8 +5,8 @@ import type { Series, UrlPattern } from '../shared/series.ts';
 import type { NotesEntry } from '../shared/translator.ts';
 import { createSeriesCatalog, type SeriesRepo } from './series-catalog.ts';
 
-const EP1 = 'https://shonenjumpplus.com/episode/1';
-const EP2 = 'https://shonenjumpplus.com/episode/2';
+const EP1 = 'https://manga.example/episode/1';
+const EP2 = 'https://manga.example/episode/2';
 
 /** 記憶體版的 IndexedDB。 */
 function memoryRepo() {
@@ -81,7 +81,7 @@ describe('seriesForUrl', () => {
 
     const id = await catalog.seriesForUrl(EP1);
 
-    expect(db.series.get(id)).toMatchObject({ provisional: true, name: expect.stringMatching(/^未命名・shonenjumpplus\.com・/) });
+    expect(db.series.get(id)).toMatchObject({ provisional: true, name: expect.stringMatching(/^未命名・manga\.example・/) });
     expect(db.patterns.size).toBe(0);
   });
 

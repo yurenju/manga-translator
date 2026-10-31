@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isPageCandidate, pageCandidateRejection } from './page-candidates.ts';
 
 const VIEWPORT = { width: 1280, height: 720 };
-/** 仿 Jump+ 一頁在畫面上的大小。 */
+/** 仿 canvas 網站一頁在畫面上的大小。 */
 const page = (x: number, y: number) => ({ x, y, width: 430, height: 625 });
 
 describe('isPageCandidate', () => {
@@ -26,7 +26,7 @@ describe('isPageCandidate', () => {
     expect(isPageCandidate({ x: 10, y: 10, width: 600, height: 90 }, VIEWPORT)).toBe(false);
   });
 
-  it('被 overflow 裁切的祖先擋住的不是（仿 Jump+ 翻頁：隔壁頁在 viewer 外面）', () => {
+  it('被 overflow 裁切的祖先擋住的不是（仿 canvas 網站翻頁：隔壁頁在 viewer 外面）', () => {
     const viewer = { x: 425, y: 57, width: 430, height: 625 };
     expect(isPageCandidate(page(425, 57), VIEWPORT, [viewer])).toBe(true);
     expect(isPageCandidate(page(-5, 57), VIEWPORT, [viewer])).toBe(false);

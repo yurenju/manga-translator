@@ -1,18 +1,18 @@
 import type { Page } from '@playwright/test';
 import { readGroundTruth } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, chooseFromPanelMenu, expect, test } from './fixtures.ts';
+import { activateOnMockSite, chooseFromPanelMenu, expect, test } from './fixtures.ts';
 
 /**
  * 用真的視窗（1280×1500）而不是 Playwright 模擬的 viewport：啟動時 side panel 會真的打開、把頁面擠窄，
  * 模擬的 viewport 不會跟著變，量到的 rect 就跟 captureVisibleTab 的截圖對不上（真實 Chrome 沒有這個問題）。
- * 可視高度約 1390 px；仿 Jump+ 每頁顯示 430×625、間隔 16 px，header 下方第 1、2 頁完整可見，第 3 頁只露出上半部。
+ * 可視高度約 1390 px；仿 canvas 網站每頁顯示 430×625、間隔 16 px，header 下方第 1、2 頁完整可見，第 3 頁只露出上半部。
  *
  * 認頁靠 FakeTranslator：它把 OCR 原文對回全部合成頁的 ground truth，所以逐字稿裡出現的譯文屬於哪一張
  * 合成頁，就知道裁出來的是哪一頁；裁切偏掉時會混進別頁的句子或認不出來。
  */
 test.use({ viewport: null, fakeTranslator: true });
 
-/** 仿 Jump+ 前三頁；第 3 頁永遠只露出一部分，用來確認不會誤認成它。 */
+/** 仿 canvas 網站前三頁；第 3 頁永遠只露出一部分，用來確認不會誤認成它。 */
 const FIRST_PAGES = ['p01-basic', 'p02-ruby', 'p03-shapes'];
 
 /** 一頁 7 句裡至少要認出這麼多句才算「是這一頁」（截圖裡的 Page 只有原圖約一半大，OCR 偶爾漏一句）。 */
@@ -45,14 +45,14 @@ const pageIcon = (panel: Page, name: string) => pageList(panel).getByRole('listi
 // 排序、左右頁、頁首文字的規則在 src/ui/view.test.ts；這裡只確認 side panel 真的把它們畫出來
 
 test('啟動後 side panel 列出完整可見的 Page，只露出一部分的不列；單頁的頁首圖示一格', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
   await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
   await expect(pageIcon(panel, '第 1 頁').locator('rect')).toHaveCount(1);
 });
 
 test('捲動後重新擷取：上下都只露出一部分時只列中間那頁', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);
 
   await page.evaluate(() => window.scrollTo(0, 300));
@@ -62,7 +62,7 @@ test('捲動後重新擷取：上下都只露出一部分時只列中間那頁',
 });
 
 test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀」，右頁在前；沒有縮圖', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.ebookReaderUrl });
 
   // 左右頁怎麼判斷、頁首文字是 view.test.ts 的 unit；這是唯一一條讓真的 Spread（SW 切成兩頁）一路畫到 side panel 的
   await expect(pageList(panel).getByRole('heading')).toHaveText(['右頁 · 先讀', '左頁 · 後讀']);
@@ -72,7 +72,7 @@ test('Spread 的兩個 Page 頁首是「右頁 · 先讀」「左頁 · 後讀�
 });
 
 test('每個 Page 的翻譯狀態在頁首右側，跟標題同一行', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
   for (const name of ['第 1 頁', '第 2 頁']) {
     const item = pageList(panel).getByRole('listitem', { name });
@@ -91,7 +91,7 @@ test.describe('DPR 1.5', () => {
   test.use({ realDeviceScaleFactor: 1.5 });
 
   test('裁切位置仍正確', async ({ context, sw, extensionId, mockSite }) => {
-    const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+    const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
     expect(await page.evaluate(() => devicePixelRatio)).toBe(1.5);
     await expectPagesListed(panel, ['p01-basic', 'p02-ruby']);

@@ -202,7 +202,7 @@ window.build = function build(spec) {
   svgEl("feTurbulence", { type: "fractalNoise", baseFrequency: 0.045, numOctaves: 2, seed: 7, result: "noise" }, rough);
   svgEl("feDisplacementMap", { in: "SourceGraphic", in2: "noise", scale: 7, xChannelSelector: "R", yChannelSelector: "G" }, rough);
 
-  // Page edges of a spread: a faint gutter shadow so it looks like Kindle's spread.
+  // Page edges of a spread: a faint gutter shadow so it looks like an e-book reader's spread.
   for (const pg of spec.pages ?? []) {
     svgEl("rect", { x: pg.bbox[0], y: pg.bbox[1], width: pg.bbox[2], height: pg.bbox[3], fill: "none", stroke: "#ddd", "stroke-width": 1 }, svg);
   }

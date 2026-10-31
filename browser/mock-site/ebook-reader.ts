@@ -1,27 +1,27 @@
 /**
- * 仿 Kindle（spec #27 第 12 節、#35）：整個 viewport 一張同源 blob `<img>`，是把整個 Spread（或單頁）等比例縮放、
+ * 仿電子書閱讀器（spec #27 第 12 節、#35）：整個 viewport 一張同源 blob `<img>`，是把整個 Spread（或單頁）等比例縮放、
  * 置中塞進 viewport 的合成圖，周圍是純黑邊；像素＝viewport × devicePixelRatio，視窗大小一變就重新產生（#35 實測）。
  * 翻頁是同一個 `<img>` 換 `src`（← 鍵＝下一頁、→ 鍵＝上一頁），body[data-page-index] 是目前第幾個畫面。
  * `#zoom` 是可以加 transform 的祖先（縮放／拖曳）；框架重繪由測試自己做（例如 `#zoom` 只留下 img）。
- * 圖片跟網站同 origin（canvas 不 tainted，才能 toBlob），放在 /kindle/img/。
+ * 圖片跟網站同 origin（canvas 不 tainted，才能 toBlob），放在 /ebook-reader/img/。
  * 每次合成完、img 載入後 body 會有 data-ready="true"。
  *
- * 工具列（#55，仿真實 amazon manga 閱讀器）：上方書名列＋試讀橫幅、下方進度列、左右翻頁箭頭，疊在 img 上面。
+ * 工具列（#55，仿真實的電子書閱讀器）：上方書名列＋試讀橫幅、下方進度列、左右翻頁箭頭，疊在 img 上面。
  * 點畫面中間切換顯示。收起時跟真實閱讀器一樣先淡出（`fading`，半透明），比外掛的翻頁 debounce 久，之後才加上
  * `hidden`（display: none）。外掛截圖前會把工具列藏起來（#59）。img 是 `pointer-events: none`，
  * 上面蓋著一層全透明的感應層 `#tap`（真實閱讀器也是這樣接點擊）。
  * 網址參數：`toolbar=shown` 一開始就顯示工具列；`bg=white` 白底（合成圖的邊是白的）；
  * `buffers=3` 仿真實閱讀器輪流用好幾張疊在一起的 `<img>`：新畫面畫進下一張，載入後用 `visibility` 切換，
- * 藏起來的那張保留舊的 `src`、留在原地（真實 Kindle 實測）。
+ * 藏起來的那張保留舊的 `src`、留在原地（真實的電子書閱讀器實測）。
  */
-export const KINDLE_VIEWS = ['p07-spread', 'p08-action', 'p01-basic'] as const;
+export const READER_VIEWS = ['p07-spread', 'p08-action', 'p01-basic'] as const;
 
-export function kindlePage(): string {
+export function ebookReaderPage(): string {
   return `<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>Kindle（模擬）</title>
+<title>電子書閱讀器（模擬）</title>
 <style>
   html, body { margin: 0; overflow: hidden; background: #000; }
   body.white { background: #fff; }
@@ -51,7 +51,7 @@ export function kindlePage(): string {
   <button class="chevron right" type="button">›</button>
 </div>
 <script>
-  const views = ${JSON.stringify(KINDLE_VIEWS)};
+  const views = ${JSON.stringify(READER_VIEWS)};
   const params = new URLSearchParams(location.search);
   const background = params.get('bg') === 'white' ? '#fff' : '#000';
   document.body.classList.toggle('white', background === '#fff');
@@ -79,7 +79,7 @@ export function kindlePage(): string {
     const image = new Image();
     image.onload = () => resolve(image);
     image.onerror = reject;
-    image.src = '/kindle/img/' + id + '.png';
+    image.src = '/ebook-reader/img/' + id + '.png';
   })));
   async function compose() {
     const source = (await sources)[index];

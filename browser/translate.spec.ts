@@ -6,7 +6,7 @@
  * 也檢查 key 不經過 content script 與 messaging（spec #27 第 5 節）。
  */
 import type { Page, Worker } from '@playwright/test';
-import { activateOnJumpPlus, chooseFromPanelMenu, expect, openSidePanel, test } from './fixtures.ts';
+import { activateOnMockSite, chooseFromPanelMenu, expect, openSidePanel, test } from './fixtures.ts';
 
 test.use({ viewport: null, fakeTranslator: true, requireApiKey: true, unreadableTexts: ['もちろん！'] });
 
@@ -64,7 +64,7 @@ test('設定 API key、同意資料使用後，已啟動的分頁直接翻譯：
   extensionId,
   mockSite,
 }) => {
-  const { panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, beforeActivate: recordPanelMessages });
+  const { panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite, beforeActivate: recordPanelMessages });
   await recordContentMessages(sw, tabId);
 
   // 還沒有 key：原文＋kuromoji 讀音、未翻譯

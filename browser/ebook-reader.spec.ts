@@ -1,12 +1,12 @@
 /**
- * #35：仿 Kindle（整個 viewport 一張 blob img，Spread＋黑邊，翻頁換 src）。OCR 用 FakeEngine 重播
+ * #35：仿電子書閱讀器（整個 viewport 一張 blob img，Spread＋黑邊，翻頁換 src）。OCR 用 FakeEngine 重播
  * （ADR 0007；@e2e 那幾條在 e2e 跑真模型），譯文來自 FakeTranslator。
  * 外掛要去黑邊、從中縫切成兩個 Page，兩頁共用同一個 anchor 與 shadow host。
  * Spread 右頁先送出 LLM 的規則在 transcribe 的 unit。
  */
 import type { Page, Worker } from '@playwright/test';
 import { readGroundTruth, type GtText } from '../src/testing/synthetic.ts';
-import { activateOnJumpPlus, expect, sentOriginals, test } from './fixtures.ts';
+import { activateOnMockSite, expect, sentOriginals, test } from './fixtures.ts';
 import { overlayHostCount, type ScreenRect } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -16,13 +16,13 @@ const TOLERANCE = 4;
 
 const normalize = (s: string) => s.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '');
 
-interface KindleOverlay {
+interface ReaderOverlay {
   texts: { text: string; rect: ScreenRect }[];
   /** img 的畫面 rect（含祖先 transform）與合成圖的像素尺寸。 */
   img: ScreenRect & { naturalWidth: number; naturalHeight: number };
 }
 
-function kindleOverlay(page: Page): Promise<KindleOverlay> {
+function readerOverlay(page: Page): Promise<ReaderOverlay> {
   return page.evaluate(() => {
     const rectOf = (el: Element) => {
       const r = el.getBoundingClientRect();
@@ -40,8 +40,8 @@ function kindleOverlay(page: Page): Promise<KindleOverlay> {
 }
 
 /** 這個合成頁（ground truth）的哪些句子有譯文蓋在畫面上；回傳每句在第幾頁（0＝右頁）。 */
-async function overlaidTexts(page: Page, id: string): Promise<{ gt: GtText; rect: ScreenRect; img: KindleOverlay['img'] }[]> {
-  const { texts, img } = await kindleOverlay(page);
+async function overlaidTexts(page: Page, id: string): Promise<{ gt: GtText; rect: ScreenRect; img: ReaderOverlay['img'] }[]> {
+  const { texts, img } = await readerOverlay(page);
   const gt = readGroundTruth(id);
   return texts.flatMap((t) => {
     const target = gt.texts.find((g) => normalize(g.zh) === normalize(t.text));
@@ -49,8 +49,8 @@ async function overlaidTexts(page: Page, id: string): Promise<{ gt: GtText; rect
   });
 }
 
-/** ground truth 的 Balloon（Spread 原圖像素）換成畫面座標：合成圖是等比例縮放置中、周圍黑邊（browser/mock-site/kindle.ts）。 */
-function balloonOnScreen(id: string, bbox: GtText['bbox'], img: KindleOverlay['img']): ScreenRect {
+/** ground truth 的 Balloon（Spread 原圖像素）換成畫面座標：合成圖是等比例縮放置中、周圍黑邊（browser/mock-site/ebook-reader.ts）。 */
+function balloonOnScreen(id: string, bbox: GtText['bbox'], img: ReaderOverlay['img']): ScreenRect {
   const gt = readGroundTruth(id);
   const s = Math.min(img.naturalWidth / gt.width, img.naturalHeight / gt.height);
   const ox = Math.floor((img.naturalWidth - Math.round(gt.width * s)) / 2);
@@ -94,16 +94,16 @@ async function turnTo(page: Page, key: 'ArrowLeft' | 'ArrowRight', index: number
 }
 
 test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內；祖先 transform 後仍對齊', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }, testInfo) => {
-  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  const { page } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.ebookReaderUrl });
   await waitForOverlay(page, 'p07-spread');
   await expectAligned(page, 'p07-spread', '剛覆蓋');
   // 兩頁共用同一個 anchor 的 shadow host
   expect(await overlayHostCount(page)).toBe(1);
-  const shot = testInfo.outputPath('kindle-spread.png');
+  const shot = testInfo.outputPath('ebook-reader-spread.png');
   await page.screenshot({ path: shot });
-  await testInfo.attach('kindle-spread', { path: shot, contentType: 'image/png' });
+  await testInfo.attach('ebook-reader-spread', { path: shot, contentType: 'image/png' });
 
-  // 仿 Kindle 縮放／拖曳：祖先元素的 transform（縮小，img 仍完整在畫面內）
+  // 仿電子書閱讀器縮放／拖曳：祖先元素的 transform（縮小，img 仍完整在畫面內）
   await page.evaluate(() => {
     document.querySelector<HTMLElement>('#zoom')!.style.transform = 'translate(40px, 30px) scale(0.85)';
   });
@@ -111,7 +111,7 @@ test('Spread 切成兩頁：譯文各自落在自己的 Balloon 內；祖先 tra
 });
 
 test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中快取；重繪後 host 自動掛回', async ({ context, sw, extensionId, mockSite }) => {
-  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  const { page } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.ebookReaderUrl });
   await waitForOverlay(page, 'p07-spread');
 
   await turnTo(page, 'ArrowLeft', 1);
@@ -139,7 +139,7 @@ test('換 src 翻頁後舊覆蓋消失、新 Spread 被翻譯；翻回來命中�
 });
 
 test('多張 img 輪流用（visibility 切換）：翻頁後藏起來的那張上的舊譯文看不到，來回翻都只有目前的 Spread', async ({ context, sw, extensionId, mockSite }) => {
-  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: `${mockSite.kindleUrl}?buffers=3` });
+  const { page } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: `${mockSite.ebookReaderUrl}?buffers=3` });
   await waitForOverlay(page, 'p07-spread');
 
   await turnTo(page, 'ArrowLeft', 1);
@@ -160,7 +160,7 @@ test('多張 img 輪流用（visibility 切換）：翻頁後藏起來的那張�
   await expectAligned(page, 'p08-action', '翻回來後');
 });
 
-/** 仿 Kindle 工具列上的文字（browser/mock-site/kindle.ts）：截到工具列的話 OCR 會讀到。 */
+/** 仿電子書閱讀器工具列上的文字（browser/mock-site/ebook-reader.ts）：截到工具列的話 OCR 會讀到。 */
 const TOOLBAR_TEXTS = ['ライブラリ', 'サンプル作品', '期間限定', '無料試し読み', 'ページ'];
 
 /** 送進 LLM 的原文（= OCR 讀到的）裡有沒有工具列上的文字。 */
@@ -169,7 +169,7 @@ async function toolbarTextsSent(sw: Worker): Promise<string[]> {
   return TOOLBAR_TEXTS.filter((t) => sent.some((s) => normalize(s).includes(normalize(t))));
 }
 
-/** 點畫面中間（仿 Kindle 的感應層）切換工具列。 */
+/** 點畫面中間（仿電子書閱讀器的感應層）切換工具列。 */
 async function toggleToolbar(page: Page): Promise<void> {
   const size = page.viewportSize() ?? (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
   await page.mouse.click(size.width / 2, size.height / 2);
@@ -179,8 +179,8 @@ const captureCount = (sw: Worker) => sw.evaluate(() => globalThis.__captureLog?.
 
 for (const bg of ['black', 'white'] as const) {
   test(`#59 工具列蓋住頁面（${bg === 'black' ? '黑底' : '白底'}）：開著也翻，截圖前藏起工具列，譯文落在 Balloon 內`, async ({ context, sw, extensionId, mockSite }) => {
-    const url = `${mockSite.kindleUrl}?toolbar=shown&bg=${bg}`;
-    const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url });
+    const url = `${mockSite.ebookReaderUrl}?toolbar=shown&bg=${bg}`;
+    const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url });
 
     await waitForOverlay(page, 'p07-spread');
     await expectAligned(page, 'p07-spread', `工具列開著（${bg}）`);
@@ -193,7 +193,7 @@ for (const bg of ['black', 'white'] as const) {
 }
 
 test('#55 工具列開了又收起：同一頁命中快取、不重翻', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite }) => {
-  const { page } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.kindleUrl });
+  const { page } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.ebookReaderUrl });
   await waitForOverlay(page, 'p07-spread');
   await expect.poll(() => sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(2);
 

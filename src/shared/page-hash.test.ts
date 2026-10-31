@@ -15,7 +15,7 @@ const scale = (image: GrayImage, s: number) => resize(image, Math.round(image.wi
 /** 同一個 Page 在不同網站／畫面上可能的樣子。 */
 const variants: Record<string, (image: GrayImage) => GrayImage> = {
   '縮成 0.3 倍': (i) => scale(i, 0.3),
-  '縮成 0.49 倍（仿 Jump+ 顯示寬）': (i) => scale(i, 0.49),
+  '縮成 0.49 倍（仿 canvas 網站顯示寬）': (i) => scale(i, 0.49),
   '放大 1.5 倍': (i) => scale(i, 1.5),
   'JPEG 品質 50': (i) => jpeg(i, 50),
   'JPEG 品質 90': (i) => jpeg(i, 90),

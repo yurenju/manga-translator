@@ -5,19 +5,19 @@ import { mergeTranslations, provisionalSeries, seriesMenu, urlPattern } from './
 
 describe('provisionalSeries', () => {
   it('名稱是「未命名・網站・月/日」，標成 provisional', () => {
-    const series = provisionalSeries('https://shonenjumpplus.com/episode/3270375685', new Date(2026, 9, 25, 23, 10), 'id-1');
+    const series = provisionalSeries('https://manga.example/episode/3270375685', new Date(2026, 9, 25, 23, 10), 'id-1');
 
-    expect(series).toEqual({ id: 'id-1', name: '未命名・shonenjumpplus.com・10/25', provisional: true, createdAt: new Date(2026, 9, 25, 23, 10).getTime() });
+    expect(series).toEqual({ id: 'id-1', name: '未命名・manga.example・10/25', provisional: true, createdAt: new Date(2026, 9, 25, 23, 10).getTime() });
   });
 });
 
 describe('urlPattern', () => {
   it('只留 origin＋path，忽略 query 與 hash', () => {
-    expect(urlPattern('https://shonenjumpplus.com/episode/3270375685?from=top#page-3')).toBe('https://shonenjumpplus.com/episode/3270375685');
+    expect(urlPattern('https://manga.example/episode/3270375685?from=top#page-3')).toBe('https://manga.example/episode/3270375685');
   });
 
   it('同網站的另一個網址是不同的網址模式', () => {
-    expect(urlPattern('https://shonenjumpplus.com/episode/1')).not.toBe(urlPattern('https://shonenjumpplus.com/episode/2'));
+    expect(urlPattern('https://manga.example/episode/1')).not.toBe(urlPattern('https://manga.example/episode/2'));
   });
 });
 

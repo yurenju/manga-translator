@@ -68,7 +68,7 @@ const SAMPLE: BackupData = {
     { id: 's1', name: '火ノ丸相撲', provisional: false, createdAt: 1 },
     { id: 's2', name: '未命名', provisional: true, createdAt: 2 },
   ],
-  urlPatterns: [{ pattern: 'https://shonenjumpplus.com/episode/1', seriesId: 's1', lastUsedAt: 3 }],
+  urlPatterns: [{ pattern: 'https://manga.example/episode/1', seriesId: 's1', lastUsedAt: 3 }],
   seriesNotes: [
     { seriesId: 's1', 原文: 'パン', 讀音: 'ぱん', 譯文: '麵包', 類別: '用語', locked: true, 自稱: '俺' },
     { seriesId: 's2', 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文: '霧島湊', 類別: '人名', locked: false },

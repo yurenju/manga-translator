@@ -5,7 +5,7 @@
  * 多個 Page（Spread 的 subRect）共用一個 host、各自一個 Page 層（同一個 Page 只留一層）。Page 層用 Page 原始像素排版，整層
  * translate＋scale 對到 anchor 的 offset*×subRect，捲動、祖先 transform、overflow 裁切都由瀏覽器自然套用。
  * 只在 anchor 尺寸變（ResizeObserver）、視窗大小變、主頁面把 host 丟掉（MutationObserver）時重算或重掛；
- * img 換了 src（Kindle 翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
+ * img 換了 src（電子書閱讀器翻頁）就拿掉上面所有 Page 層，等 SW 送新的。
  * host 是 anchor 的兄弟節點，不會跟著 anchor 被藏起來，所以 anchor 看不到時 host 也自己藏起來。
  *
  * Page Mode（#73）只決定擦字＋譯文那一層要不要顯示：學習時藏起來、保留日文原稿；hover hit-test、tooltip、
@@ -25,7 +25,7 @@ export type LoadFont = (text: string) => Promise<string>;
 
 /**
  * 元素看得到（自己與祖先都不是 display:none、visibility 不是 hidden）。輪流用好幾張疊在一起的 img 的閱讀器
- * （真實 Kindle）用 visibility 藏起舊的那張、留在原地：它不是 Page，上面的覆蓋層也要藏起來。
+ * （真實的電子書閱讀器）用 visibility 藏起舊的那張、留在原地：它不是 Page，上面的覆蓋層也要藏起來。
  * opacity:0 不算：淡出結束不會有 mutation，要另外接 transitionend 才知道。
  */
 export const isShown = (element: Element) => element.checkVisibility({ visibilityProperty: true });
@@ -173,7 +173,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     }
   });
   const mutationObserver = new MutationObserver((records) => {
-    // img 換了 src（Kindle 翻頁、視窗大小變了重新產生合成圖）：上面已經不是那些 Page，舊覆蓋先拿掉，
+    // img 換了 src（電子書閱讀器翻頁、視窗大小變了重新產生合成圖）：上面已經不是那些 Page，舊覆蓋先拿掉，
     // 等 SW 重新擷取後送新的（同一頁就從記住的結果重送，overlay-sync.ts）
     for (const record of records) {
       const entry = record.attributeName === 'src' ? entries.get(record.target as HTMLElement) : undefined;

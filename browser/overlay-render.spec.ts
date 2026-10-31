@@ -1,7 +1,7 @@
 /**
  * 第 2 層（spec #27 第 12 節）：覆蓋渲染。在 e2e build 的外掛測試頁把合成頁的 ground truth 直接畫成覆蓋層
  * （不跑 OCR），量每個譯文元素的 rect、斷言落在對應的 Balloon 內，並存截圖。
- * 顯示寬度跟仿 Jump+ 一樣是 430（倍率約 0.49），最小畫面字級 9px 才有作用。
+ * 顯示寬度跟仿 canvas 網站一樣是 430（倍率約 0.49），最小畫面字級 9px 才有作用。
  */
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
@@ -13,7 +13,7 @@ import { overlayTexts, type ScreenRect } from './overlay-helpers.ts';
 
 const SYNTHETIC = new URL('../testdata/synthetic/out/', import.meta.url);
 
-/** 跟仿 Jump+ 一樣的單頁顯示寬度；Spread 兩倍。 */
+/** 跟仿 canvas 網站一樣的單頁顯示寬度；Spread 兩倍。 */
 const PAGE_WIDTH = 430;
 
 declare global {

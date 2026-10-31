@@ -1,14 +1,13 @@
 /**
- * 仿 Jump+：每頁一個 880×1280 的 canvas，圖片來自另一個 origin 所以 canvas 是 tainted；
+ * 仿 canvas 網站：每頁一個 880×1280 的 canvas，圖片來自另一個 origin 所以 canvas 是 tainted；
  * 網址不會因為翻頁改變。預設縱向排列；paged（`?mode=paged`，#34）是 RTL 翻頁：`overflow:hidden` 的
- * viewer 一次只露一頁，隔壁頁在 viewer 外面（rect 在畫面內但被裁掉），翻頁是 450 ms 的 transform 動畫
- * （參考 prototype/overlay-render 的 buildJumpPlus）。← 鍵或點左半＝下一頁，→ 鍵或點右半＝上一頁；
- * body[data-page-index] 是目前第幾頁（0 起算）。
+ * viewer 一次只露一頁，隔壁頁在 viewer 外面（rect 在畫面內但被裁掉），翻頁是 450 ms 的 transform 動畫。
+ * ← 鍵或點左半＝下一頁，→ 鍵或點右半＝上一頁；body[data-page-index] 是目前第幾頁（0 起算）。
  * header 有一個小 canvas 當網站 logo，用來確認太小的元素不會被當成 Page。
  * 全部頁面畫完後 body 會有 data-ready="true"。
  *
  * 疊在 Page 上的元素（#59，網址參數，可以同時開）：
- * - `nav=1`：真實 Jump+ 的翻頁感應區。透明、各蓋半個畫面的 `<a>`，背景圖是貼在畫面左右邊的小箭頭（`no-repeat`），
+ * - `nav=1`：真實的 canvas 網站的翻頁感應區。透明、各蓋半個畫面的 `<a>`，背景圖是貼在畫面左右邊的小箭頭（`no-repeat`），
  *   `opacity: 0.2`；#55 的「有畫東西就算遮擋」把整塊當成遮擋物，整頁都不翻。
  * - `watermark=1`：第 1 頁上方三分之一蓋一塊 `pointer-events: none` 的半透明洋紅浮水印（`#watermark`），上面有字。
  * - `stacked=1`：第 1 頁上疊一張 120×120 的青色 `<img>`（`#stacked`），太小不算 Page，但不能被藏掉（可能是漫畫本身）。
@@ -20,12 +19,12 @@ export const WATERMARK_TEXT = 'サンプル透かし';
 const ARROW = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="27" height="49.5"><path d="M24 2 3 24.75 24 47.5" fill="none" stroke="#000" stroke-width="4"/></svg>')}`;
 const CYAN = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="#0ff"/></svg>')}`;
 
-export function jumpPlusPage(imageOrigin: string, { paged = false, nav = false, watermark = false, stacked = false } = {}): string {
+export function canvasSitePage(imageOrigin: string, { paged = false, nav = false, watermark = false, stacked = false } = {}): string {
   return `<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<title>少年ジャンプ＋（模擬）</title>
+<title>canvas 漫畫網站（模擬）</title>
 <style>
   body { margin: 0; background: #f2f2f2; font-family: sans-serif; }
   header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #fff; border-bottom: 1px solid #ddd; }
@@ -46,7 +45,7 @@ export function jumpPlusPage(imageOrigin: string, { paged = false, nav = false, 
 </style>
 </head>
 <body>
-<header><canvas id="logo" width="120" height="32"></canvas>少年ジャンプ＋（模擬）· 第 1 話</header>
+<header><canvas id="logo" width="120" height="32"></canvas>canvas 漫畫網站（模擬）· 第 1 話</header>
 <div class="viewer${paged ? ' paged' : ''}" id="viewer">${paged ? '<div class="track" id="track"></div>' : ''}</div>
 ${nav ? '<a class="page-navigation-forward rtl"></a><a class="page-navigation-backward rtl"></a>' : ''}
 <script>

@@ -16,7 +16,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { BrowserContext, FrameLocator, Page } from '@playwright/test';
 import { parseEnvFile } from '../../scripts/paddle-tunnel.ts';
-import { activateOnJumpPlus, chooseFromPanelMenu, expect, openPanelMenu, test } from '../fixtures.ts';
+import { activateOnMockSite, chooseFromPanelMenu, expect, openPanelMenu, test } from '../fixtures.ts';
 import { signInFromPanel } from '../sign-in.ts';
 import { startWorker } from '../worker.ts';
 
@@ -140,7 +140,7 @@ test('Paddle sandbox：side panel 訂閱 → checkout overlay 用測試卡付款
       ),
     );
 
-    const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+    const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
     const email = `smoke-paddle-${Date.now()}@example.com`;
     await signIn(panel, context, email);
     const remaining = panel.getByRole('status', { name: '剩餘額度' });
