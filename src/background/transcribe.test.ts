@@ -1074,6 +1074,34 @@ describe('Prior Pages（ADR 0005）', () => {
     ]);
   });
 
+  it('只等同一次擷取裡在前的頁：前一次擷取還在翻的頁不等（spec D2「前一批的頁維持現狀」）', async () => {
+    const inputs: TranslateInput[] = [];
+    let releaseFirst!: () => void;
+    const firstReturns = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const translator = translatorWithNotes([], inputs);
+    const { transcriber } = setup({
+      analyze: analyzeByAnchor,
+      getTranslator: () => ({
+        ...translator,
+        async translatePage(input) {
+          const output = await translator.translatePage(input);
+          if (input.items[0]!.原文 === 'a1') await firstReturns;
+          return output;
+        },
+      }),
+    });
+
+    const first = transcriber.update(1, [thumb('a1')], capture);
+    await vi.waitFor(() => expect(inputs).toHaveLength(1));
+    // 捲動後 a1 還在畫面上、a2 露出來：a1 是前一次擷取的工作，a2 不等它
+    const second = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await vi.waitFor(() => expect(inputs).toHaveLength(2));
+    expect(transcriber.get(1)[1]!.transcript).toMatchObject({ state: 'done', translated: true });
+
+    releaseFirst();
+    await Promise.all([first, second]);
+  });
+
   it('前頁翻譯失敗：後頁照樣送出，不帶它', async () => {
     const inputs: TranslateInput[] = [];
     const translator = translatorWithNotes([], inputs);

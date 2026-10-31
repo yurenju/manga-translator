@@ -249,11 +249,16 @@ export function createTranscriber(deps: TranscriberDeps) {
     return [...before, ...earlier].slice(-PRIOR_PAGES);
   }
 
-  /** 同一批裡閱讀順序在前的頁，目前的工作都結束（翻好、失敗或被丟掉）時 resolve；前面沒有頁（單頁 viewer）就不等。 */
-  function earlierSettled(tab: TabState, record: PageRecord): Promise<unknown> | undefined {
-    const earlier = earlierInBatch(tab, record);
-    if (earlier.length === 0) return undefined;
-    return Promise.all(earlier.map((p) => findSamePage(tab.records, p.pageHash)?.settled));
+  /**
+   * 同一次排程（batch）裡閱讀順序在前的頁，它們這次的工作都結束（翻好、失敗或被丟掉）時 resolve。
+   * 前一次排程的工作不等（spec「前一批的頁維持現狀，還沒翻完就不等」）；前面沒有這次排的頁（單頁 viewer）就不等。
+   */
+  function earlierSettled(tab: TabState, record: PageRecord, batch: number): Promise<unknown> | undefined {
+    const earlier = earlierInBatch(tab, record).flatMap((p) => {
+      const r = findSamePage(tab.records, p.pageHash);
+      return r?.job?.batch === batch ? [r.settled] : [];
+    });
+    return earlier.length === 0 ? undefined : Promise.all(earlier);
   }
 
   /**
@@ -287,7 +292,7 @@ export function createTranscriber(deps: TranscriberDeps) {
   function newJob(spec: JobSpec): Job {
     const { tab, record } = spec;
     const prior = priorOf(tab, record);
-    const after = earlierSettled(tab, record);
+    const after = earlierSettled(tab, record, spec.batch);
     let resolve!: () => void;
     record.settled = new Promise<void>((r) => (resolve = r));
     const job: Job = { ...spec, request: spec.request ?? record.request, priority: PRIORITY_VISIBLE, prior, after, resolve };
