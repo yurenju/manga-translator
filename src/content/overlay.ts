@@ -368,13 +368,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       erase.dataset.eraseId = line.id;
       const vertical = isVertical(line.orientation, frame);
       const box = document.createElement('div');
-      box.className = `tx${vertical ? ' v' : ''}${kind === 'loose' ? ' ol' : ''}`;
-      if (kind === 'loose') box.dataset.looseId = line.id;
-      else box.dataset.balloonId = line.id;
+      box.className = `tx${vertical ? ' v' : ''}`;
       box.style.fontFamily = fontFamily;
-      box.style.color = luminance < 128 ? '#fff' : '#111';
-      // Loose Text 的反色描邊：黑字配白邊、白字配黑邊（Balloon 不加）
-      if (kind === 'loose') box.style.webkitTextStrokeColor = luminance < 128 ? '#111' : '#fff';
+      const [ink, stroke] = luminance < 128 ? ['#fff', '#111'] : ['#111', '#fff'];
+      box.style.color = ink;
+      if (kind === 'loose') {
+        box.classList.add('ol');
+        box.dataset.looseId = line.id;
+        // Loose Text 的反色描邊：黑字配白邊、白字配黑邊（Balloon 不加）
+        box.style.webkitTextStrokeColor = stroke;
+      } else box.dataset.balloonId = line.id;
       const originalLines = estimateOriginalLines(regions.text, line.原文, vertical);
       const inner = document.createElement('span');
       box.append(inner);
@@ -402,9 +405,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // Loose Text 大小差很多（標題、旁白、小註記），各自依文字框估，不夾在整頁 Balloon 的中位數附近
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
-    const balloonSizes = estimateFontPx(items.filter((item) => item.kind === 'balloon').map((item) => ({ text: item.regions.text, 譯文: item.line.譯文 })));
-    // items 的 Balloon 都排在前面，balloonSizes 的索引跟 items 一樣
-    const startSizes = items.map((item, i) => (item.kind === 'balloon' ? balloonSizes[i]! : estimateFontPx([{ text: item.regions.text, 譯文: item.line.譯文 }])[0]!));
+    const sizing = (item: (typeof items)[number]) => ({ text: item.regions.text, 譯文: item.line.譯文 });
+    const balloonItems = items.filter((item) => item.kind === 'balloon');
+    const balloonSizes = new Map(estimateFontPx(balloonItems.map(sizing)).map((px, i) => [balloonItems[i]!, px]));
+    const startSizes = items.map((item) => balloonSizes.get(item) ?? estimateFontPx([sizing(item)])[0]!);
     const fits: Record<string, unknown>[] = [];
     for (const [i, { kind, line, regions, box, inner, vertical, originalLines }] of items.entries()) {
       const target = {
