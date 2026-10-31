@@ -7,7 +7,7 @@
  * Notes 的用量就歸到這一頁。要帶 `Authorization: Bearer <session token>`。
  *
  * 錯誤回應一律是 HostedError：401 沒登入（reason signedOut）、400 輸入格式不符或驗證碼不對、402 額度用完、
- * 429 寄送或驗證太頻繁、404 沒有這個端點、502 Anthropic 重試後仍失敗。
+ * 413 body 超過 256 KiB、429 寄送或驗證太頻繁、404 沒有這個端點、502 Anthropic 重試後仍失敗。
  */
 export const TRANSLATE_PATH = '/v1/translate';
 export const NOTES_PATH = '/v1/notes';
@@ -44,6 +44,8 @@ export const CHECKOUT_PATH = '/v1/checkout';
 export const PORTAL_PATH = '/v1/subscription/portal';
 /** Paddle 送 webhook 的路徑（不帶 token，驗 Paddle-Signature）。 */
 export const PADDLE_WEBHOOK_PATH = '/webhooks/paddle';
+/** GET：Worker 與 D1 都能用就回 200 { ok: true }。部署後的健康檢查用（.github/workflows/ci.yml），外掛不呼叫。 */
+export const HEALTH_PATH = '/v1/health';
 
 /** checkout 頁的語言（產品網站的 /zh-tw/、/en/）。 */
 export type CheckoutLocale = 'zh-tw' | 'en';
