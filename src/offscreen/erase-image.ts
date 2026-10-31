@@ -119,6 +119,93 @@ export function eraseImage(page: RgbaImage, balloon: Box, text: Box): EraseImage
   return { box: [left + bx, top + by, bw, bh], rgba };
 }
 
+/** 殘留墨水：亮度跟擦除底色差這麼多以上。 */
+const INK_TOLERANCE = 64;
+/**
+ * Loose Text 擦完後，文字框中央一半範圍內沒擦到的墨水超過這個比例，就退回矩形（#151 的 prototype）：合成頁 p09 的
+ * 5 段都是 0；2px 細線穿過 60px 的文字框約 6.7%（線要保留）；字黏在線上沒擦掉時是幾成。
+ */
+const LOOSE_RESIDUE_LIMIT = 0.08;
+
+/**
+ * Loose Text 的擦除小圖（#151，spec #142「Loose Text 原地覆蓋」）：沒有泡泡框線擋著，所以範圍只在文字框附近
+ * （eraseImage 的「沒有外框」）。字碰到畫面線條、沿字擦不掉而殘留時，或中央找不到底色時，改成整個文字框＋padding
+ * 的矩形，顏色一樣從背景內插。一定有小圖。
+ */
+export function eraseLooseText(page: RgbaImage, text: Box): EraseImage {
+  const grown = eraseImage(page, text, text);
+  return grown && residue(page, grown, text) <= LOOSE_RESIDUE_LIMIT ? grown : eraseRect(page, text);
+}
+
+/** 文字框中央一半範圍內，沒被擦到、又跟底色差很多（墨水）的像素比例。 */
+function residue(page: RgbaImage, erase: EraseImage, text: Box): number {
+  const [ex, ey, ew, eh] = erase.box;
+  const { gray, left, top, w } = grayWindow(page, expand(text, ERASE_PADDING));
+  const base = eraseLuminance({ gray, width: w, height: gray.length / w }, { x: 0, y: 0, w, h: gray.length / w });
+  let ink = 0;
+  let total = 0;
+  for (let y = Math.max(0, Math.floor(text.y + text.h / 4)); y < Math.min(page.height, Math.ceil(text.y + (3 * text.h) / 4)); y++)
+    for (let x = Math.max(0, Math.floor(text.x + text.w / 4)); x < Math.min(page.width, Math.ceil(text.x + (3 * text.w) / 4)); x++) {
+      total++;
+      const inErase = x >= ex && x < ex + ew && y >= ey && y < ey + eh && erase.rgba[((y - ey) * ew + x - ex) * 4 + 3]! > 0;
+      if (!inErase && Math.abs(gray[(y - top) * w + x - left]! - base) > INK_TOLERANCE) ink++;
+    }
+  return total > 0 ? ink / total : 0;
+}
+
+/** 整個文字框＋padding 的矩形；顏色從框外附近（TEXT_MARGIN 內）接近底色的像素內插，沒有就用單色底色。 */
+function eraseRect(page: RgbaImage, text: Box): EraseImage {
+  const { gray, left, top, w, h } = grayWindow(page, expand(text, TEXT_MARGIN));
+  const clip = expand(text, ERASE_PADDING);
+  const base = eraseLuminance({ gray, width: w, height: h }, { x: clip.x - left, y: clip.y - top, w: clip.w, h: clip.h });
+  const bx = Math.max(0, Math.round(clip.x - left));
+  const by = Math.max(0, Math.round(clip.y - top));
+  const bw = Math.max(0, Math.min(w, Math.round(clip.x + clip.w - left)) - bx);
+  const bh = Math.max(0, Math.min(h, Math.round(clip.y + clip.h - top)) - by);
+  const inClip = (i: number) => i % w >= bx && i % w < bx + bw && Math.floor(i / w) >= by && Math.floor(i / w) < by + bh;
+  const known = new Uint8Array(w * h);
+  const wanted: number[] = [];
+  for (let i = 0; i < w * h; i++) {
+    if (inClip(i)) wanted.push(i);
+    else if (Math.abs(gray[i]! - base) <= SEED_TOLERANCE) known[i] = 1;
+  }
+  const colors = interpolate(page, left, top, w, h, known, wanted, base);
+  const rgba = new Uint8ClampedArray(bw * bh * 4);
+  for (let y = 0; y < bh; y++)
+    for (let x = 0; x < bw; x++) {
+      const i = (by + y) * w + bx + x;
+      rgba.set([colors[i * 3]!, colors[i * 3 + 1]!, colors[i * 3 + 2]!, 255], (y * bw + x) * 4);
+    }
+  return { box: [left + bx, top + by, bw, bh], rgba };
+}
+
+/** 擦除範圍（alpha > 0）的平均亮度：Loose Text 的譯文用白字還是黑字（#151）。 */
+export function meanLuminance({ rgba }: EraseImage): number {
+  let sum = 0;
+  let count = 0;
+  for (let i = 0; i < rgba.length; i += 4) {
+    if (rgba[i + 3] === 0) continue;
+    sum += 0.299 * rgba[i]! + 0.587 * rgba[i + 1]! + 0.114 * rgba[i + 2]!;
+    count++;
+  }
+  return count > 0 ? sum / count : 255;
+}
+
+/** box 夾在 Page 內的灰階視窗（0.299/0.587/0.114，跟本機流水線一致）。 */
+function grayWindow(page: RgbaImage, box: Box): { gray: Uint8Array; left: number; top: number; w: number; h: number } {
+  const left = Math.max(0, Math.floor(box.x));
+  const top = Math.max(0, Math.floor(box.y));
+  const w = Math.max(0, Math.min(page.width, Math.ceil(box.x + box.w)) - left);
+  const h = Math.max(0, Math.min(page.height, Math.ceil(box.y + box.h)) - top);
+  const gray = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const i = ((top + y) * page.width + left + x) * 4;
+      gray[y * w + x] = Math.round(0.299 * page.data[i]! + 0.587 * page.data[i + 1]! + 0.114 * page.data[i + 2]!);
+    }
+  return { gray, left, top, w, h };
+}
+
 const expand = (b: Box, m: number): Box => ({ x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m });
 
 /** 4 連通的 BFS：從 starts 出發，accept(from, to) 為真就走過去並 visit。 */
@@ -185,7 +272,9 @@ function interpolate(page: RgbaImage, left: number, top: number, w: number, h: n
         if (wt === 0) continue;
         const j = (y >> 1) * lw + (x >> 1);
         weight[j]! += wt;
-        for (let c = 0; c < 3; c++) color[j * 3 + c]! += prev.color[i * 3 + c]! * wt;
+        color[j * 3]! += prev.color[i * 3]! * wt;
+        color[j * 3 + 1]! += prev.color[i * 3 + 1]! * wt;
+        color[j * 3 + 2]! += prev.color[i * 3 + 2]! * wt;
       }
     for (let j = 0; j < lw * lh; j++) {
       if (weight[j] === 0) continue;
@@ -208,7 +297,10 @@ function interpolate(page: RgbaImage, left: number, top: number, w: number, h: n
     const y1 = Math.min(coarse.h - 1, y0 + 1);
     const fx = cx - x0;
     const fy = cy - y0;
-    const [a, b, c, d] = [(y0 * coarse.w + x0) * 3, (y0 * coarse.w + x1) * 3, (y1 * coarse.w + x0) * 3, (y1 * coarse.w + x1) * 3];
+    const a = (y0 * coarse.w + x0) * 3;
+    const b = (y0 * coarse.w + x1) * 3;
+    const c = (y1 * coarse.w + x0) * 3;
+    const d = (y1 * coarse.w + x1) * 3;
     for (let k = 0; k < 3; k++) {
       const up = (coarse.color[a + k]! * (1 - fx) + coarse.color[b + k]! * fx) * (1 - fy) + (coarse.color[c + k]! * (1 - fx) + coarse.color[d + k]! * fx) * fy;
       fine.color[i * 3 + k] = fine.color[i * 3 + k]! * wt + up * (1 - wt);
@@ -217,24 +309,25 @@ function interpolate(page: RgbaImage, left: number, top: number, w: number, h: n
   };
   for (let k = levels.length - 2; k >= 1; k--) for (let i = 0; i < levels[k]!.w * levels[k]!.h; i++) fill(levels[k]!, levels[k + 1]!, i);
   if (levels.length > 1) for (const i of wanted) fill(levels[0]!, levels[1]!, i);
-  // 平滑只看有顏色的鄰居（已知或已內插）；框線、框外的像素在第 0 層沒有顏色
+  // 平滑只看有顏色的鄰居（已知或已內插）；框線、框外的像素在第 0 層沒有顏色。
+  // 這是每頁最熱的迴圈（#151 量過），鄰居直接展開、不用 closure 與陣列
   const { color, weight } = levels[0]!;
   for (let sweep = 0; sweep < SMOOTHING_SWEEPS; sweep++)
     for (const i of wanted) {
       const x = i % w;
       let count = 0;
-      let [r, g, b] = [0, 0, 0];
-      const add = (j: number) => {
-        if (weight[j] === 0) return;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      for (let k = 0; k < 4; k++) {
+        // 左、右、上、下
+        const j = k === 0 ? (x > 0 ? i - 1 : -1) : k === 1 ? (x < w - 1 ? i + 1 : -1) : k === 2 ? (i >= w ? i - w : -1) : i + w < n ? i + w : -1;
+        if (j < 0 || weight[j] === 0) continue;
         count++;
         r += color[j * 3]!;
         g += color[j * 3 + 1]!;
         b += color[j * 3 + 2]!;
-      };
-      if (x > 0) add(i - 1);
-      if (x < w - 1) add(i + 1);
-      if (i >= w) add(i - w);
-      if (i + w < n) add(i + w);
+      }
       if (count === 0) continue;
       color[i * 3] = r / count;
       color[i * 3 + 1] = g / count;

@@ -80,6 +80,16 @@ export function textRegions(balloon: Box, text: Box): { erase: Box; fit1: Box; f
   return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1, fit2 };
 }
 
+/**
+ * Loose Text（#151）：沒有泡泡外框，排版區就是文字框本身，第 2 階也不往外長（排不下就縮字）。不跟擦除範圍取交集：
+ * 擦除範圍可能被保留下來的畫面線條切得很碎。erase 是沒有擦除小圖時的矩形退路。
+ */
+export function looseTextRegions(text: Box): { erase: Box; fit1: Box; fit2: Box } {
+  const p = ERASE_PADDING;
+  // fit1、fit2 各自一份：separateRegions 會就地修改
+  return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1: { ...text }, fit2: { ...text } };
+}
+
 const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /**

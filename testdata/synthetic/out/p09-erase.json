@@ -1,6 +1,6 @@
 {
   "id": "p09-erase",
-  "description": "擦除範圍與顏色：字撐滿的橢圓泡泡（文字框的角在泡泡外）、連體泡泡、漸層泡泡、閃光泡泡（沒有外框）、黑底白字泡泡",
+  "description": "擦除範圍與顏色：字撐滿的橢圓泡泡（文字框的角在泡泡外）、連體泡泡、漸層泡泡、閃光泡泡（沒有外框）、黑底白字泡泡；Loose Text：白描邊獨白壓在線條上、黑底白字、網點上的標題、彩色背景、小狀聲詞",
   "image": "p09-erase.png",
   "width": 880,
   "height": 1280,
@@ -167,12 +167,41 @@
       "zh": "就算你這麼說我也很困擾"
     },
     {
+      "id": "t8",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "A",
+      "page": 0,
+      "order": 2,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        514,
+        72,
+        34,
+        156
+      ],
+      "textBbox": [
+        514,
+        72,
+        34,
+        156
+      ],
+      "ja": "どうしよう…",
+      "jaLines": [
+        "どうしよう…"
+      ],
+      "ruby": [],
+      "reading": "どうしよう…",
+      "zh": "怎麼辦…"
+    },
+    {
       "id": "t2",
       "kind": "balloon",
       "shape": "ellipse",
       "panel": "B",
       "page": 0,
-      "order": 2,
+      "order": 3,
       "orientation": "vertical",
       "rotate": 0,
       "bbox": [
@@ -202,7 +231,7 @@
       "shape": "ellipse",
       "panel": "B",
       "page": 0,
-      "order": 3,
+      "order": 4,
       "orientation": "vertical",
       "rotate": 0,
       "bbox": [
@@ -227,12 +256,71 @@
       "zh": "聽說明天會下雨"
     },
     {
+      "id": "t9",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "B",
+      "page": 0,
+      "order": 5,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        79,
+        119,
+        74,
+        112
+      ],
+      "textBbox": [
+        79,
+        119,
+        74,
+        112
+      ],
+      "ja": "まさか…あいつが",
+      "jaLines": [
+        "まさか…",
+        "あいつが"
+      ],
+      "ruby": [],
+      "reading": "まさか…あいつが",
+      "zh": "難道…是那傢伙"
+    },
+    {
+      "id": "t11",
+      "kind": "sign",
+      "shape": "none",
+      "panel": "C",
+      "page": 0,
+      "order": 6,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        776,
+        540,
+        39,
+        120
+      ],
+      "textBbox": [
+        776,
+        540,
+        39,
+        120
+      ],
+      "ja": "雨の約束",
+      "jaLines": [
+        "雨の約束"
+      ],
+      "ruby": [],
+      "reading": "あめのやくそく",
+      "zh": "雨之約"
+    },
+    {
       "id": "t4",
       "kind": "balloon",
       "shape": "gradient",
       "panel": "C",
       "page": 0,
-      "order": 4,
+      "order": 7,
       "orientation": "vertical",
       "rotate": 0,
       "bbox": [
@@ -262,7 +350,7 @@
       "shape": "flash",
       "panel": "C",
       "page": 0,
-      "order": 5,
+      "order": 8,
       "orientation": "vertical",
       "rotate": 0,
       "bbox": [
@@ -287,12 +375,41 @@
       "zh": "難道是真的！？"
     },
     {
+      "id": "t10",
+      "kind": "sfx",
+      "shape": "none",
+      "panel": "C",
+      "page": 0,
+      "order": 9,
+      "orientation": "horizontal",
+      "rotate": 0,
+      "bbox": [
+        53,
+        800,
+        84,
+        39
+      ],
+      "textBbox": [
+        53,
+        800,
+        84,
+        39
+      ],
+      "ja": "ぱちっ",
+      "jaLines": [
+        "ぱちっ"
+      ],
+      "ruby": [],
+      "reading": "ぱちっ",
+      "zh": "（眨眼）眨"
+    },
+    {
       "id": "t6",
       "kind": "balloon",
       "shape": "inverted",
       "panel": "D",
       "page": 0,
-      "order": 6,
+      "order": 10,
       "orientation": "vertical",
       "rotate": 0,
       "bbox": [
@@ -318,12 +435,42 @@
       "zh": "快逃，這裡很危險"
     },
     {
+      "id": "t12",
+      "kind": "outside",
+      "shape": "none",
+      "panel": "D",
+      "page": 0,
+      "order": 11,
+      "orientation": "vertical",
+      "rotate": 0,
+      "bbox": [
+        477,
+        912,
+        67,
+        120
+      ],
+      "textBbox": [
+        477,
+        912,
+        67,
+        120
+      ],
+      "ja": "その夜、雨が降った",
+      "jaLines": [
+        "その夜、",
+        "雨が降った"
+      ],
+      "ruby": [],
+      "reading": "そのよる、あめがふった",
+      "zh": "那天晚上，下起了雨"
+    },
+    {
       "id": "t7",
       "kind": "balloon",
       "shape": "ellipse",
       "panel": "D",
       "page": 0,
-      "order": 7,
+      "order": 12,
       "orientation": "vertical",
       "rotate": 0,
       "bbox": [

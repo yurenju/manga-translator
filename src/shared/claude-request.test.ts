@@ -77,6 +77,15 @@ describe('共用的 request 組裝模組（Own API Key 與 Worker 共用）', ()
     expect(instructions?.text).toMatch(/さん[^\n]*同學[^\n]*省略[^\n]*先生／小姐/);
   });
 
+  it('翻譯的 schema 每一項都要回 sfx，指示寫明擬音、擬態算 Sound Effect，角色自己的感嘆不算', () => {
+    const body = translateRequest(input);
+    const item = (body.output_config.format.schema as { properties: { items: { items: { properties: Record<string, { type: string }>; required: string[] } } } }).properties.items.items;
+
+    expect(item.properties.sfx?.type).toBe('boolean');
+    expect(item.required).toContain('sfx');
+    expect(body.system[0]?.text).toMatch(/sfx[^\n]*擬音[^\n]*擬態[^\n]*感嘆[^\n]*不算/);
+  });
+
   it('整理 Notes 的 request body：沒有 Series Notes 時 system 只有指示一段', () => {
     const body = notesRequest(notesInput);
 
@@ -87,11 +96,11 @@ describe('共用的 request 組裝模組（Own API Key 與 Worker 共用）', ()
 
   it('解析翻譯回應：譯文、讀音、用量與模型', () => {
     const out = parseTranslateResponse(
-      apiResponse({ items: [{ id: 'b1', reading: 'おはよう', zh: '早安', unreadable: false }] }),
+      apiResponse({ items: [{ id: 'b1', reading: 'おはよう', zh: '早安', unreadable: false, sfx: false }] }),
     );
 
     expect(out).toEqual({
-      items: [{ id: 'b1', 讀音: 'おはよう', 譯文: '早安', unreadable: false }],
+      items: [{ id: 'b1', 讀音: 'おはよう', 譯文: '早安', unreadable: false, sfx: false }],
       usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 700, costUsd: 0.000137 },
       model: CLAUDE_MODEL,
     });
@@ -118,5 +127,6 @@ describe('共用的 request 組裝模組（Own API Key 與 Worker 共用）', ()
   it('回應被截斷或不符合 schema 時丟錯', () => {
     expect(() => parseTranslateResponse(apiResponse({ items: [] }, 'max_tokens'))).toThrow('stop_reason: max_tokens');
     expect(() => parseNotesResponse(apiResponse({ items: [] }))).toThrow('不符合 schema');
+    expect(() => parseTranslateResponse(apiResponse({ items: [{ id: 'b1', reading: '', zh: '', unreadable: false }] }))).toThrow('不符合 schema');
   });
 });

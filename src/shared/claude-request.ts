@@ -21,7 +21,7 @@ import type {
 
 export const CLAUDE_MODEL = 'claude-haiku-5-5';
 /** 寫進快取判斷過時用（#33）；改 ① 的 prompt 或 schema 就要改這個。② 的 prompt 不影響已快取的譯文，不用改。 */
-export const PROMPT_VERSION = 'claude-text-v4';
+export const PROMPT_VERSION = 'claude-text-v5';
 
 const MAX_TOKENS = 16_000;
 
@@ -71,6 +71,7 @@ const TRANSLATE_TEXT = `你是日文漫畫翻譯助手，幫助讀者一邊看�
 - reading：整句的假名讀音，漢字一律寫成平假名；原文的片假名維持片假名，標點照原文。
 - zh：自然、口語的台灣繁體中文譯文，符合角色的語氣；狀聲詞翻成中文讀者習慣的狀聲詞。
 - unreadable：如果 ja 明顯是 OCR 亂碼（例如設計字體被讀成一串不成句的字），沒辦法判斷原本寫什麼，就設為 true，reading 與 zh 留空字串。不要硬翻亂碼。
+- sfx：這段是狀聲詞（Sound Effect）就設為 true：擬音（聲音，例如ドン、ぱち）與擬態（動作或狀態，例如ニコリ、ドキドキ）都算。角色自己發出的感嘆（あ…、あっ、うっ）是台詞，不算，設為 false。狀聲詞的 zh 照樣要翻。
 
 閱讀順序已經由程式決定，請照輸入的順序回答，不要重排。
 
@@ -133,6 +134,7 @@ const TRANSLATE_SCHEMA = obj({
       reading: str('整句假名讀音'),
       zh: str('繁體中文（台灣）譯文'),
       unreadable: { type: 'boolean', description: '原文是無法判斷的 OCR 亂碼' },
+      sfx: { type: 'boolean', description: '狀聲詞（擬音、擬態）；角色自己的感嘆不算' },
     }),
   },
 });
@@ -214,7 +216,7 @@ export function notesRequest(input: NotesInput): MessagesRequest {
 type NotesFields = Record<keyof typeof NOTES_FIELDS, string>;
 
 interface TranslateAnswer {
-  items: { id: string; reading: string; zh: string; unreadable: boolean }[];
+  items: { id: string; reading: string; zh: string; unreadable: boolean; sfx: boolean }[];
 }
 
 interface NotesAnswer {
@@ -233,7 +235,7 @@ const isNotesFields = (v: unknown): v is NotesFields =>
 function isTranslateAnswer(v: unknown): v is TranslateAnswer {
   if (typeof v !== 'object' || v === null) return false;
   const a = v as Partial<TranslateAnswer>;
-  return Array.isArray(a.items) && a.items.every((i) => isStr(i?.id) && isStr(i.reading) && isStr(i.zh) && typeof i.unreadable === 'boolean');
+  return Array.isArray(a.items) && a.items.every((i) => isStr(i?.id) && isStr(i.reading) && isStr(i.zh) && typeof i.unreadable === 'boolean' && typeof i.sfx === 'boolean');
 }
 
 function isNotesAnswer(v: unknown): v is NotesAnswer {
@@ -301,7 +303,7 @@ function parse<A>(json: ApiResponse, isValid: (v: unknown) => v is A): { answer:
 /** ① 的回應 → 依 id 對回的讀音與譯文；回答不完整或不符合 schema 時丟錯。 */
 export function parseTranslateResponse(json: ApiResponse): Omit<TranslateOutput, 'latencyMs'> {
   const { answer, ...info } = parse(json, isTranslateAnswer);
-  return { items: answer.items.map((i) => ({ id: i.id, 讀音: i.reading, 譯文: i.zh, unreadable: i.unreadable })), ...info };
+  return { items: answer.items.map((i) => ({ id: i.id, 讀音: i.reading, 譯文: i.zh, unreadable: i.unreadable, sfx: i.sfx })), ...info };
 }
 
 /** ② 的回應 → Series Notes 的變更；回答不完整或不符合 schema 時丟錯。 */

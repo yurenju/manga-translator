@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readGroundTruth, readRgba, type GtBox } from '../testing/synthetic.ts';
-import { eraseImage, type EraseImage, type RgbaImage } from './erase-image.ts';
+import { eraseImage, eraseLooseText, meanLuminance, type EraseImage, type RgbaImage } from './erase-image.ts';
 import type { RecordedOcr } from './fake-engine.ts';
 
 type Rgb = [number, number, number];
@@ -96,6 +96,73 @@ describe('eraseImage（擦除範圍沿泡泡內緣，顏色從背景內插）', 
   });
 });
 
+/** 擦除範圍都在文字框外擴 3px 之內。 */
+function expectWithinPadding(erase: EraseImage, text: { x: number; y: number; w: number; h: number }): void {
+  for (const [x, y] of erased(erase))
+    expect(x >= text.x - 3 && x < text.x + text.w + 3 && y >= text.y - 3 && y < text.y + text.h + 3, `(${x}, ${y}) 在文字框＋padding 外`).toBe(true);
+}
+
+describe('eraseLooseText（Loose Text：範圍限制在文字框＋padding，殘留太多就退回矩形）', () => {
+  // 文字框 30～70：裡面 4 個不相連的墨水方塊（字）
+  const TEXT_BOX = { x: 30, y: 30, w: 40, h: 40 };
+  const glyph = (x: number, y: number) => [34, 54].some((gx) => x >= gx && x < gx + 12) && [34, 54].some((gy) => y >= gy && y < gy + 12);
+
+  it('白底上的字：沿字的周圍擦，範圍不出文字框＋padding，字擦乾淨', () => {
+    const image = page(100, 100, (x, y) => (glyph(x, y) ? [0, 0, 0] : [255, 255, 255]));
+
+    const erase = eraseLooseText(image, TEXT_BOX);
+
+    expectWithinPadding(erase, TEXT_BOX);
+    const result = composite(image, erase);
+    for (let y = TEXT_BOX.y; y < TEXT_BOX.y + TEXT_BOX.h; y++)
+      for (let x = TEXT_BOX.x; x < TEXT_BOX.x + TEXT_BOX.w; x++) expect(pixel(result, x, y), `(${x}, ${y})`).toEqual([255, 255, 255]);
+  });
+
+  it('字黏在穿過文字框的線條上（沿字擦不掉）：退回整個文字框＋padding 的矩形，顏色從框外的背景內插', () => {
+    // 一條橫線穿過整張圖，四個字都碰到它
+    const line = (y: number) => y >= 44 && y < 56;
+    const image = page(100, 100, (x, y) => (glyph(x, y) || (line(y) && (x < 34 || x >= 66 || (x >= 46 && x < 54))) ? [0, 0, 0] : [250, 200, 120]));
+
+    const erase = eraseLooseText(image, TEXT_BOX);
+
+    expect(erase.box).toEqual([27, 27, 46, 46]);
+    expect(erased(erase)).toHaveLength(46 * 46);
+    const result = composite(image, erase);
+    for (let y = TEXT_BOX.y; y < TEXT_BOX.y + TEXT_BOX.h; y++)
+      for (let x = TEXT_BOX.x; x < TEXT_BOX.x + TEXT_BOX.w; x++) {
+        const [r, g, b] = pixel(result, x, y);
+        expect(Math.max(Math.abs(r - 250), Math.abs(g - 200), Math.abs(b - 120)), `(${x}, ${y}) 沒擦成背景色`).toBeLessThanOrEqual(8);
+      }
+  });
+
+  it('細線穿過文字框但沒碰到字：沿字擦，線條保留下來', () => {
+    // 文字框 20～80；2px 橫線在 y＝49～50，字在線的上下、不碰線
+    const text = { x: 20, y: 20, w: 60, h: 60 };
+    const ink = (x: number, y: number) => [26, 56].some((gx) => x >= gx && x < gx + 18) && [26, 56].some((gy) => y >= gy && y < gy + 18);
+    const image = page(100, 100, (x, y) => (ink(x, y) || y === 49 || y === 50 ? [0, 0, 0] : [255, 255, 255]));
+
+    const result = composite(image, eraseLooseText(image, text));
+
+    for (let x = 0; x < 100; x++) expect(pixel(result, x, 49), `(${x}, 49)`).toEqual([0, 0, 0]);
+    for (const [x, y] of [[30, 30], [60, 30], [30, 60], [60, 60]] as const) expect(pixel(result, x, y), `(${x}, ${y})`).toEqual([255, 255, 255]);
+  });
+
+  it('文字框中央整塊都是墨水（找不到底色的起點）：同樣退回矩形，不會沒有小圖', () => {
+    const image = page(100, 100, (x, y) => (x >= 40 && x < 60 && y >= 40 && y < 60 ? [0, 0, 0] : [255, 255, 255]));
+
+    const erase = eraseLooseText(image, TEXT_BOX);
+
+    expect(erased(erase)).toHaveLength(46 * 46);
+    expect(meanLuminance(erase)).toBeGreaterThan(250);
+  });
+
+  it('meanLuminance：擦除範圍（alpha > 0）的平均亮度，黑底白字是暗的（譯文用白字）', () => {
+    const image = page(100, 100, (x, y) => (glyph(x, y) ? [255, 255, 255] : [10, 10, 10]));
+
+    expect(meanLuminance(eraseLooseText(image, TEXT_BOX))).toBeLessThan(128);
+  });
+});
+
 describe('eraseImage：合成頁 p09（真模型錄下的框）', () => {
   const id = 'p09-erase';
   const image = readRgba(id);
@@ -163,6 +230,49 @@ describe('eraseImage：合成頁 p09（真模型錄下的框）', () => {
           }
         }
       expect(residue / total, `殘留墨水 ${residue} / ${total} 像素`).toBeLessThan(0.002);
+    });
+  }
+});
+
+describe('eraseLooseText：合成頁 p09 的 Loose Text（真模型錄下的框）', () => {
+  const id = 'p09-erase';
+  const image = readRgba(id);
+  const blank = readRgba(`${id}-blank`);
+  const gt = readGroundTruth(id);
+  const recorded = (JSON.parse(readFileSync(new URL('../../testdata/synthetic/recorded-ocr.json', import.meta.url), 'utf8')) as RecordedOcr[]).find(
+    (r) => r.id === id,
+  )!;
+  const px = (r: { x: number; y: number; w: number; h: number }) => ({ x: r.x * image.width, y: r.y * image.height, w: r.w * image.width, h: r.h * image.height });
+  const overlap = (a: GtBox, b: { x: number; y: number; w: number; h: number }) =>
+    Math.max(0, Math.min(a[0] + a[2], b.x + b.w) - Math.max(a[0], b.x)) * Math.max(0, Math.min(a[1] + a[3], b.y + b.h) - Math.max(a[1], b.y));
+  const diff = (a: RgbaImage, b: RgbaImage, x: number, y: number) => Math.max(...[0, 1, 2].map((c) => Math.abs(a.data[(y * a.width + x) * 4 + c]! - b.data[(y * b.width + x) * 4 + c]!)));
+  /** box 裡沒被擦除小圖蓋到的像素（y × 頁寬 + x）。 */
+  const unerased = (erase: EraseImage, [bx, by, bw, bh]: GtBox) => {
+    const covered = new Set(erased(erase).map(([x, y]) => y * image.width + x));
+    const out: number[] = [];
+    for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) if (!covered.has(y * image.width + x)) out.push(y * image.width + x);
+    return out;
+  };
+
+  it('錄到的 Loose Text 正是合成頁的 5 段（白描邊獨白、黑底白字、網點上的標題、彩色背景、狀聲詞）', () => {
+    const matched = recorded.looseText.map((l) => gt.texts.reduce((best, t) => (overlap(t.textBbox, px(l.bbox)) > overlap(best.textBbox, px(l.bbox)) ? t : best)).id);
+    expect(matched.sort()).toEqual(['t10', 't11', 't12', 't8', 't9']);
+  });
+
+  for (const loose of recorded.looseText) {
+    const text = px(loose.bbox);
+    const truth = gt.texts.reduce((best, t) => (overlap(t.textBbox, text) > overlap(best.textBbox, text) ? t : best));
+
+    it(`${truth.id}（${truth.ja}）：擦除範圍不超出文字框＋padding，文字框內沒有殘留原文墨水`, () => {
+      const erase = eraseLooseText(image, text);
+
+      expectWithinPadding(erase, { x: Math.floor(text.x), y: Math.floor(text.y), w: Math.ceil(text.w) + 1, h: Math.ceil(text.h) + 1 });
+      // 殘留＝原文的墨水（有字的頁跟沒字的頁不一樣的像素）沒被小圖蓋到。白描邊獨白跟線條交會處的反鋸齒會留下一點點
+      const kept = new Set(unerased(erase, truth.textBbox));
+      const [tx, ty, tw, th] = truth.textBbox;
+      let residue = 0;
+      for (let y = ty; y < ty + th; y++) for (let x = tx; x < tx + tw; x++) if (diff(image, blank, x, y) > 32 && kept.has(y * image.width + x)) residue++;
+      expect(residue / (tw * th), `殘留墨水 ${residue} / ${tw * th} 像素`).toBeLessThan(0.01);
     });
   }
 });

@@ -25,7 +25,7 @@ beforeEach(async () => {
 /** 帶這個測試登入拿到的 token；token: null＝不帶。 */
 const post = (path: string, body: unknown, as: string | null = token) => postAs(path, body, as === null ? {} : { token: as });
 
-const answer = { items: [{ id: 'b1', reading: 'おはよう！きょうははやいね', zh: '早安！今天好早喔', unreadable: false }] };
+const answer = { items: [{ id: 'b1', reading: 'おはよう！きょうははやいね', zh: '早安！今天好早喔', unreadable: false, sfx: false }] };
 
 const ok = reply(answer);
 

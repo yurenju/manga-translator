@@ -36,6 +36,8 @@ export interface BalloonText {
   unreadable: boolean;
   /** OCR 非標點字的最低信心（ADR 0009）。舊快取沒有。 */
   ocrConfidence?: number;
+  /** LLM 判斷是 Sound Effect（狀聲詞，GLOSSARY）。Balloon 不看這個欄位，照樣覆蓋。舊快取沒有。 */
+  sfx?: boolean;
   /** 原地覆蓋的擦除底色：文字框（外擴 3px）裡最常出現的亮度 0～255，取自截圖（#32）。沒有時當白底。 */
   eraseLuminance?: number;
   /**
@@ -57,6 +59,15 @@ export interface LooseText {
   譯文: string;
   unreadable: boolean;
   ocrConfidence?: number;
+  /** LLM 判斷是 Sound Effect（狀聲詞，GLOSSARY）：不覆蓋，譯文只在 tooltip 與 side panel。舊快取沒有：整頁的 Loose Text 都不覆蓋。 */
+  sfx?: boolean;
+  /** 擦除範圍的平均亮度 0～255（#151）：低於 128 用白字。沒有擦除小圖時也拿來塗矩形。 */
+  eraseLuminance?: number;
+  /**
+   * 擦除小圖（#151）：範圍限制在文字框＋padding 內，顏色從背景內插；跟 BalloonText.erase 同樣只存在本機快取。
+   * 沒有時（備份還原的頁）用文字框外擴 3px 的矩形加 eraseLuminance。
+   */
+  erase?: { box: RatioRect; image: string };
 }
 
 export interface PageText {
@@ -64,25 +75,29 @@ export interface PageText {
   looseText: LooseText[];
 }
 
-/** 要原地覆蓋的 Balloon：有譯文、不是 unreadable（spec 第 7.2 節、ADR 0009）。Loose Text 不覆蓋。 */
-export function overlaidBalloons({ balloons }: PageText): BalloonText[] {
-  return balloons.filter((b) => !b.unreadable && b.譯文 !== '');
+/**
+ * 要原地覆蓋的段：有譯文、不是 unreadable（LLM 判斷亂碼或 OCR 信心低於門檻，ADR 0009）。Loose Text 還要 LLM
+ * 明確說不是 Sound Effect（spec #142「Loose Text 原地覆蓋」）：舊快取沒有 sfx 就不蓋。Balloon 不管 sfx。
+ */
+export function overlaidTexts({ balloons, looseText }: PageText): PageText {
+  const translated = (t: { unreadable: boolean; 譯文: string }) => !t.unreadable && t.譯文 !== '';
+  return { balloons: balloons.filter(translated), looseText: looseText.filter((l) => translated(l) && l.sfx === false) };
 }
 
 /**
  * 只留在本機快取、不進備份的擦除資料（#149）。從截圖算出來的圖，備份只帶文字與座標；還原後那頁跟舊快取一樣
  * 退回矩形加 eraseLuminance。之後新增的擦除資料（例如排版矩形）加在這裡。
  */
-const LOCAL_ERASE_KEYS = ['erase'] as const satisfies readonly (keyof BalloonText)[];
+const LOCAL_ERASE_KEYS = ['erase'] as const satisfies readonly (keyof BalloonText & keyof LooseText)[];
 
-/** 拿掉一頁所有 Balloon 的擦除資料（不改到傳進來的物件）。 */
+/** 拿掉一頁所有 Balloon 與 Loose Text 的擦除資料（不改到傳進來的物件）。 */
 export function withoutEraseData<T extends PageText>(page: T): T {
-  const strip = (balloon: BalloonText): BalloonText => {
-    const copy = { ...balloon };
+  const strip = <U extends BalloonText | LooseText>(text: U): U => {
+    const copy = { ...text };
     for (const key of LOCAL_ERASE_KEYS) delete copy[key];
     return copy;
   };
-  return { ...page, balloons: page.balloons.map(strip) };
+  return { ...page, balloons: page.balloons.map(strip), looseText: page.looseText.map(strip) };
 }
 
 /** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */

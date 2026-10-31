@@ -157,6 +157,59 @@ test.describe('覆蓋渲染（ground truth）', () => {
     expect(gray).toBeLessThan(190);
   });
 
+  // unit test 驗不到：content script 真的把 Loose Text 畫上去、套上描邊，量到的譯文外框（真實排版）落在文字框內
+  test('不是 Sound Effect 的 Loose Text 原地覆蓋（譯文在文字框內、反色描邊），Sound Effect 不覆蓋', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);
+    const id = 'p09-erase';
+    const gt = readGroundTruth(id);
+    // 原尺寸顯示，Page 像素＝畫面 px
+    await render(page, id, gt.width);
+
+    const loose = await page.evaluate(() => {
+      const root = document.querySelector('[data-naruhodo-overlay]')!.shadowRoot!;
+      return [...root.querySelectorAll<HTMLElement>('[data-loose-id]')].map((el) => {
+        const inner = el.firstElementChild!.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return {
+          id: el.dataset.looseId!,
+          inner: { x: inner.x, y: inner.y, width: inner.width, height: inner.height },
+          color: style.color,
+          stroke: parseFloat(style.webkitTextStrokeWidth),
+          strokeColor: style.webkitTextStrokeColor,
+          fontPx: parseFloat(style.fontSize),
+        };
+      });
+    });
+    const erased = await page.evaluate(() =>
+      [...document.querySelector('[data-naruhodo-overlay]')!.shadowRoot!.querySelectorAll<HTMLElement>('[data-erase-id]')].map((el) => el.dataset.eraseId),
+    );
+
+    // t10 是 Sound Effect（ぱちっ）：沒有譯文、也沒有擦除底色
+    expect(loose.map((l) => l.id).sort()).toEqual(['t11', 't12', 't8', 't9']);
+    expect(erased).not.toContain('t10');
+    expect(erased).toEqual(expect.arrayContaining(['t8', 't9', 't11', 't12']));
+    const anchor = await anchorRect(page);
+    for (const l of loose) {
+      const [x, y, w, h] = gt.texts.find((t) => t.id === l.id)!.textBbox;
+      expect.soft(l.inner.x, `${l.id} 左`).toBeGreaterThanOrEqual(anchor.x + x - 0.5);
+      expect.soft(l.inner.y, `${l.id} 上`).toBeGreaterThanOrEqual(anchor.y + y - 0.5);
+      expect.soft(l.inner.x + l.inner.width, `${l.id} 右`).toBeLessThanOrEqual(anchor.x + x + w + 0.5);
+      expect.soft(l.inner.y + l.inner.height, `${l.id} 下`).toBeLessThanOrEqual(anchor.y + y + h + 0.5);
+      // 描邊約字級的 1/8（paint-order: stroke 讓一半蓋在字下，外側露出 1/8）
+      expect.soft(l.stroke, `${l.id} 描邊`).toBeCloseTo(l.fontPx / 4, 1);
+    }
+    // 黑底白字（t12）：白字黑邊；其他是淺色底：黑字白邊
+    const t12 = loose.find((l) => l.id === 't12')!;
+    expect(t12.color).toBe('rgb(255, 255, 255)');
+    expect(t12.strokeColor).toBe('rgb(17, 17, 17)');
+    const t8 = loose.find((l) => l.id === 't8')!;
+    expect(t8.color).toBe('rgb(17, 17, 17)');
+    expect(t8.strokeColor).toBe('rgb(255, 255, 255)');
+    // Balloon 不加描邊
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector('[data-naruhodo-overlay]')!.shadowRoot!.querySelector('[data-balloon-id]')!).webkitTextStrokeWidth)).toBe('0px');
+  });
+
   test('譯文太長時截斷，字級仍不小於畫面 9px，滑過時 tooltip 顯示原文＋ルビ＋譯文全文', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);

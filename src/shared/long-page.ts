@@ -83,7 +83,11 @@ export function toPageText({ balloons, looseText }: PageText, slice: Slice): Pag
       textBbox: toPageBox(b.textBbox, slice),
       ...(b.erase ? { erase: { ...b.erase, box: toPageBox(b.erase.box, slice) } } : {}),
     })),
-    looseText: looseText.map((l) => ({ ...l, bbox: toPageBox(l.bbox, slice) })),
+    looseText: looseText.map((l) => ({
+      ...l,
+      bbox: toPageBox(l.bbox, slice),
+      ...(l.erase ? { erase: { ...l.erase, box: toPageBox(l.erase.box, slice) } } : {}),
+    })),
   };
 }
 

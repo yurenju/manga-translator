@@ -191,4 +191,25 @@ describe('toPageText（一截的結果換成 Page 座標）', () => {
     close(onPage!.erase!.box, { x: 0.18, y: 0.57, w: 0.24, h: 0.06 });
     expect(onPage!.erase!.image).toBe('data:image/png;base64,AAAA');
   });
+
+  it('Loose Text 的擦除小圖也跟文字框一起換算（#151）', () => {
+    const loose: LooseText = {
+      id: 'l1',
+      order: 1,
+      bbox: { x: 0.2, y: 0.3, w: 0.2, h: 0.2 },
+      orientation: 'vertical',
+      原文: 'あ…',
+      讀音: 'あ…',
+      讀音來源: 'kuromoji',
+      譯文: '',
+      unreadable: false,
+      erase: { box: { x: 0.18, y: 0.28, w: 0.24, h: 0.24 }, image: 'data:image/png;base64,AAAA' },
+    };
+
+    const [onPage] = toPageText({ balloons: [], looseText: [loose] }, { top: 0.5, bottom: 0.75 }).looseText;
+
+    expect(onPage!.erase!.box.y).toBeCloseTo(0.57);
+    expect(onPage!.erase!.box.h).toBeCloseTo(0.06);
+    expect(onPage!.erase!.image).toBe('data:image/png;base64,AAAA');
+  });
 });
