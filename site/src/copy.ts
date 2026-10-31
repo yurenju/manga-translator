@@ -44,8 +44,8 @@ export const copy: Record<Locale, SiteCopy> = {
   'zh-tw': {
     nav: { pricing: '價格', faq: '常見問題', install: '安裝外掛', languageLabel: '語言' },
     hero: {
-      title: '在日文漫畫網站上翻譯成中文',
-      lead: 'Naruhodo 是一個 Chrome 外掛。點一下圖示，對話框旁就出現繁體中文翻譯，還附上振り仮名，邊看邊學日文。',
+      title: '看日文漫畫，旁邊就有中文',
+      lead: 'Naruhodo 是一個 Chrome 外掛。點一下圖示，它會找出畫面上的漫畫頁、讀出對話框裡的日文，再把繁體中文翻譯放回原本的位置，還附上振り仮名，邊看邊學日文。',
       install: '加到 Chrome',
       pricing: '看價格',
     },
@@ -58,7 +58,7 @@ export const copy: Record<Locale, SiteCopy> = {
       title: '怎麼用',
       steps: [
         { title: '安裝並登入', body: '輸入 email，收到驗證碼貼回來就登入，不用設定密碼。' },
-        { title: '打開漫畫網站', body: '在少年 Jump+ 或 Kindle Manga 上點外掛圖示，或按 Alt+Shift+M。' },
+        { title: '打開你在看的漫畫', body: '在漫畫頁上點外掛圖示，或按 Alt+Shift+M。' },
         { title: '對照著看', body: '譯文疊在對話框上，原文與讀音都留著；已經翻過的頁面再看不會再算一次。' },
       ],
     },
@@ -70,7 +70,7 @@ export const copy: Record<Locale, SiteCopy> = {
         price: PRICE,
         unit: '／年',
         items: ['每月 800 頁翻譯，大約 4 本單行本', '每月在你訂閱的那天重置', '隨時取消，用到這一年結束'],
-        cta: '訂閱',
+        cta: '訂閱即將推出',
       },
       ownKey: '已經有 Anthropic API key？也可以改用自備金鑰，不需要帳號、沒有頁數限制。',
     },
@@ -82,9 +82,16 @@ export const copy: Record<Locale, SiteCopy> = {
           a: '找出對話框與辨識文字都在你的電腦上進行，辨識出來的日文會送去翻譯。詳見{link}。',
           link: 'privacy',
         },
+        {
+          q: 'Naruhodo 會保存或分享我看的漫畫嗎？',
+          a: '不會。漫畫圖片不會離開你的電腦，送去翻譯的只有辨識出來的日文文字。翻好的內容只存在你自己的瀏覽器裡，方便你下次翻回這一頁時不用重新翻譯。',
+        },
         { q: '一頁怎麼算？', a: '成功翻譯一頁算一頁，要求重新翻譯也算；跨頁算兩頁。再看已經翻過的頁面、或翻譯失敗，都不算。' },
         { q: '可以退款嗎？', a: '詳見{link}。', link: 'refund' },
-        { q: '支援哪些網站？', a: '目前支援少年 Jump+ 與 Kindle Manga。' },
+        {
+          q: '可以在哪些網站上用？',
+          a: 'Naruhodo 會找出頁面上大張的漫畫圖片，辨識裡面的文字再翻譯，所以不限定特定網站。每個網站的版面不太一樣，如果遇到翻不出來的頁面，歡迎到 GitHub 回報。',
+        },
       ],
     },
     legal: {
@@ -113,8 +120,8 @@ export const copy: Record<Locale, SiteCopy> = {
   en: {
     nav: { pricing: 'Pricing', faq: 'FAQ', install: 'Install', languageLabel: 'Language' },
     hero: {
-      title: 'Translate Japanese manga into Chinese, right on the manga site',
-      lead: 'Naruhodo is a Chrome extension. Click its icon and Traditional Chinese translations appear on each speech balloon, with furigana so you learn Japanese as you read.',
+      title: 'Read Japanese manga with Chinese right where the words are',
+      lead: 'Naruhodo is a Chrome extension. Click its icon and it finds the manga page on your screen, reads the Japanese in each speech balloon, and places a Traditional Chinese translation right back where the text was, with furigana so you learn Japanese as you read.',
       install: 'Add to Chrome',
       pricing: 'See pricing',
     },
@@ -127,7 +134,7 @@ export const copy: Record<Locale, SiteCopy> = {
       title: 'How it works',
       steps: [
         { title: 'Install and sign in', body: 'Enter your email and paste back the code we send. No password needed.' },
-        { title: 'Open a manga site', body: 'On Shonen Jump+ or Kindle Manga, click the extension icon or press Alt+Shift+M.' },
+        { title: "Open the manga you're reading", body: 'On the page, click the extension icon or press Alt+Shift+M.' },
         { title: 'Read side by side', body: 'Translations sit on the balloons, with the original text and readings kept. Revisiting a translated page never counts again.' },
       ],
     },
@@ -139,7 +146,7 @@ export const copy: Record<Locale, SiteCopy> = {
         price: PRICE,
         unit: '/year',
         items: ['800 translated pages a month, about 4 volumes', 'Resets each month on the day you subscribed', 'Cancel anytime, keep using it until the year ends'],
-        cta: 'Subscribe',
+        cta: 'Subscriptions coming soon',
       },
       ownKey: 'Already have an Anthropic API key? You can use your own key instead: no account, no page limit.',
     },
@@ -151,9 +158,16 @@ export const copy: Record<Locale, SiteCopy> = {
           a: 'Finding balloons and recognizing text happen on your computer. The recognized Japanese text is sent for translation. See the {link} for details.',
           link: 'privacy',
         },
+        {
+          q: 'Does Naruhodo store or share the manga I read?',
+          a: "No. Manga images never leave your computer; only the recognized Japanese text is sent for translation. Translations are kept in your own browser, so a page you come back to doesn't need translating again.",
+        },
         { q: 'What counts as a page?', a: 'Each page translated successfully counts once, including one you ask to translate again; a two-page spread counts as two. Revisiting a translated page or a failed translation does not count.' },
         { q: 'Can I get a refund?', a: 'See the {link}.', link: 'refund' },
-        { q: 'Which sites are supported?', a: 'Shonen Jump+ and Kindle Manga for now.' },
+        {
+          q: 'Where does it work?',
+          a: "Naruhodo looks for the large manga image on the page, recognizes the text in it and translates it, so it isn't tied to particular sites. Every site lays out pages a little differently; if a page doesn't translate, let us know on GitHub.",
+        },
       ],
     },
     legal: {
