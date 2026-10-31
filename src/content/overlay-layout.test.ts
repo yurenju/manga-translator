@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breakLines, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { breakLines, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, looseTextRegions, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 describe('verticalize（直書前的文字處理）', () => {
   it('半形 !?~, 換成全形', () => {
@@ -99,6 +99,32 @@ describe('separateRegions（相鄰 Balloon 的譯文範圍不重疊）', () => {
     const before = structuredClone(items);
     separateRegions(items);
     expect(items).toEqual(before);
+  });
+});
+
+describe('looseTextRegions（Loose Text 的排版區是文字框本身，#151）', () => {
+  const text = { x: 200, y: 100, w: 60, h: 180 };
+
+  it('擦除範圍是文字框外擴 3px；第 1、2 階都是文字框（沒有泡泡可以往外長）', () => {
+    const regions = looseTextRegions(text);
+
+    expect(regions.erase).toEqual({ x: 197, y: 97, w: 66, h: 186 });
+    expect(regions.fit1).toEqual(text);
+    expect(regions.fit2).toEqual(text);
+  });
+
+  it('跟旁邊的 Balloon 一起 separateRegions：兩邊的譯文範圍不重疊，Loose Text 的範圍仍在自己的文字框內', () => {
+    const balloonText = { x: 150, y: 120, w: 40, h: 150 };
+    const items = [{ text, ...looseTextRegions(text) }, { text: balloonText, ...textRegions({ x: 120, y: 80, w: 100, h: 230 }, balloonText) }];
+
+    separateRegions(items);
+
+    const [loose, balloon] = items;
+    for (const key of ['fit1', 'fit2'] as const) {
+      expect(loose![key].x + loose![key].w <= balloon![key].x || balloon![key].x + balloon![key].w <= loose![key].x, key).toBe(true);
+      expect(loose![key].x).toBeGreaterThanOrEqual(text.x);
+      expect(loose![key].x + loose![key].w).toBeLessThanOrEqual(text.x + text.w);
+    }
   });
 });
 

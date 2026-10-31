@@ -146,8 +146,8 @@ describe('逐字稿：本機流水線＋Translator', () => {
         input = i;
         return {
           items: [
-            { id: 'b1', 讀音: 'きょうは', 譯文: '今天', unreadable: false },
-            { id: 'l1', 讀音: 'どん', 譯文: '咚', unreadable: true },
+            { id: 'b1', 讀音: 'きょうは', 譯文: '今天', unreadable: false, sfx: false },
+            { id: 'l1', 讀音: 'どん', 譯文: '咚', unreadable: true, sfx: true },
           ],
           usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, costUsd: 0 },
           model: 'fake',
@@ -170,8 +170,19 @@ describe('逐字稿：本機流水線＋Translator', () => {
     const last = published.at(-1)![0]!.transcript;
     expect(last.state === 'done' && last.translated).toBe(true);
     if (last.state !== 'done') return;
-    expect(last.text.balloons[0]).toMatchObject({ 讀音: 'きょうは', 讀音來源: 'llm', 譯文: '今天', unreadable: false });
-    expect(last.text.looseText[0]).toMatchObject({ 讀音: 'どん', 讀音來源: 'llm', 譯文: '咚', unreadable: true });
+    expect(last.text.balloons[0]).toMatchObject({ 讀音: 'きょうは', 讀音來源: 'llm', 譯文: '今天', unreadable: false, sfx: false });
+    expect(last.text.looseText[0]).toMatchObject({ 讀音: 'どん', 讀音來源: 'llm', 譯文: '咚', unreadable: true, sfx: true });
+  });
+
+  it('Translator 沒回 sfx（部署中的舊版 Worker）：PageText 也沒有 sfx，Loose Text 不覆蓋', async () => {
+    const { transcriber, published } = setup({ getTranslator: () => translatorReturning('譯') });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    const last = published.at(-1)![0]!.transcript;
+    if (last.state !== 'done') throw new Error(last.state);
+    expect(last.text.looseText[0]).toMatchObject({ 譯文: '譯-l1' });
+    expect(last.text.looseText[0]).not.toHaveProperty('sfx');
   });
 
   it('OCR 信心低於門檻的段（本機已判 unreadable）：Translator 回 unreadable: false 也維持 unreadable', async () => {

@@ -22,13 +22,13 @@ import type {
 } from '../shared/messages.ts';
 import { rejectInSlice, sliceOf, stripeFingerprint, toPageText } from '../shared/long-page.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
-import type { BalloonText, PageText, RatioRect } from '../shared/page-text.ts';
+import type { BalloonText, LooseText, PageText, RatioRect } from '../shared/page-text.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput } from '../shared/translator.ts';
 import { createClaudeTranslator } from './claude-translator.ts';
 import { subImageRect, thumbnailSize, toImageRect, toSubRect } from './crop.ts';
 import { eraseLuminance } from './erase-color.ts';
-import { eraseImage, type RgbaImage } from './erase-image.ts';
+import { eraseImage, eraseLooseText, meanLuminance, type EraseImage, type RgbaImage } from './erase-image.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { pageRgba } from './page-image.ts';
 import { cropImage, splitSpread } from './spread.ts';
@@ -149,14 +149,15 @@ async function analyze({ screenshot, viewport, candidate, subRect, collected = [
     // 被切到、重疊而不收的框；tooTall＝比可見範圍還高，永遠收不到（已知限制）
     if (__DEBUG__ && slice && rejected.length > 0) trace('longPage:rejected', { anchorId: candidate.anchorId, slice, rejected });
     const eraseStartedAt = performance.now();
-    const text = { ...analyzed, balloons: eraseBalloons(analyzed.balloons, pageRgba(bitmap, rect)) };
+    const rgba = pageRgba(bitmap, rect);
+    const text = { balloons: eraseBalloons(analyzed.balloons, rgba), looseText: eraseLoose(analyzed.looseText, rgba) };
     if (__DEBUG__) {
       trace('analyze', {
         anchorId: candidate.anchorId,
         subRect,
         imageRect: rect,
         ms: Math.round(performance.now() - startedAt),
-        // 擦除小圖（#149）佔的時間，已含在 ms 裡
+        // 擦除小圖（Balloon #149、Loose Text #151）佔的時間，已含在 ms 裡
         eraseMs: Math.round(performance.now() - eraseStartedAt),
         eraseFallbacks: text.balloons.filter((b) => !b.erase).map((b) => b.id),
         balloons: text.balloons.map(({ id, order, orientation, 原文, ocrConfidence, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, ocrConfidence, balloonBbox, textBbox })),
@@ -185,11 +186,26 @@ function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] 
     const pad = ERASE_PADDING;
     const luminance = eraseLuminance(gray, { x: text.x - pad, y: text.y - pad, w: text.w + 2 * pad, h: text.h + 2 * pad });
     const erase = eraseImage(page, px(b.balloonBbox), text);
-    if (!erase) return { ...b, eraseLuminance: luminance };
-    const [x, y, w, h] = erase.box;
-    const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(erase.rgba, w, h), 0, 0));
-    return { ...b, eraseLuminance: luminance, erase: { box: { x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height }, image } };
+    return erase ? { ...b, eraseLuminance: luminance, erase: encodeErase(erase, page) } : { ...b, eraseLuminance: luminance };
   });
+}
+
+/**
+ * Loose Text 的擦除小圖與字色用的平均亮度（#151）。翻譯前還不知道哪段是 Sound Effect，所以 unreadable 以外的都算；
+ * 要不要覆蓋由 content script 決定（overlaidTexts）。
+ */
+function eraseLoose(looseText: LooseText[], page: RgbaImage): LooseText[] {
+  return looseText.map((l) => {
+    if (l.unreadable) return l;
+    const erase = eraseLooseText(page, { x: l.bbox.x * page.width, y: l.bbox.y * page.height, w: l.bbox.w * page.width, h: l.bbox.h * page.height });
+    return { ...l, eraseLuminance: Math.round(meanLuminance(erase)), erase: encodeErase(erase, page) };
+  });
+}
+
+/** 小圖編成 PNG data URL 才能隨 PageText 走 messaging、存進快取；位置換成相對 Page 的比例。 */
+function encodeErase({ box: [x, y, w, h], rgba }: EraseImage, page: RgbaImage): { box: RatioRect; image: string } {
+  const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(rgba, w, h), 0, 0));
+  return { box: { x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height }, image };
 }
 
 function grayOfRgba({ data, width, height }: RgbaImage): GrayImage {

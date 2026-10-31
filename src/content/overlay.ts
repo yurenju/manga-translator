@@ -14,12 +14,12 @@
 import type { LineRef } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageMode } from '../shared/page-mode.ts';
-import { overlaidBalloons, type BalloonText, type PageText, type RatioRect } from '../shared/page-text.ts';
+import { overlaidTexts, type PageText, type RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
-import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, looseTextRegions, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -36,6 +36,8 @@ export const HOST_ATTRIBUTE = 'data-naruhodo-overlay';
 
 /** 譯文的行高（em）。 */
 const LINE_HEIGHT = 1.15;
+/** Loose Text 譯文的反色描邊（#151）：paint-order: stroke 讓一半壓在字下面，字外側露出約字級的 1/8。 */
+const LOOSE_STROKE_EM = 0.25;
 
 /** tooltip 與高亮框的顏色、字型取自 design tokens（跟 side panel 同一份，#71）；擦字與譯文的顏色跟著原稿算。 */
 const STYLE = `${TOKENS}
@@ -50,6 +52,7 @@ const STYLE = `${TOKENS}
 .tx > span { white-space: nowrap; }
 .tx[data-wrap] > span { white-space: normal; }
 .tx[data-fit="3"] { align-items: flex-start; justify-content: flex-start; }
+.tx.ol { -webkit-text-stroke-width: ${LOOSE_STROKE_EM}em; paint-order: stroke fill; }
 :host([data-page-mode="learn"]) .er, :host([data-page-mode="learn"]) .tx { visibility: hidden; }
 .tip { position: absolute; display: none; box-sizing: border-box; padding: 0.6em 0.8em; border-radius: 0.6em;
   background: var(--naru-tooltip-bg); color: var(--naru-tooltip-ink); font-weight: 500; line-height: 1.4; white-space: pre-wrap;
@@ -142,8 +145,8 @@ function setBox(el: HTMLElement, box: Box): void {
 }
 
 /** 擦除底色的元素（怎麼畫由 eraseFill 決定）：小圖用 img，矩形用塗色的 div。 */
-function eraseElement(balloon: BalloonText, rect: Box, size: { width: number; height: number }): HTMLElement {
-  const fill = eraseFill(balloon);
+function eraseElement(text: Parameters<typeof eraseFill>[0], rect: Box, size: { width: number; height: number }): HTMLElement {
+  const fill = eraseFill(text);
   if (fill.kind === 'image') {
     const img = document.createElement('img');
     img.className = 'er img';
@@ -322,8 +325,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /** 把一個 Page 的譯文覆蓋在 anchor 上；同一個 Page（subRect）再呼叫就換成新的。pageHash＝hover 同步用的 Page 身分。 */
   async function show(anchor: HTMLElement, sub: RatioRect = WHOLE_PAGE, text: PageText, pageHash = ''): Promise<void> {
-    const balloons = overlaidBalloons(text);
-    const fontFamily = await loadFont(balloons.map((b) => b.譯文).join(''));
+    const { balloons, looseText } = overlaidTexts(text);
+    const fontFamily = await loadFont([...balloons, ...looseText].map((t) => t.譯文).join(''));
     if (stopped) return;
     const entry = entryFor(anchor);
     const size = pageSize(intrinsicSize(anchor), sub, anchor);
@@ -342,39 +345,48 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       譯文: t.譯文,
       unreadable: t.unreadable,
     });
-    // unreadable 與 Loose Text 不覆蓋，但滑過時一樣有 tooltip、一樣跟 side panel 同步
+    // 不覆蓋的段（unreadable、Sound Effect）滑過時一樣有 tooltip、一樣跟 side panel 同步
     const lines: HoverLine[] = [
       ...text.balloons.map((b) => toHoverLine(b, b.balloonBbox)),
       ...text.looseText.map((l) => toHoverLine(l, l.bbox)),
     ];
     const layer: PageLayer = { pageHash, sub, size, element, tip, highlight, lines };
 
-    const regionsList = balloons.map((balloon) => {
-      const text = toPx(balloon.textBbox, size);
-      return { text, ...textRegions(toPx(balloon.balloonBbox, size), text) };
-    });
-    separateRegions(regionsList);
-    const items = balloons.map((balloon, i) => {
-      const balloonBox = toPx(balloon.balloonBbox, size);
-      const regions = regionsList[i]!;
-      const luminance = balloon.eraseLuminance ?? 255;
-      const erase = eraseElement(balloon, regions.erase, size);
-      erase.dataset.eraseId = balloon.id;
-      const vertical = isVertical(balloon.orientation, balloonBox);
+    // Balloon 與 Loose Text 一起排、一起 separateRegions；frame 是判斷直書橫書的框，Loose Text 的排版區是文字框本身（#151）
+    const overlaid = [
+      ...balloons.map((b) => {
+        const frame = toPx(b.balloonBbox, size);
+        const textBox = toPx(b.textBbox, size);
+        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox) } };
+      }),
+      ...looseText.map((l) => {
+        const textBox = toPx(l.bbox, size);
+        return { kind: 'loose' as const, line: l, frame: textBox, regions: { text: textBox, ...looseTextRegions(textBox) } };
+      }),
+    ];
+    separateRegions(overlaid.map((o) => o.regions));
+    const items = overlaid.map(({ kind, line, frame, regions }) => {
+      const luminance = line.eraseLuminance ?? 255;
+      const erase = eraseElement(line, regions.erase, size);
+      erase.dataset.eraseId = line.id;
+      const vertical = isVertical(line.orientation, frame);
       const box = document.createElement('div');
-      box.className = vertical ? 'tx v' : 'tx';
-      box.dataset.balloonId = balloon.id;
+      box.className = `tx${vertical ? ' v' : ''}${kind === 'loose' ? ' ol' : ''}`;
+      if (kind === 'loose') box.dataset.looseId = line.id;
+      else box.dataset.balloonId = line.id;
       box.style.fontFamily = fontFamily;
       box.style.color = luminance < 128 ? '#fff' : '#111';
-      const originalLines = estimateOriginalLines(regions.text, balloon.原文, vertical);
+      // Loose Text 的反色描邊：黑字配白邊、白字配黑邊（Balloon 不加）
+      if (kind === 'loose') box.style.webkitTextStrokeColor = luminance < 128 ? '#111' : '#fff';
+      const originalLines = estimateOriginalLines(regions.text, line.原文, vertical);
       const inner = document.createElement('span');
       box.append(inner);
-      return { balloon, regions, erase, box, inner, vertical, originalLines };
+      return { kind, line, regions, erase, box, inner, vertical, originalLines };
     });
     // 擦除小圖解碼完才放上去：之後會截「帶覆蓋層的樣子」，還沒解碼的圖會露出原文
     await Promise.all(items.map(({ erase }) => (erase instanceof HTMLImageElement ? erase.decode().catch(() => {}) : undefined)));
     if (stopped) return;
-    // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
+    // 擦除底色全部在譯文之前：偵測框重疊時，後一段的底色才不會蓋掉前一段的譯文
     element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
 
     // 換掉同一個範圍上的舊層，以及同一個 Page 在別的範圍上的舊層：視窗大小變了、合成圖重畫後，同一頁量到的
@@ -390,11 +402,14 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     place(entry);
 
     // 縮字只在建立時量一次（實際量測是否溢出）；縮放不重排。最小字級用當下的畫面倍率換算，起始字級每框各自估（#80、#81）。
+    // Loose Text 大小差很多（標題、旁白、小註記），各自依文字框估，不夾在整頁 Balloon 的中位數附近
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
-    const startSizes = estimateFontPx(balloons.map((b, i) => ({ text: regionsList[i]!.text, 譯文: b.譯文 })));
+    const balloonSizes = estimateFontPx(items.filter((item) => item.kind === 'balloon').map((item) => ({ text: item.regions.text, 譯文: item.line.譯文 })));
+    // items 的 Balloon 都排在前面，balloonSizes 的索引跟 items 一樣
+    const startSizes = items.map((item, i) => (item.kind === 'balloon' ? balloonSizes[i]! : estimateFontPx([{ text: item.regions.text, 譯文: item.line.譯文 }])[0]!));
     const fits: Record<string, unknown>[] = [];
-    for (const [i, { balloon, regions, box, inner, vertical, originalLines }] of items.entries()) {
+    for (const [i, { kind, line, regions, box, inner, vertical, originalLines }] of items.entries()) {
       const target = {
         setLines: (lines: string[]) => setLines(inner, lines, vertical),
         apply(region: Box, px: number) {
@@ -407,7 +422,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
           box.scrollWidth > box.clientWidth + 1 ||
           box.scrollHeight > box.clientHeight + 1,
       };
-      let result = layoutText(target, balloon.譯文, originalLines, regions, minLayerPx, startSizes[i]);
+      let result = layoutText(target, line.譯文, originalLines, regions, minLayerPx, startSizes[i]);
       // 每個候選行數都排不下（譯文範圍跟文字框的形狀差太多）就讓瀏覽器自動換行再試，最差跟 #81 之前一樣
       const wrapped = result.stage === 3;
       if (wrapped) {
@@ -421,8 +436,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         const fillRate = textArea > 0 ? (inner.offsetWidth * inner.offsetHeight) / textArea : null;
         const renderedLines = Math.round((vertical ? inner.offsetWidth : inner.offsetHeight) / (result.size * LINE_HEIGHT));
         fits.push({
-          id: balloon.id,
-          譯文: balloon.譯文,
+          id: line.id,
+          kind,
+          譯文: line.譯文,
           vertical,
           startPx: startSizes[i],
           originalLines,
@@ -431,12 +447,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
           fillRate,
           ...result,
           regions,
-          eraseLuminance: balloon.eraseLuminance,
+          eraseLuminance: line.eraseLuminance,
         });
       }
     }
     if (__DEBUG__) {
       const anchorRect = anchor.getBoundingClientRect();
+      const skipped = (t: PageText['balloons'][number] | PageText['looseText'][number]) => ({ id: t.id, unreadable: t.unreadable, sfx: t.sfx, 譯文: t.譯文 });
       trace('overlay:show', {
         pageHash,
         sub,
@@ -444,7 +461,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         anchorRect: { x: anchorRect.x, y: anchorRect.y, width: anchorRect.width, height: anchorRect.height },
         screenScale,
         minLayerPx,
-        skipped: text.balloons.filter((b) => !balloons.includes(b)).map((b) => ({ id: b.id, unreadable: b.unreadable, 譯文: b.譯文 })),
+        skipped: [...text.balloons.filter((b) => !balloons.includes(b)), ...text.looseText.filter((l) => !looseText.includes(l))].map(skipped),
         fits,
       });
     }

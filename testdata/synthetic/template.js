@@ -268,6 +268,8 @@ window.build = function build(spec) {
       css += `-webkit-text-stroke:${Math.max(2, size / 14)}px #111;color:#fff;paint-order:stroke fill;letter-spacing:-0.05em;`;
       if (t.color === "black") css += "color:#111;-webkit-text-stroke:0;";
     }
+    // Black text with a white outline, as monologue over line art often is.
+    if (t.outline === "white") css += `-webkit-text-stroke:${Math.max(3, size / 6)}px #fff;paint-order:stroke fill;`;
     if (t.skew) css += `font-style:italic;`;
     if (t.rough) css += `filter:url(#rough);`;
     div.style.cssText = css;

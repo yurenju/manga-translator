@@ -200,7 +200,7 @@ export function letterbox(
   return { image: { gray, width: viewport.width, height: viewport.height }, content: { x: ox, y: oy, width: cw, height: ch } };
 }
 
-/** 要原地覆蓋的種類（其他是 Loose Text）。 */
+/** 當成 Balloon 的種類（其他是 Loose Text，不是 sfx 的也會覆蓋）。 */
 const OVERLAY_KINDS = new Set<GtText['kind']>(['balloon', 'thought', 'narration']);
 
 /**
@@ -233,7 +233,13 @@ export function groundTruthPageTexts(id: string): { sub: RatioRect; text: PageTe
             const [x, y, w, h] = t.textBbox;
             return { ...common(t), balloonBbox: ratio(t.bbox), textBbox: ratio(t.textBbox), eraseLuminance: eraseLuminance(image, { x: x - 3, y: y - 3, w: w + 6, h: h + 6 }) };
           }),
-        looseText: texts.filter((t) => !OVERLAY_KINDS.has(t.kind)).map((t) => ({ ...common(t), bbox: ratio(t.bbox) })),
+        // sfx 跟 FakeTranslator 一樣看 ground truth 的種類；沒有擦除小圖，底色用最常出現的亮度
+        looseText: texts
+          .filter((t) => !OVERLAY_KINDS.has(t.kind))
+          .map((t) => {
+            const [x, y, w, h] = t.bbox;
+            return { ...common(t), bbox: ratio(t.bbox), sfx: t.kind === 'sfx', eraseLuminance: eraseLuminance(image, { x: x - 3, y: y - 3, w: w + 6, h: h + 6 }) };
+          }),
       },
     };
   });
