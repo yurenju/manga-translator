@@ -104,6 +104,33 @@ describe('seriesForUrl', () => {
   });
 });
 
+describe('rememberedSeries', () => {
+  it('同分頁導航到記住過的網址（忽略 query 與 hash）：回傳那部 Series，並更新最近使用時間', async () => {
+    const { db, catalog, tick } = setup();
+    const series = await catalog.create('火ノ丸相撲', EP1);
+    tick();
+
+    expect(await catalog.rememberedSeries(`${EP1}?p=2`)).toBe(series.id);
+    expect(db.patterns.get(EP1)?.lastUsedAt).toBe(2000);
+  });
+
+  it('對不上網址模式：沒有結果，也不建 Provisional Series', async () => {
+    const { db, catalog } = setup();
+    await catalog.create('火ノ丸相撲', EP1);
+
+    expect(await catalog.rememberedSeries(EP2)).toBeUndefined();
+    expect(db.series.size).toBe(1);
+  });
+
+  it('網址模式指到的 Series 已經不在（例如被合併掉）：沒有結果', async () => {
+    const { db, catalog } = setup();
+    const series = await catalog.create('火ノ丸相撲', EP1);
+    db.series.delete(series.id);
+
+    expect(await catalog.rememberedSeries(EP1)).toBeUndefined();
+  });
+});
+
 describe('select', () => {
   it('選非 Provisional 的 Series 才記住網址模式，並更新最近使用時間', async () => {
     const { db, catalog, tick } = setup();

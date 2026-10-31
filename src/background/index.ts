@@ -344,6 +344,13 @@ async function updateSeries(tabId: number, action: string, change: (url: string,
 const activation = createActivation({
   store,
   seriesForUrl: (url) => seriesCatalog.seriesForUrl(url),
+  rememberedSeries: (url) => seriesCatalog.rememberedSeries(url),
+  onSeriesChanged(tabId) {
+    // 跟 side panel 切換 Series 一樣：忘掉畫面上的 Page 重新擷取；Prior Pages 在 Series 換了時自己清空
+    notifyPanel({ type: 'series:changed', tabId });
+    transcriber.resetPages(tabId);
+    scan(tabId);
+  },
   getTabUrl: async (tabId) => (await chrome.tabs.get(tabId)).url,
   openSidePanel(tabId) {
     // 不 await setOptions：await 會讓 open() 離開 user gesture。兩個呼叫會依序送到瀏覽器。
