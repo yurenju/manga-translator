@@ -44,6 +44,17 @@ export function isVertical(orientation: 'vertical' | 'horizontal', balloon: Box)
 /** 只擦文字框，外擴這麼多（不猜 Balloon 形狀，框線與尾巴保留）。 */
 export const ERASE_PADDING = 3;
 
+/**
+ * 擦除底色怎麼畫：有擦除小圖（#149）就原樣貼上；舊快取、備份還原的頁，或擦除退回矩形時沒有小圖，
+ * 用文字框外擴 ERASE_PADDING 的矩形塗 eraseLuminance（沒有時當白底）。
+ */
+export function eraseFill(balloon: {
+  erase?: { box: { x: number; y: number; w: number; h: number }; image: string };
+  eraseLuminance?: number;
+}): { kind: 'image'; box: { x: number; y: number; w: number; h: number }; image: string } | { kind: 'rect'; luminance: number } {
+  return balloon.erase ? { kind: 'image', ...balloon.erase } : { kind: 'rect', luminance: balloon.eraseLuminance ?? 255 };
+}
+
 const fromEdges = (left: number, top: number, right: number, bottom: number): Box => ({ x: left, y: top, w: right - left, h: bottom - top });
 
 /**

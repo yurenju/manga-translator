@@ -19,7 +19,7 @@ import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
-import { estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -141,22 +141,20 @@ function setBox(el: HTMLElement, box: Box): void {
   Object.assign(el.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
 }
 
-/**
- * 擦除底色：有擦除小圖（#149）就原樣貼在它的位置；舊快取沒有、或擦除退回矩形時，用文字框外擴 3px 的矩形塗 eraseLuminance。
- */
+/** 擦除底色的元素（怎麼畫由 eraseFill 決定）：小圖用 img，矩形用塗色的 div。 */
 function eraseElement(balloon: BalloonText, rect: Box, size: { width: number; height: number }): HTMLElement {
-  if (balloon.erase) {
+  const fill = eraseFill(balloon);
+  if (fill.kind === 'image') {
     const img = document.createElement('img');
     img.className = 'er img';
-    img.src = balloon.erase.image;
-    setBox(img, toPx(balloon.erase.box, size));
+    img.src = fill.image;
+    setBox(img, toPx(fill.box, size));
     return img;
   }
-  const luminance = balloon.eraseLuminance ?? 255;
   const div = document.createElement('div');
   div.className = 'er';
   setBox(div, rect);
-  div.style.background = `rgb(${luminance}, ${luminance}, ${luminance})`;
+  div.style.background = `rgb(${fill.luminance}, ${fill.luminance}, ${fill.luminance})`;
   return div;
 }
 

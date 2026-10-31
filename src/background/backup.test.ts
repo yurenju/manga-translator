@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { PageTranslation } from '../shared/page-text.ts';
+import { eraseFill } from '../content/overlay-layout.ts';
+import type { BalloonText, PageTranslation } from '../shared/page-text.ts';
 import type { NotesSuggestion, SeriesNotes } from '../shared/series-notes.ts';
 import type { Series, UrlPattern } from '../shared/series.ts';
 import type { NotesEntry } from '../shared/translator.ts';
@@ -104,5 +105,38 @@ describe('importAll', () => {
     for (const key of ['series', 'urlPatterns', 'seriesNotes', 'notesSuggestions', 'pageTranslations'] as const)
       expect(sorted(imported[key]), key).toEqual(sorted(SAMPLE[key]));
     expect(touched.sort()).toEqual(['s1', 's2']);
+  });
+});
+
+describe('擦除資料只留在本機', () => {
+  it('匯出檔不含擦除小圖；匯入後那頁跟舊快取一樣，擦除退回矩形加 eraseLuminance', async () => {
+    const balloon: BalloonText = {
+      id: 'b1',
+      order: 1,
+      balloonBbox: { x: 0.1, y: 0.1, w: 0.3, h: 0.3 },
+      textBbox: { x: 0.15, y: 0.15, w: 0.2, h: 0.2 },
+      orientation: 'vertical',
+      原文: 'パン',
+      讀音: 'ぱん',
+      讀音來源: 'llm',
+      譯文: '麵包',
+      unreadable: false,
+      eraseLuminance: 250,
+      erase: { box: { x: 0.14, y: 0.14, w: 0.22, h: 0.22 }, image: 'data:image/png;base64,ERASE-IMAGE' },
+    };
+    const source = memoryDb();
+    source.seed({ ...SAMPLE, pageTranslations: [{ ...translation('s1', 'aaaa', '麵包'), balloons: [balloon] }] });
+
+    const file = JSON.parse(JSON.stringify(await source.backup.exportAll()));
+    const clean = memoryDb();
+    await clean.backup.importAll(file);
+
+    expect(JSON.stringify(file)).not.toContain('ERASE-IMAGE');
+    const [restored] = clean.stores().pageTranslations.find((t) => t.pageHash === 'aaaa')!.balloons;
+    const { erase: _, ...rest } = balloon;
+    expect(restored).toEqual(rest);
+    expect(eraseFill(restored!)).toEqual({ kind: 'rect', luminance: 250 });
+    // 本機那份不受影響
+    expect(source.stores().pageTranslations[0]!.balloons[0]!.erase).toEqual(balloon.erase);
   });
 });

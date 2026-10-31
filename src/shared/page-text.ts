@@ -68,6 +68,22 @@ export function overlaidBalloons({ balloons }: PageText): BalloonText[] {
   return balloons.filter((b) => !b.unreadable && b.譯文 !== '');
 }
 
+/**
+ * 只留在本機快取、不進備份的擦除資料（#149）。從截圖算出來的圖，備份只帶文字與座標；還原後那頁跟舊快取一樣
+ * 退回矩形加 eraseLuminance。之後新增的擦除資料（例如排版矩形）加在這裡。
+ */
+const LOCAL_ERASE_KEYS = ['erase'] as const satisfies readonly (keyof BalloonText)[];
+
+/** 拿掉一頁所有 Balloon 的擦除資料（不改到傳進來的物件）。 */
+export function withoutEraseData<T extends PageText>(page: T): T {
+  const strip = (balloon: BalloonText): BalloonText => {
+    const copy = { ...balloon };
+    for (const key of LOCAL_ERASE_KEYS) delete copy[key];
+    return copy;
+  };
+  return { ...page, balloons: page.balloons.map(strip) };
+}
+
 /** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */
 export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
   return [
