@@ -51,6 +51,10 @@ describe('正式 build', () => {
     expect(content).not.toMatch(/^\s*(import|export)\b/m);
   });
 
+  it('Hosted Translation 連 production 的 Worker', async () => {
+    expect(await readText(prodDir, 'background.js')).toContain('"https://api.naruhodo.page"');
+  });
+
   it('不包含 e2e 測試入口、FakeTranslator 與合成頁 ground truth', async () => {
     const sw = await readText(prodDir, 'background.js');
 

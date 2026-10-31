@@ -6,7 +6,7 @@
  */
 import { openDb, STORES, storeRequest } from './db.ts';
 
-/** scripts/build.ts 依 build 決定；正式 build 的網址還沒定（''＝Hosted Translation 不翻譯）。 */
+/** scripts/build.ts 依 build 決定（''＝Hosted Translation 不翻譯）。 */
 export const HOSTED_API_URL = __HOSTED_API_URL__;
 
 const SESSION_ID = 'hostedSession';
