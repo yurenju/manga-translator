@@ -18,6 +18,12 @@ export interface RatioRect {
 
 export type Orientation = 'vertical' | 'horizontal';
 
+/** 擦除小圖（#149、#151）：image 是 box 大小的 PNG data URL（alpha＝擦除範圍），box 是它在 Page 上的位置。 */
+export interface EraseData {
+  box: RatioRect;
+  image: string;
+}
+
 export interface BalloonText {
   id: string;
   /** 閱讀順序（本機決定），Balloon 與 Loose Text 共用同一串編號，從 1 開始。 */
@@ -46,7 +52,7 @@ export interface BalloonText {
    * 用文字框外擴 3px 的矩形加 eraseLuminance。
    * fit 是排版矩形（#150）：擦除範圍內面積最大的軸對齊矩形，譯文只排在這裡面。#150 之前算的小圖沒有，排版維持原本的範圍。
    */
-  erase?: { box: RatioRect; image: string; fit?: RatioRect };
+  erase?: EraseData & { fit?: RatioRect };
 }
 
 export interface LooseText {
@@ -68,7 +74,7 @@ export interface LooseText {
    * 擦除小圖（#151）：範圍限制在文字框＋padding 內，顏色從背景內插；跟 BalloonText.erase 同樣只存在本機快取。
    * 沒有時（備份還原的頁）用文字框外擴 3px 的矩形加 eraseLuminance。
    */
-  erase?: { box: RatioRect; image: string };
+  erase?: EraseData;
 }
 
 export interface PageText {

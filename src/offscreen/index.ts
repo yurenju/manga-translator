@@ -22,7 +22,7 @@ import type {
 } from '../shared/messages.ts';
 import { rejectInSlice, sliceOf, stripeFingerprint, toPageText } from '../shared/long-page.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
-import type { BalloonText, LooseText, PageText, RatioRect } from '../shared/page-text.ts';
+import type { BalloonText, EraseData, LooseText, PageText, RatioRect } from '../shared/page-text.ts';
 import { grayOfRgba, type RgbaImage } from '../shared/pixels.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesInput, NotesOutput, TranslateInput, TranslateOutput } from '../shared/translator.ts';
@@ -206,7 +206,7 @@ function eraseLoose(looseText: LooseText[], page: RgbaImage): LooseText[] {
 }
 
 /** 小圖編成 PNG data URL 才能隨 PageText 走 messaging、存進快取；位置換成相對 Page 的比例。 */
-function encodeErase({ box, rgba }: EraseImage, page: RgbaImage): { box: RatioRect; image: string } {
+function encodeErase({ box, rgba }: EraseImage, page: RgbaImage): EraseData {
   const [, , w, h] = box;
   const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(rgba, w, h), 0, 0));
   return { box: ratioRect(box, page), image };
