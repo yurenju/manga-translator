@@ -351,7 +351,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
     const regionsList = balloons.map((balloon) => {
       const text = toPx(balloon.textBbox, size);
-      return { text, ...textRegions(toPx(balloon.balloonBbox, size), text) };
+      const fit = balloon.erase?.fit;
+      return { text, ...textRegions(toPx(balloon.balloonBbox, size), text, fit && toPx(fit, size)) };
     });
     separateRegions(regionsList);
     const items = balloons.map((balloon, i) => {

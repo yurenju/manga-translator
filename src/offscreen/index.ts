@@ -31,6 +31,7 @@ import { eraseLuminance } from './erase-color.ts';
 import { eraseImage, type RgbaImage } from './erase-image.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { pageRgba } from './page-image.ts';
+import type { PixelBox } from './pipeline/boxes.ts';
 import { cropImage, splitSpread } from './spread.ts';
 
 const trace = createTrace('offscreen');
@@ -186,9 +187,10 @@ function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] 
     const luminance = eraseLuminance(gray, { x: text.x - pad, y: text.y - pad, w: text.w + 2 * pad, h: text.h + 2 * pad });
     const erase = eraseImage(page, px(b.balloonBbox), text);
     if (!erase) return { ...b, eraseLuminance: luminance };
-    const [x, y, w, h] = erase.box;
+    const ratio = ([x, y, w, h]: PixelBox): RatioRect => ({ x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height });
+    const [, , w, h] = erase.box;
     const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(erase.rgba, w, h), 0, 0));
-    return { ...b, eraseLuminance: luminance, erase: { box: { x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height }, image } };
+    return { ...b, eraseLuminance: luminance, erase: { box: ratio(erase.box), image, fit: ratio(erase.fit) } };
   });
 }
 

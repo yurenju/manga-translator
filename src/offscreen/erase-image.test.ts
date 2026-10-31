@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { readGroundTruth, readRgba, type GtBox } from '../testing/synthetic.ts';
-import { eraseImage, type EraseImage, type RgbaImage } from './erase-image.ts';
+import { eraseImage, largestRect, type EraseImage, type RgbaImage } from './erase-image.ts';
 import type { RecordedOcr } from './fake-engine.ts';
 
 type Rgb = [number, number, number];
@@ -87,12 +87,65 @@ describe('eraseImage（擦除範圍沿泡泡內緣，顏色從背景內插）', 
       }
   });
 
+  it('排版矩形（#150）整塊落在擦除範圍內：橢圓泡泡裡是泡泡內緣的內接矩形，不是文字框', () => {
+    const { image, inside, balloon } = balloonPage(() => [255, 255, 255]);
+
+    const erase = eraseImage(image, balloon, TEXT)!;
+
+    const done = new Set(erased(erase).map(([x, y]) => `${x},${y}`));
+    const [fx, fy, fw, fh] = erase.fit;
+    for (let y = fy; y < fy + fh; y++) for (let x = fx; x < fx + fw; x++) expect(done.has(`${x},${y}`), `(${x}, ${y}) 不在擦除範圍內`).toBe(true);
+    // 擦除範圍是橢圓內緣（半徑約 37.5×47.5）跟文字框＋3px 的交集，內接矩形約 53×67
+    expect(fw * fh).toBeGreaterThan(0.9 * 53 * 67);
+    expect(inside(fx, fy) && inside(fx + fw - 1, fy + fh - 1)).toBe(true);
+  });
+
   it('文字框中央完全找不到接近底色的像素：回傳 undefined（呼叫端退回矩形）', () => {
     // 白底，文字框 10～30，中央一半（15～25）整塊是黑的
     const image = page(40, 40, (x, y) => (x >= 15 && x < 25 && y >= 15 && y < 25 ? [0, 0, 0] : [255, 255, 255]));
     const text = { x: 10, y: 10, w: 20, h: 20 };
 
     expect(eraseImage(image, { x: 0, y: 0, w: 40, h: 40 }, text)).toBeUndefined();
+  });
+});
+
+describe('largestRect（範圍內面積最大的軸對齊矩形）', () => {
+  /** 用字元畫 mask：# 是範圍內。 */
+  const mask = (rows: string[]) => ({ mask: Uint8Array.from(rows.join(''), (c) => (c === '#' ? 1 : 0)), w: rows[0]!.length, h: rows.length });
+
+  it('整塊都是範圍：就是整塊', () => {
+    const { mask: m, w, h } = mask(['#####', '#####', '#####']);
+    expect(largestRect(m, w, h)).toEqual([0, 0, 5, 3]);
+  });
+
+  it('不規則形狀：L 形加一個洞，取面積最大的那塊', () => {
+    const { mask: m, w, h } = mask([
+      '##......',
+      '##......',
+      '########',
+      '###.####',
+      '########',
+    ]);
+    // 洞右邊的 4×3＝12，比左邊兩欄 2×5＝10、洞左邊的 3×3、整列 8×1 都大
+    expect(largestRect(m, w, h)).toEqual([4, 2, 4, 3]);
+  });
+
+  it('沒有範圍：寬高為 0', () => {
+    const { mask: m, w, h } = mask(['...', '...']);
+    const [, , rw, rh] = largestRect(m, w, h);
+    expect(rw * rh).toBe(0);
+  });
+
+  it('橢圓：矩形在橢圓內，面積接近內接矩形的理論最大值 2ab（外框的 √½ × √½）', () => {
+    const [w, h, a, b] = [200, 120, 100, 60];
+    const m = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) m[y * w + x] = Math.hypot((x + 0.5 - a) / a, (y + 0.5 - b) / b) < 1 ? 1 : 0;
+
+    const [rx, ry, rw, rh] = largestRect(m, w, h);
+
+    for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) expect(m[y * w + x], `(${x}, ${y})`).toBe(1);
+    expect(rw * rh).toBeGreaterThan(0.97 * 2 * a * b);
   });
 });
 

@@ -178,7 +178,7 @@ describe('toPageText（一截的結果換成 Page 座標）', () => {
       讀音來源: 'kuromoji',
       譯文: '',
       unreadable: false,
-      erase: { box: { x: 0.18, y: 0.28, w: 0.24, h: 0.24 }, image: 'data:image/png;base64,AAAA' },
+      erase: { box: { x: 0.18, y: 0.28, w: 0.24, h: 0.24 }, image: 'data:image/png;base64,AAAA', fit: { x: 0.2, y: 0.32, w: 0.2, h: 0.16 } },
     };
 
     // 這一截是 Page 的 50%～75%
@@ -189,6 +189,7 @@ describe('toPageText（一截的結果換成 Page 座標）', () => {
     };
     close(onPage!.textBbox, { x: 0.2, y: 0.575, w: 0.2, h: 0.05 });
     close(onPage!.erase!.box, { x: 0.18, y: 0.57, w: 0.24, h: 0.06 });
+    close(onPage!.erase!.fit!, { x: 0.2, y: 0.58, w: 0.2, h: 0.04 });
     expect(onPage!.erase!.image).toBe('data:image/png;base64,AAAA');
   });
 });

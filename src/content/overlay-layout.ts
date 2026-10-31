@@ -60,8 +60,9 @@ const fromEdges = (left: number, top: number, right: number, bottom: number): Bo
 /**
  * erase：擦除範圍；fit1：第 1 階的譯文範圍（文字框外擴 Balloon 寬高的 12%，不超出 Balloon 往內 8%）；
  * fit2：第 2 階（Balloon 往內 10%，跟 fit1 取聯集，才不會比第 1 階小）。
+ * 有排版矩形（#150，擦除範圍內最大的矩形）時，fit1、fit2 都跟它取交集，譯文才不出擦除範圍。
  */
-export function textRegions(balloon: Box, text: Box): { erase: Box; fit1: Box; fit2: Box } {
+export function textRegions(balloon: Box, text: Box, fit?: Box): { erase: Box; fit1: Box; fit2: Box } {
   const p = ERASE_PADDING;
   const gx = balloon.w * 0.12;
   const gy = balloon.h * 0.12;
@@ -77,7 +78,11 @@ export function textRegions(balloon: Box, text: Box): { erase: Box; fit1: Box; f
     Math.max(fit1.x + fit1.w, balloon.x + balloon.w * 0.9),
     Math.max(fit1.y + fit1.h, balloon.y + balloon.h * 0.9),
   );
-  return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1, fit2 };
+  const within = (r: Box) =>
+    fit
+      ? fromEdges(Math.max(r.x, fit.x), Math.max(r.y, fit.y), Math.min(r.x + r.w, fit.x + fit.w), Math.min(r.y + r.h, fit.y + fit.h))
+      : r;
+  return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1: within(fit1), fit2: within(fit2) };
 }
 
 const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;

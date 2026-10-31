@@ -18,6 +18,8 @@ export interface EraseImage {
   box: PixelBox;
   /** box 大小的 RGBA；alpha 255＝擦除、0＝保留原圖。 */
   rgba: Uint8ClampedArray<ArrayBuffer>;
+  /** 排版矩形（#150）：擦除範圍內面積最大的軸對齊矩形（Page 原始像素，整數），譯文只排在這裡面。 */
+  fit: PixelBox;
 }
 
 /** 往外長的範圍：Balloon 外框再外擴這麼多，框線外側才碰得到範圍邊緣。 */
@@ -106,6 +108,7 @@ export function eraseImage(page: RgbaImage, balloon: Box, text: Box): EraseImage
     for (let x = bx; x < bx + bw; x++) if (label[y * w + x] !== 0 && !known[y * w + x]) wanted.push(y * w + x);
   const colors = interpolate(page, left, top, w, h, known, wanted, base);
   const rgba = new Uint8ClampedArray(bw * bh * 4);
+  const mask = new Uint8Array(bw * bh);
   for (let y = 0; y < bh; y++)
     for (let x = 0; x < bw; x++) {
       const i = (by + y) * w + bx + x;
@@ -115,8 +118,34 @@ export function eraseImage(page: RgbaImage, balloon: Box, text: Box): EraseImage
       rgba[o + 1] = colors[i * 3 + 1]!;
       rgba[o + 2] = colors[i * 3 + 2]!;
       rgba[o + 3] = 255;
+      mask[y * bw + x] = 1;
     }
-  return { box: [left + bx, top + by, bw, bh], rgba };
+  const [fx, fy, fw, fh] = largestRect(mask, bw, bh);
+  return { box: [left + bx, top + by, bw, bh], rgba, fit: [left + bx + fx, top + by + fy, fw, fh] };
+}
+
+/**
+ * mask（非 0＝範圍內）裡面積最大的軸對齊矩形，[x, y, w, h]；沒有範圍時寬高是 0。
+ * 逐列累計每欄往上連續的高度，再用單調堆疊求每列長條圖裡最大的矩形，O(w × h)。
+ */
+export function largestRect(mask: ArrayLike<number>, w: number, h: number): PixelBox {
+  const heights = new Int32Array(w);
+  const stack = new Int32Array(w + 1);
+  let best: PixelBox = [0, 0, 0, 0];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) heights[x] = mask[y * w + x] ? heights[x]! + 1 : 0;
+    let top = 0;
+    for (let x = 0; x <= w; x++) {
+      const height = x < w ? heights[x]! : 0;
+      while (top > 0 && heights[stack[top - 1]!]! >= height) {
+        const barHeight = heights[stack[--top]!]!;
+        const left = top > 0 ? stack[top - 1]! + 1 : 0;
+        if (barHeight * (x - left) > best[2] * best[3]) best = [left, y - barHeight + 1, x - left, barHeight];
+      }
+      stack[top++] = x;
+    }
+  }
+  return best;
 }
 
 const expand = (b: Box, m: number): Box => ({ x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m });
