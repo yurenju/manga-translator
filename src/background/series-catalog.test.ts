@@ -87,7 +87,7 @@ describe('seriesForUrl', () => {
 
   it('選過 Series 的網址（忽略 query 與 hash）直接預選它，不再建 Provisional Series', async () => {
     const { db, catalog } = setup();
-    const series = await catalog.create('火ノ丸相撲', EP1);
+    const series = await catalog.create('範例作品', EP1);
 
     expect(await catalog.seriesForUrl(`${EP1}?from=top#p3`)).toBe(series.id);
     expect([...db.series.values()]).toEqual([series]);
@@ -95,7 +95,7 @@ describe('seriesForUrl', () => {
 
   it('同網站的另一個網址不預選，建 Provisional Series', async () => {
     const { db, catalog } = setup();
-    const series = await catalog.create('火ノ丸相撲', EP1);
+    const series = await catalog.create('範例作品', EP1);
 
     const id = await catalog.seriesForUrl(EP2);
 
@@ -107,7 +107,7 @@ describe('seriesForUrl', () => {
 describe('rememberedSeries', () => {
   it('同分頁導航到記住過的網址（忽略 query 與 hash）：回傳那部 Series，並更新最近使用時間', async () => {
     const { db, catalog, tick } = setup();
-    const series = await catalog.create('火ノ丸相撲', EP1);
+    const series = await catalog.create('範例作品', EP1);
     tick();
 
     expect(await catalog.rememberedSeries(`${EP1}?p=2`)).toBe(series.id);
@@ -116,7 +116,7 @@ describe('rememberedSeries', () => {
 
   it('對不上網址模式：沒有結果，也不建 Provisional Series', async () => {
     const { db, catalog } = setup();
-    await catalog.create('火ノ丸相撲', EP1);
+    await catalog.create('範例作品', EP1);
 
     expect(await catalog.rememberedSeries(EP2)).toBeUndefined();
     expect(db.series.size).toBe(1);
@@ -124,7 +124,7 @@ describe('rememberedSeries', () => {
 
   it('網址模式指到的 Series 已經不在（例如被合併掉）：沒有結果', async () => {
     const { db, catalog } = setup();
-    const series = await catalog.create('火ノ丸相撲', EP1);
+    const series = await catalog.create('範例作品', EP1);
     db.series.delete(series.id);
 
     expect(await catalog.rememberedSeries(EP1)).toBeUndefined();
@@ -159,9 +159,9 @@ describe('rename', () => {
     const { db, catalog } = setup();
     const id = await catalog.seriesForUrl(EP1);
 
-    await catalog.rename(id, '火ノ丸相撲', EP1);
+    await catalog.rename(id, '範例作品', EP1);
 
-    expect(db.series.get(id)).toMatchObject({ id, name: '火ノ丸相撲', provisional: false });
+    expect(db.series.get(id)).toMatchObject({ id, name: '範例作品', provisional: false });
     expect(await catalog.seriesForUrl(EP1)).toBe(id);
   });
 });
@@ -173,7 +173,7 @@ describe('merge', () => {
 
   it('快取改用目標 ID（同一個 Page 保留目標的）、Notes 衝突變成建議修改、刪掉臨時 Series、記住網址', async () => {
     const { db, catalog } = setup();
-    const target = await catalog.create('火ノ丸相撲', EP1);
+    const target = await catalog.create('範例作品', EP1);
     const provisional = await catalog.seriesForUrl(EP2);
     db.seed(
       [translation(target.id, A, '目標的'), translation(provisional, nearA, '臨時的'), translation(provisional, B, '另一頁')],
@@ -197,7 +197,7 @@ describe('merge', () => {
 
   it('來源不是 Provisional Series：不合併，什麼都不動', async () => {
     const { db, catalog } = setup();
-    const target = await catalog.create('火ノ丸相撲', EP1);
+    const target = await catalog.create('範例作品', EP1);
     const named = await catalog.create('鬼滅', EP2);
     db.seed([translation(named.id, B, '另一頁')], [note(named.id, '小関', '小關')]);
 

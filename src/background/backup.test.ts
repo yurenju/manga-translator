@@ -66,7 +66,7 @@ const translation = (seriesId: string, pageHash: string, 譯文: string): PageTr
 /** 兩部 Series，每個 store 都有東西（含一個 locked 條目與一個待處理的建議）。 */
 const SAMPLE: BackupData = {
   series: [
-    { id: 's1', name: '火ノ丸相撲', provisional: false, createdAt: 1 },
+    { id: 's1', name: '範例作品', provisional: false, createdAt: 1 },
     { id: 's2', name: '未命名', provisional: true, createdAt: 2 },
   ],
   urlPatterns: [{ pattern: 'https://manga.example/episode/1', seriesId: 's1', lastUsedAt: 3 }],
