@@ -56,6 +56,10 @@ export interface LongPageRequest {
   stripes: Stripe[];
   /** 這次的 Line（翻好或沒翻好）併回整個 Page。 */
   whole(part: PageText): PageText;
+  /** 接續同一個 Page（不是重新翻譯整個 Page）時：這個 Page 扣頁那次的 usageRecordId（Hosted Translation 才有）。 */
+  pageUsageRecordId?: number;
+  /** 翻好時 Worker 回的 usageRecordId（Hosted Translation 才有），下一截接續時帶。 */
+  charged?(usageRecordId: number): void;
 }
 
 const trace = createTrace('sw');
@@ -134,8 +138,13 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
     let output: TranslateOutput;
     const startedAt = Date.now();
     try {
-      output = await translator.translatePage({ ...seriesName(series), ...toTranslateInput(text, seriesNotes, priorPages) });
-      trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage, priorPages: priorPages.length });
+      const continues = long?.pageUsageRecordId;
+      output = await translator.translatePage({
+        ...seriesName(series),
+        ...toTranslateInput(text, seriesNotes, priorPages),
+        ...(continues === undefined ? {} : { pageUsageRecordId: continues }),
+      });
+      trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage, priorPages: priorPages.length, continues, usageRecordId: output.usageRecordId });
     } catch (e) {
       trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });
       // 額度用完不是失敗：跟沒有 Translator 一樣只顯示原文與讀音，用完的提示在 side panel 頂端
@@ -144,6 +153,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       console.warn('translate failed', e);
       return { state: 'done', text: whole(text), translated: false, translateError: e instanceof Error ? e.message : String(e) };
     }
+    if (output.usageRecordId !== undefined) long?.charged?.(output.usageRecordId);
     const translated = applyTranslation(text, output);
     const page = whole(translated);
     const { model, latencyMs, usage } = output;
