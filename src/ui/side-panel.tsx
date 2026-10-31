@@ -12,6 +12,7 @@ import type { StaleReason } from '../shared/series-notes.ts';
 import { Badge, Button, Callout, PageHeader, Progress, SegmentedControl, type SegmentOption } from './components.tsx';
 import { OwnKeyDataFlow } from './data-flow.tsx';
 import { PRIVACY_URL } from './links.ts';
+import { SubscribeButton } from './subscribe-button.tsx';
 import { DEFAULT_LEVEL, DisplaySwitch, Transcript, type Display, type Level } from './transcript.tsx';
 import {
   quotaView,
@@ -232,11 +233,7 @@ function QuotaExhaustedCallout({
       </p>
       <p>{exhausted.body}</p>
       <div class="naru-row">
-        {exhausted.subscribe && (
-          <Button variant="primary" disabled={!onSubscribe} onClick={onSubscribe}>
-            訂閱
-          </Button>
-        )}
+        {exhausted.subscribe && <SubscribeButton variant="primary" onSubscribe={onSubscribe} />}
         <Button variant="link" onClick={onUseOwnKey}>
           使用自備金鑰
         </Button>
@@ -250,11 +247,7 @@ function QuotaLine({ line, onSubscribe }: { line: NonNullable<QuotaView['line']>
   return (
     <div role="status" aria-label="剩餘額度" class={`status-row quota-row${line.warn ? ' quota-row--warn' : ''}`}>
       <span>{line.text}</span>
-      {line.subscribeLink && (
-        <Button variant="link" disabled={!onSubscribe} onClick={onSubscribe}>
-          訂閱
-        </Button>
-      )}
+      {line.subscribeLink && <SubscribeButton variant="link" onSubscribe={onSubscribe} />}
     </div>
   );
 }
@@ -562,9 +555,7 @@ export function SidePanel(props: SidePanelProps) {
         <div class="status-row">
           <StatusText status={view.status} />
           {quota.footerButton === 'subscribe' ? (
-            <Button variant="primary" disabled={!props.onSubscribe} onClick={props.onSubscribe}>
-              訂閱
-            </Button>
+            <SubscribeButton variant="primary" onSubscribe={props.onSubscribe} />
           ) : (
             quota.footerButton === 'translate' &&
             (done.length > 0 || pending) && (

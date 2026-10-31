@@ -19,6 +19,7 @@ import { saveTranslationMode } from '../shared/translation-mode.ts';
 import { Button, Callout } from '../ui/components.tsx';
 import { OwnKeyDataFlow, PolicyLinks } from '../ui/data-flow.tsx';
 import { SignIn } from '../ui/sign-in.tsx';
+import { SubscribeButton } from '../ui/subscribe-button.tsx';
 
 const hostedAccount = createHostedAccountClient({ apiUrl: HOSTED_API_URL, fetch: (url, init) => fetch(url, init) });
 
@@ -158,9 +159,7 @@ function Plan({ session, onFree, onSubscribed, onNext }: { session: HostedSessio
           <p class="ob-plan__name">訂閱（年繳）</p>
           <p class="ob-plan__price">US$20 / 年</p>
           <p class="hint">每月可翻 800 頁，從訂閱那天起每月同一天重置。</p>
-          <Button variant="primary" onClick={() => void subscribe()}>
-            訂閱
-          </Button>
+          <SubscribeButton variant="primary" onSubscribe={() => void subscribe()} />
         </section>
       </div>
       {failure && (

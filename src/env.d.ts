@@ -2,8 +2,10 @@
 declare const __E2E__: boolean;
 /** debug build（scripts/debug-chrome.ts）才是 true：印除錯記錄（src/shared/debug-trace.ts）。 */
 declare const __DEBUG__: boolean;
-/** Hosted Translation 的 Worker 網址（scripts/build.ts 的 hostedApiUrl）；正式 build 還是空字串。 */
+/** Hosted Translation 的 Worker 網址（scripts/build.ts 的 hostedApiUrl）。 */
 declare const __HOSTED_API_URL__: string;
+/** 訂閱開放了沒（scripts/build.ts 的 subscriptionOpen）；false 時「訂閱」按鈕停用、顯示「訂閱即將推出」。 */
+declare const __SUBSCRIPTION_OPEN__: boolean;
 
 /** esbuild 用 text loader 把 .css 打包成字串（覆蓋層字型的 unicode-range，src/content/overlay-font.ts）。 */
 declare module '*.css' {

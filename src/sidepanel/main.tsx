@@ -26,6 +26,7 @@ import { saveTranslationMode, watchTranslationMode, type TranslationMode } from 
 import { Badge, Button, RadioCard, Switch } from '../ui/components.tsx';
 import { DeleteAccount } from '../ui/delete-account.tsx';
 import { SidePanel } from '../ui/side-panel.tsx';
+import { SubscribeButton } from '../ui/subscribe-button.tsx';
 import { accountPlanView } from '../ui/view.ts';
 import { SeriesNotesSection } from './series-notes.tsx';
 
@@ -188,9 +189,7 @@ function HostedAccount({
         {plan?.subscribed ? (
           <Button onClick={() => void managePlan(session)}>管理訂閱</Button>
         ) : (
-          <Button variant="primary" disabled={!plan} onClick={() => void subscribe(session)}>
-            訂閱
-          </Button>
+          <SubscribeButton variant="primary" onSubscribe={plan && (() => void subscribe(session))} />
         )}
         <Button onClick={() => void signOut(accountExit, session.token)}>登出</Button>
         <Button variant="ghost" class="naru-text-danger" onClick={onDeleteAccount}>
