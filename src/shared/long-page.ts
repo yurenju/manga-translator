@@ -77,7 +77,12 @@ export function toPageBox(box: RatioRect, { top, bottom }: Slice): RatioRect {
 /** 一截的辨識結果整份換成 Page 座標。 */
 export function toPageText({ balloons, looseText }: PageText, slice: Slice): PageText {
   return {
-    balloons: balloons.map((b) => ({ ...b, balloonBbox: toPageBox(b.balloonBbox, slice), textBbox: toPageBox(b.textBbox, slice) })),
+    balloons: balloons.map((b) => ({
+      ...b,
+      balloonBbox: toPageBox(b.balloonBbox, slice),
+      textBbox: toPageBox(b.textBbox, slice),
+      ...(b.erase ? { erase: { ...b.erase, box: toPageBox(b.erase.box, slice) } } : {}),
+    })),
     looseText: looseText.map((l) => ({ ...l, bbox: toPageBox(l.bbox, slice) })),
   };
 }

@@ -7,7 +7,8 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { PageMode } from '../src/shared/page-mode.ts';
 import type { PageText, RatioRect } from '../src/shared/page-text.ts';
-import { groundTruthPageTexts, readGroundTruth, SYNTHETIC_IDS } from '../src/testing/synthetic.ts';
+import { eraseImage } from '../src/offscreen/erase-image.ts';
+import { groundTruthPageTexts, pngDataUrl, readGroundTruth, readRgba, SYNTHETIC_IDS, type GtBox } from '../src/testing/synthetic.ts';
 import { expect, test } from './fixtures.ts';
 import { overlayTexts, type ScreenRect } from './overlay-helpers.ts';
 
@@ -26,7 +27,8 @@ async function render(page: Page, id: string, width: number, pages = groundTruth
 }
 
 const anchorRect = (page: Page): Promise<ScreenRect> =>
-  page.locator('img').evaluate((img) => {
+  // 擦除小圖也是 img（在覆蓋層的 shadow root 裡，locator 會穿進去）
+  page.locator('img:not(.er)').evaluate((img) => {
     const r = img.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   });
@@ -110,6 +112,49 @@ test.describe('覆蓋渲染（ground truth）', () => {
     console.log('～ 的字形墨跡', JSON.stringify(ink), '字框', JSON.stringify(clip));
     // 橫書的 ～ 是扁的；直書字形是直的
     expect(ink.height).toBeGreaterThan(ink.width * 1.5);
+  });
+
+  // unit test 驗不到：content script 真的把 PNG data URL 貼在 Page 層的正確位置、縮放跟著 Page 層走
+  test('有擦除小圖的 Balloon 原樣貼上（橢圓外的角保留原本的底色）；舊快取沒有小圖的維持矩形', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);
+    const id = 'p09-erase';
+    const gt = readGroundTruth(id);
+    const image = readRgba(id);
+    const { sub, text } = groundTruthPageTexts(id)[0]!;
+    const px = ([x, y, w, h]: GtBox) => ({ x, y, w, h });
+    // t1 帶擦除小圖；t7 當成舊快取，沒有小圖
+    const t1 = gt.texts.find((t) => t.id === 't1')!;
+    const erase = eraseImage(image, px(t1.bbox), px(t1.textBbox))!;
+    const [ex, ey, ew, eh] = erase.box;
+    const balloons = text.balloons.map((b) =>
+      b.id === 't1'
+        ? { ...b, erase: { box: { x: ex / gt.width, y: ey / gt.height, w: ew / gt.width, h: eh / gt.height }, image: pngDataUrl({ data: erase.rgba, width: ew, height: eh }) } }
+        : b,
+    );
+    // 原尺寸顯示，Page 像素＝畫面 px
+    await render(page, id, gt.width, [{ sub, text: { ...text, balloons } }]);
+
+    const tags = await page.evaluate(() => {
+      const root = document.querySelector('[data-naruhodo-overlay]')!.shadowRoot!;
+      // 量底色時藏起譯文
+      for (const tx of root.querySelectorAll<HTMLElement>('.tx')) tx.style.visibility = 'hidden';
+      return Object.fromEntries([...root.querySelectorAll<HTMLElement>('[data-erase-id]')].map((el) => [el.dataset.eraseId, el.tagName]));
+    });
+    expect(tags.t1).toBe('IMG');
+    expect(tags.t7).toBe('DIV');
+    // 文字框的左上角在泡泡外（灰底 180）：矩形擦除會蓋成白色，小圖保留原本的灰
+    const anchor = await anchorRect(page);
+    const [tx, ty] = t1.textBbox;
+    const png = await page.screenshot({ clip: { x: anchor.x + tx, y: anchor.y + ty, width: 2, height: 2 } });
+    const gray = await page.evaluate(async (url) => {
+      const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+      const ctx = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')!;
+      ctx.drawImage(bitmap, 0, 0);
+      return ctx.getImageData(0, 0, 1, 1).data[0];
+    }, `data:image/png;base64,${png.toString('base64')}`);
+    expect(gray).toBeGreaterThan(170);
+    expect(gray).toBeLessThan(190);
   });
 
   test('譯文太長時截斷，字級仍不小於畫面 9px，滑過時 tooltip 顯示原文＋ルビ＋譯文全文', async ({ context, extensionId }) => {

@@ -3,7 +3,7 @@
  * PNG 只需要支援合成頁用的格式：8-bit RGB／RGBA、非交錯。
  */
 import { readFileSync } from 'node:fs';
-import { inflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
 import { eraseLuminance } from '../offscreen/erase-color.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
 
@@ -15,6 +15,7 @@ export type GtBox = [number, number, number, number];
 export interface GtText {
   id: string;
   kind: 'balloon' | 'thought' | 'narration' | 'sfx' | 'sign' | 'outside';
+  shape: string;
   page: number | null;
   order: number;
   orientation: 'vertical' | 'horizontal';
@@ -44,21 +45,29 @@ export const SYNTHETIC_IDS = [
   'p06-horizontal',
   'p07-spread',
   'p08-action',
+  'p09-erase',
 ] as const;
 
 export function readGroundTruth(id: string): GtPage {
   return JSON.parse(readFileSync(new URL(`${id}.json`, OUT_DIR), 'utf8')) as GtPage;
 }
 
-/** 解出灰階（0.299/0.587/0.114，跟 offscreen 的 canvas 版一致）。 */
-export function readGray(id: string): { gray: Uint8Array; width: number; height: number } {
-  const png = readFileSync(new URL(`${id}.png`, OUT_DIR));
+/** 彩色像素（RGBA，跟 canvas 的 ImageData 同樣排法）。 */
+export interface RgbaImage {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+}
+
+/** 解出 RGBA；name 是 out/ 裡的檔名（不含 .png），例如 p09-erase-blank。 */
+export function readRgba(name: string): RgbaImage {
+  const png = readFileSync(new URL(`${name}.png`, OUT_DIR));
   const width = png.readUInt32BE(16);
   const height = png.readUInt32BE(20);
   const bitDepth = png[24];
   const colorType = png[25];
   if (bitDepth !== 8 || (colorType !== 2 && colorType !== 6) || png[28] !== 0) {
-    throw new Error(`unsupported PNG ${id}: depth ${bitDepth} color ${colorType}`);
+    throw new Error(`unsupported PNG ${name}: depth ${bitDepth} color ${colorType}`);
   }
   const channels = colorType === 2 ? 3 : 4;
   const idat: Buffer[] = [];
@@ -92,10 +101,54 @@ export function readGray(id: string): { gray: Uint8Array; width: number; height:
       pixels[y * stride + i] = (line[i]! + predictor) & 0xff;
     }
   }
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let i = 0; i < width * height; i++) {
+    for (let c = 0; c < 3; c++) data[i * 4 + c] = pixels[i * channels + c]!;
+    data[i * 4 + 3] = channels === 4 ? pixels[i * channels + 3]! : 255;
+  }
+  return { data, width, height };
+}
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+/** RGBA 編成 PNG data URL（offscreen 用 canvas.toDataURL 做同一件事）。 */
+export function pngDataUrl({ data, width, height }: RgbaImage): string {
+  const chunk = (type: string, body: Buffer) => {
+    const typed = Buffer.concat([Buffer.from(type, 'latin1'), body]);
+    let crc = 0xffffffff;
+    for (const byte of typed) crc = CRC_TABLE[(crc ^ byte) & 0xff]! ^ (crc >>> 8);
+    const out = Buffer.alloc(typed.length + 8);
+    out.writeUInt32BE(body.length, 0);
+    typed.copy(out, 4);
+    out.writeUInt32BE((crc ^ 0xffffffff) >>> 0, typed.length + 4);
+    return out;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) raw.set(data.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+  return `data:image/png;base64,${png.toString('base64')}`;
+}
+
+/** 解出灰階（0.299/0.587/0.114，跟 offscreen 的 canvas 版一致）。 */
+export function readGray(id: string): { gray: Uint8Array; width: number; height: number } {
+  const { data, width, height } = readRgba(id);
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < width * height; i++) {
-    const p = i * channels;
-    gray[i] = Math.round(0.299 * pixels[p]! + 0.587 * pixels[p + 1]! + 0.114 * pixels[p + 2]!);
+    gray[i] = Math.round(0.299 * data[i * 4]! + 0.587 * data[i * 4 + 1]! + 0.114 * data[i * 4 + 2]!);
   }
   return { gray, width, height };
 }

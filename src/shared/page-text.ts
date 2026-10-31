@@ -38,6 +38,12 @@ export interface BalloonText {
   ocrConfidence?: number;
   /** 原地覆蓋的擦除底色：文字框（外擴 3px）裡最常出現的亮度 0～255，取自截圖（#32）。沒有時當白底。 */
   eraseLuminance?: number;
+  /**
+   * 擦除小圖（#149）：沿泡泡內緣的擦除範圍，顏色從背景內插。image 是 box 大小的 PNG data URL（alpha＝擦除範圍），
+   * content script 原樣貼在 box 上。只存在本機快取，不送給 LLM 或 Worker。舊快取沒有、擦除退回矩形時也沒有：
+   * 用文字框外擴 3px 的矩形加 eraseLuminance。
+   */
+  erase?: { box: RatioRect; image: string };
 }
 
 export interface LooseText {
@@ -61,6 +67,22 @@ export interface PageText {
 /** 要原地覆蓋的 Balloon：有譯文、不是 unreadable（spec 第 7.2 節、ADR 0009）。Loose Text 不覆蓋。 */
 export function overlaidBalloons({ balloons }: PageText): BalloonText[] {
   return balloons.filter((b) => !b.unreadable && b.譯文 !== '');
+}
+
+/**
+ * 只留在本機快取、不進備份的擦除資料（#149）。從截圖算出來的圖，備份只帶文字與座標；還原後那頁跟舊快取一樣
+ * 退回矩形加 eraseLuminance。之後新增的擦除資料（例如排版矩形）加在這裡。
+ */
+const LOCAL_ERASE_KEYS = ['erase'] as const satisfies readonly (keyof BalloonText)[];
+
+/** 拿掉一頁所有 Balloon 的擦除資料（不改到傳進來的物件）。 */
+export function withoutEraseData<T extends PageText>(page: T): T {
+  const strip = (balloon: BalloonText): BalloonText => {
+    const copy = { ...balloon };
+    for (const key of LOCAL_ERASE_KEYS) delete copy[key];
+    return copy;
+  };
+  return { ...page, balloons: page.balloons.map(strip) };
 }
 
 /** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */

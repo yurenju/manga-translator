@@ -14,12 +14,12 @@
 import type { LineRef } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageMode } from '../shared/page-mode.ts';
-import { overlaidBalloons, type PageText, type RatioRect } from '../shared/page-text.ts';
+import { overlaidBalloons, type BalloonText, type PageText, type RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
-import { estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -42,6 +42,7 @@ const STYLE = `${TOKENS}
 :host { all: initial; }
 .pl { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .er { position: absolute; border-radius: 3px; }
+.er.img { border-radius: 0; }
 .tx { position: absolute; box-sizing: border-box; display: flex; align-items: center; justify-content: center;
   text-align: center; line-height: ${LINE_HEIGHT}; overflow: hidden; font-weight: 700; overflow-wrap: anywhere; }
 .tx.v { writing-mode: vertical-rl; text-orientation: mixed; }
@@ -138,6 +139,23 @@ const toPx = (r: RatioRect, size: { width: number; height: number }): Box => ({
 
 function setBox(el: HTMLElement, box: Box): void {
   Object.assign(el.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
+}
+
+/** 擦除底色的元素（怎麼畫由 eraseFill 決定）：小圖用 img，矩形用塗色的 div。 */
+function eraseElement(balloon: BalloonText, rect: Box, size: { width: number; height: number }): HTMLElement {
+  const fill = eraseFill(balloon);
+  if (fill.kind === 'image') {
+    const img = document.createElement('img');
+    img.className = 'er img';
+    img.src = fill.image;
+    setBox(img, toPx(fill.box, size));
+    return img;
+  }
+  const div = document.createElement('div');
+  div.className = 'er';
+  setBox(div, rect);
+  div.style.background = `rgb(${fill.luminance}, ${fill.luminance}, ${fill.luminance})`;
+  return div;
 }
 
 function textDiv(className: string, text: string): HTMLElement {
@@ -340,10 +358,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       const balloonBox = toPx(balloon.balloonBbox, size);
       const regions = regionsList[i]!;
       const luminance = balloon.eraseLuminance ?? 255;
-      const erase = document.createElement('div');
-      erase.className = 'er';
-      setBox(erase, regions.erase);
-      erase.style.background = `rgb(${luminance}, ${luminance}, ${luminance})`;
+      const erase = eraseElement(balloon, regions.erase, size);
+      erase.dataset.eraseId = balloon.id;
       const vertical = isVertical(balloon.orientation, balloonBox);
       const box = document.createElement('div');
       box.className = vertical ? 'tx v' : 'tx';
@@ -355,6 +371,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       box.append(inner);
       return { balloon, regions, erase, box, inner, vertical, originalLines };
     });
+    // 擦除小圖解碼完才放上去：之後會截「帶覆蓋層的樣子」，還沒解碼的圖會露出原文
+    await Promise.all(items.map(({ erase }) => (erase instanceof HTMLImageElement ? erase.decode().catch(() => {}) : undefined)));
+    if (stopped) return;
     // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
     element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
 

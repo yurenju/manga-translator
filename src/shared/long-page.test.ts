@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resize, type GrayImage } from '../testing/image-degrade.ts';
 import { cropGray, readGray } from '../testing/synthetic.ts';
-import { addLines, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox } from './long-page.ts';
+import { addLines, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox, toPageText } from './long-page.ts';
 import type { BalloonText, LooseText, PageText, RatioRect } from './page-text.ts';
 
 /** 合成頁上下接成一張長圖（webtoon 式，接縫看不出來）。 */
@@ -162,5 +162,33 @@ describe('新收的 Line 併進長 Page', () => {
 describe('看得到的那一截在 Page 裡的範圍', () => {
   it('從 anchor rect 與看得到的 rect（CSS px）算出 Page 高度的比例', () => {
     expect(sliceOf({ x: 440, y: -600, width: 400, height: 2400 }, { x: 440, y: 60, width: 400, height: 600 })).toEqual({ top: 0.275, bottom: 0.525 });
+  });
+});
+
+describe('toPageText（一截的結果換成 Page 座標）', () => {
+  it('擦除小圖的位置跟文字框一起換算（#149），小圖本身不動', () => {
+    const balloon: BalloonText = {
+      id: 'b1',
+      order: 1,
+      balloonBbox: { x: 0.1, y: 0.2, w: 0.4, h: 0.4 },
+      textBbox: { x: 0.2, y: 0.3, w: 0.2, h: 0.2 },
+      orientation: 'vertical',
+      原文: 'パン',
+      讀音: 'ぱん',
+      讀音來源: 'kuromoji',
+      譯文: '',
+      unreadable: false,
+      erase: { box: { x: 0.18, y: 0.28, w: 0.24, h: 0.24 }, image: 'data:image/png;base64,AAAA' },
+    };
+
+    // 這一截是 Page 的 50%～75%
+    const [onPage] = toPageText({ balloons: [balloon], looseText: [] }, { top: 0.5, bottom: 0.75 }).balloons;
+
+    const close = (actual: RatioRect, expected: RatioRect) => {
+      for (const key of ['x', 'y', 'w', 'h'] as const) expect(actual[key], key).toBeCloseTo(expected[key]);
+    };
+    close(onPage!.textBbox, { x: 0.2, y: 0.575, w: 0.2, h: 0.05 });
+    close(onPage!.erase!.box, { x: 0.18, y: 0.57, w: 0.24, h: 0.06 });
+    expect(onPage!.erase!.image).toBe('data:image/png;base64,AAAA');
   });
 });

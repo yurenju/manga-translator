@@ -1,0 +1,168 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { readGroundTruth, readRgba, type GtBox } from '../testing/synthetic.ts';
+import { eraseImage, type EraseImage, type RgbaImage } from './erase-image.ts';
+import type { RecordedOcr } from './fake-engine.ts';
+
+type Rgb = [number, number, number];
+
+/** 畫一張頁：每個像素的顏色由 paint(x, y) 決定。 */
+function page(width: number, height: number, paint: (x: number, y: number) => Rgb): RgbaImage {
+  const data = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const [r, g, b] = paint(x, y);
+      data.set([r, g, b, 255], (y * width + x) * 4);
+    }
+  return { data, width, height };
+}
+
+/** 橢圓泡泡（中心 cx, cy、半徑 rx, ry、框線 2px），框內 fill(x, y)，框外 outside。 */
+function balloonPage(fill: (x: number, y: number) => Rgb, outside: Rgb = [120, 120, 120]) {
+  const [cx, cy, rx, ry] = [50, 60, 40, 50];
+  const d = (x: number, y: number) => Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry);
+  const inside = (x: number, y: number) => d(x, y) < 1 - 2.5 / Math.min(rx, ry);
+  const image = page(100, 120, (x, y) => {
+    if (d(x, y) >= 1) return outside;
+    if (!inside(x, y)) return [10, 10, 10];
+    // 文字墨水：中間一個 30×40 的區塊裡每隔 4 列畫一條橫線
+    if (x >= 35 && x < 65 && y >= 40 && y < 80 && y % 4 < 2) return [15, 15, 15];
+    return fill(x, y);
+  });
+  return { image, inside, balloon: { x: 10, y: 10, w: 80, h: 100 } };
+}
+
+/** 文字框撐滿泡泡：四個角都在橢圓外。 */
+const TEXT = { x: 20, y: 20, w: 60, h: 80 };
+
+/** 把擦除小圖貼回頁上（alpha 0 的像素保留原圖）。 */
+function composite(image: RgbaImage, erase: EraseImage): RgbaImage {
+  const data = new Uint8ClampedArray(image.data);
+  const [ex, ey, ew, eh] = erase.box;
+  for (let y = 0; y < eh; y++)
+    for (let x = 0; x < ew; x++) {
+      const src = (y * ew + x) * 4;
+      if (erase.rgba[src + 3] === 0) continue;
+      data.set(erase.rgba.subarray(src, src + 3), ((ey + y) * image.width + ex + x) * 4);
+    }
+  return { ...image, data };
+}
+
+/** 擦除範圍（alpha > 0）的像素座標。 */
+function erased(erase: EraseImage): [number, number][] {
+  const [ex, ey, ew, eh] = erase.box;
+  const out: [number, number][] = [];
+  for (let y = 0; y < eh; y++) for (let x = 0; x < ew; x++) if (erase.rgba[(y * ew + x) * 4 + 3]! > 0) out.push([ex + x, ey + y]);
+  return out;
+}
+
+const pixel = ({ data, width }: RgbaImage, x: number, y: number): Rgb => [data[(y * width + x) * 4]!, data[(y * width + x) * 4 + 1]!, data[(y * width + x) * 4 + 2]!];
+
+describe('eraseImage（擦除範圍沿泡泡內緣，顏色從背景內插）', () => {
+  it('文字框的角在泡泡外：擦除範圍不出泡泡框線，框內的字擦乾淨、底色是白的', () => {
+    const { image, inside, balloon } = balloonPage(() => [255, 255, 255]);
+
+    const erase = eraseImage(image, balloon, TEXT)!;
+
+    expect(erase).toBeDefined();
+    for (const [x, y] of erased(erase)) expect(inside(x, y), `(${x}, ${y}) 在泡泡框線上或外面`).toBe(true);
+    const result = composite(image, erase);
+    for (let y = TEXT.y; y < TEXT.y + TEXT.h; y++)
+      for (let x = TEXT.x; x < TEXT.x + TEXT.w; x++) if (inside(x, y)) expect(pixel(result, x, y), `(${x}, ${y})`).toEqual([255, 255, 255]);
+  });
+
+  it('漸層泡泡：擦掉的字用周圍背景內插，接得上漸層，不被墨水和框線染灰', () => {
+    // 上白下藍的漸層：每列的顏色只跟 y 有關
+    const gradient = (_: number, y: number): Rgb => [255 - y, 255 - Math.round(y / 2), 255];
+    const { image, inside, balloon } = balloonPage(gradient);
+
+    const result = composite(image, eraseImage(image, balloon, TEXT)!);
+
+    for (let y = TEXT.y; y < TEXT.y + TEXT.h; y++)
+      for (let x = TEXT.x; x < TEXT.x + TEXT.w; x++) {
+        if (!inside(x, y)) continue;
+        const [r, g, b] = pixel(result, x, y);
+        const [er, eg, eb] = gradient(x, y);
+        expect(Math.max(Math.abs(r - er), Math.abs(g - eg), Math.abs(b - eb)), `(${x}, ${y})`).toBeLessThanOrEqual(4);
+      }
+  });
+
+  it('文字框中央完全找不到接近底色的像素：回傳 undefined（呼叫端退回矩形）', () => {
+    // 白底，文字框 10～30，中央一半（15～25）整塊是黑的
+    const image = page(40, 40, (x, y) => (x >= 15 && x < 25 && y >= 15 && y < 25 ? [0, 0, 0] : [255, 255, 255]));
+    const text = { x: 10, y: 10, w: 20, h: 20 };
+
+    expect(eraseImage(image, { x: 0, y: 0, w: 40, h: 40 }, text)).toBeUndefined();
+  });
+});
+
+describe('eraseImage：合成頁 p09（真模型錄下的框）', () => {
+  const id = 'p09-erase';
+  const image = readRgba(id);
+  // 同一頁不畫字：完美擦除後應該長的樣子
+  const blank = readRgba(`${id}-blank`);
+  const gt = readGroundTruth(id);
+  const recorded = (JSON.parse(readFileSync(new URL('../../testdata/synthetic/recorded-ocr.json', import.meta.url), 'utf8')) as RecordedOcr[]).find(
+    (r) => r.id === id,
+  )!;
+  const px = (r: { x: number; y: number; w: number; h: number }) => ({ x: r.x * image.width, y: r.y * image.height, w: r.w * image.width, h: r.h * image.height });
+  /** 像素中心在泡泡的橢圓裡（ground truth 的外框）；inset 是往內縮幾 px，負的是往外。 */
+  const insideBalloon = ([bx, by, bw, bh]: GtBox, x: number, y: number, inset: number) =>
+    Math.hypot((x + 0.5 - bx - bw / 2) / (bw / 2 - inset), (y + 0.5 - by - bh / 2) / (bh / 2 - inset)) < 1;
+  /** 泡泡尾巴：spec 的 tail 尖端，跟橢圓 0.92 倍處左右各 0.18 弧度的兩點連成三角形（同 template.js 的 tailPath）。 */
+  const spec = JSON.parse(readFileSync(new URL(`../../testdata/synthetic/specs/${id}.json`, import.meta.url), 'utf8')) as {
+    texts: { cx: number; cy: number; w: number; h: number; tail?: [number, number] }[];
+  };
+  const tails = spec.texts.flatMap(({ cx, cy, w, h, tail }) => {
+    if (!tail) return [];
+    const angle = Math.atan2(tail[1] - cy, tail[0] - cx);
+    const at = (a: number): [number, number] => [cx + Math.cos(a) * (w / 2) * 0.92, cy + Math.sin(a) * (h / 2) * 0.92];
+    return [[at(angle - 0.18), tail, at(angle + 0.18)] as [number, number][]];
+  });
+  /** 像素中心在三角形裡，或離三角形的邊 1.5px（框線外緣）以內。 */
+  const insideTail = (tri: [number, number][], x: number, y: number) => {
+    const [px0, py0] = [x + 0.5, y + 0.5];
+    const cross = ([ax, ay]: [number, number], [bx, by]: [number, number]) => (bx - ax) * (py0 - ay) - (by - ay) * (px0 - ax);
+    const signs = tri.map((a, i) => Math.sign(cross(a, tri[(i + 1) % 3]!)));
+    if (signs.every((s) => s >= 0) || signs.every((s) => s <= 0)) return true;
+    return tri.some(([ax, ay], i) => {
+      const [bx, by] = tri[(i + 1) % 3]!;
+      const t = Math.max(0, Math.min(1, ((px0 - ax) * (bx - ax) + (py0 - ay) * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2)));
+      return Math.hypot(px0 - ax - t * (bx - ax), py0 - ay - t * (by - ay)) <= 1.5;
+    });
+  };
+  const overlap = (a: GtBox, b: { x: number; y: number; w: number; h: number }) =>
+    Math.max(0, Math.min(a[0] + a[2], b.x + b.w) - Math.max(a[0], b.x)) * Math.max(0, Math.min(a[1] + a[3], b.y + b.h) - Math.max(a[1], b.y));
+  const diff = (a: RgbaImage, b: RgbaImage, x: number, y: number) => Math.max(...[0, 1, 2].map((c) => Math.abs(a.data[(y * a.width + x) * 4 + c]! - b.data[(y * b.width + x) * 4 + c]!)));
+
+  for (const balloon of recorded.balloons) {
+    const text = px(balloon.textBbox);
+    const truth = gt.texts.reduce((best, t) => (overlap(t.textBbox, text) > overlap(best.textBbox, text) ? t : best));
+
+    it(`${truth.id}（${truth.shape}）：擦除範圍不出泡泡框線；貼回後框線、接縫、框外都跟沒有字的頁一樣，文字框內沒有殘留墨水`, () => {
+      const erase = eraseImage(image, px(balloon.balloonBbox), text);
+
+      expect(erase, '退回了矩形').toBeDefined();
+      // 框線 3px：擦除範圍不超出框線外緣（1.5px）。連體泡泡可以在相連的兩個泡泡裡。閃光泡泡沒有外框，
+      // 放射線之間的白底本來就跟泡泡相連，只看下面的「放射線沒被改」
+      const balloons = gt.texts.filter((t) => t.shape !== 'flash').map((t) => t.bbox);
+      if (truth.shape !== 'flash')
+        for (const [x, y] of erased(erase!))
+          expect(balloons.some((b) => insideBalloon(b, x, y, -1.5)) || tails.some((t) => insideTail(t, x, y)), `(${x}, ${y}) 在泡泡框線外`).toBe(true);
+      const result = composite(image, erase!);
+      const [tx, ty, tw, th] = truth.textBbox;
+      let residue = 0;
+      let total = 0;
+      for (let y = ty - 6; y < ty + th + 6; y++)
+        for (let x = tx - 6; x < tx + tw + 6; x++) {
+          const d = diff(result, blank, x, y);
+          if (!insideBalloon(truth.bbox, x, y, 3)) expect(d, `(${x}, ${y}) 框線或框外被改了`).toBeLessThanOrEqual(8);
+          else {
+            total++;
+            if (d > 32) residue++;
+          }
+        }
+      expect(residue / total, `殘留墨水 ${residue} / ${total} 像素`).toBeLessThan(0.002);
+    });
+  }
+});
