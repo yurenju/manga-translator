@@ -172,8 +172,8 @@ interface JobSpec {
 const SAME_SLICE = 1e-3;
 const sameSlice = (a: Slice, b: Slice) => Math.abs(a.top - b.top) < SAME_SLICE && Math.abs(a.bottom - b.bottom) < SAME_SLICE;
 
-/** 擷取到的 Page（長 Page 是看得到的那一截）要送去辨識的內容。 */
-function sliceRequest(page: PageThumb, capture: CropRequest): AnalyzeRequest {
+/** 擷取到的 Page 要送去辨識的內容（一般 Page 是整個 Page，長 Page 是看得到的那一截）。 */
+function analyzeRequestOf(page: PageThumb, capture: CropRequest): AnalyzeRequest {
   return {
     screenshot: capture.screenshot,
     viewport: capture.viewport,
@@ -423,7 +423,7 @@ export function createTranscriber(deps: TranscriberDeps) {
    * 長 Page 的這一截是哪個 Page：anchor 認得就是它，認不出才比橫條（記憶體裡的；快取的在 lookupLong）。
    * 認出來時記一筆 trace：靠什麼認的、對上第幾條橫條（#154 真實網站驗收核對用）。
    */
-  function findLong(tab: TabState, page: PageThumb): PageRecord | undefined {
+  function identifyLongPage(tab: TabState, page: PageThumb): PageRecord | undefined {
     const longs = tab.records.filter((r) => r.long);
     const byAnchor = longs.find((r) => r.long!.anchorId === page.anchorId);
     if (byAnchor) {
@@ -445,24 +445,25 @@ export function createTranscriber(deps: TranscriberDeps) {
     const slice = sliceOf(page.rect, page.visible!);
     if (sameSlice(long.slice, slice) || record.transcript.state === 'pending') return;
     long.slice = slice;
-    const request = sliceRequest(page, capture);
+    const request = analyzeRequestOf(page, capture);
     if (record.job && !record.job.started) record.job.request = request;
     else enqueueLocal(newJob({ ...spec, record, request }));
   }
 
   /** 長 Page 查快取：命中就換成快取裡的身分，已收的 Line 從快取接著收，看過的橫條併起來。 */
   async function lookupLong(tab: TabState, seriesId: string | undefined, record: PageRecord): Promise<Transcript | undefined> {
-    const found = await pageTranslation.lookupLong(seriesId, record.long!.stripes);
+    const long = record.long!;
+    const found = await pageTranslation.lookupLong(seriesId, long.stripes);
     if (!found) return undefined;
     const { cached, transcript } = found;
     const provisional = record.pageHash;
     // 對上第幾條記在 cache:hit
-    trace('longPage:identified', { tabId: tab.tabId, anchorId: record.long!.anchorId, pageHash: cached.pageHash, by: 'cacheStripes' });
+    trace('longPage:identified', { tabId: tab.tabId, anchorId: long.anchorId, pageHash: cached.pageHash, by: 'cacheStripes' });
     record.pageHash = cached.pageHash;
-    record.long!.stripes = mergeStripes(cached.stripes ?? [], record.long!.stripes);
-    if (cached.charge) record.long!.charge = cached.charge;
+    long.stripes = mergeStripes(cached.stripes ?? [], long.stripes);
+    if (cached.charge) long.charge = cached.charge;
     if (transcript.state === 'done') record.text = transcript.text;
-    tab.pages = tab.pages.map((p) => (p.anchorId === record.long!.anchorId && p.pageHash === provisional ? { ...p, pageHash: cached.pageHash } : p));
+    tab.pages = tab.pages.map((p) => (p.anchorId === long.anchorId && p.pageHash === provisional ? { ...p, pageHash: cached.pageHash } : p));
     return transcript;
   }
 
@@ -483,7 +484,7 @@ export function createTranscriber(deps: TranscriberDeps) {
     const current = tab;
     pages = pages.flatMap((page) => {
       if (!page.visible) return [page];
-      const known = findLong(current, page);
+      const known = identifyLongPage(current, page);
       if (known) {
         known.long!.anchorId = page.anchorId;
         known.long!.stripes = mergeStripes(known.long!.stripes, page.stripes ?? []);
@@ -515,7 +516,7 @@ export function createTranscriber(deps: TranscriberDeps) {
       const record: PageRecord = {
         pageHash: page.pageHash,
         seriesId: undefined,
-        request: sliceRequest(page, capture!),
+        request: analyzeRequestOf(page, capture!),
         transcript: { state: 'analyzing' },
         settled: Promise.resolve(),
         ...(page.visible ? { long: { anchorId: page.anchorId, stripes: page.stripes ?? [], slice: sliceOf(page.rect, page.visible) } } : {}),
