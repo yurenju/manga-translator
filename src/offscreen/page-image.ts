@@ -1,4 +1,7 @@
+/** 瀏覽器版的 PageImage：用 OffscreenCanvas 縮放、裁切、轉灰階（跟 #7 的 browser.html 一致）。 */
 import { grayOfRgba, type RgbaImage } from '../shared/pixels.ts';
+import type { PixelBox } from './pipeline/boxes.ts';
+import type { PageImage } from './pipeline/analyze.ts';
 
 /** Page 的全解析度 RGBA（擦除小圖用；畫法跟 createPageImage 一樣，空白處當白底）。 */
 export function pageRgba(source: ImageBitmap, rect: { x: number; y: number; width: number; height: number }): RgbaImage {
@@ -12,9 +15,6 @@ export function pageRgba(source: ImageBitmap, rect: { x: number; y: number; widt
   return { data: ctx.getImageData(0, 0, width, height).data, width, height };
 }
 
-/** 瀏覽器版的 PageImage：用 OffscreenCanvas 縮放、裁切、轉灰階（跟 #7 的 browser.html 一致）。 */
-import type { PixelBox } from './pipeline/boxes.ts';
-import type { PageImage } from './pipeline/analyze.ts';
 
 /**
  * source 是整張截圖（或原圖）；rect 是 Page 在 source 裡的範圍（像素）。
