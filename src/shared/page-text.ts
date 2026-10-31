@@ -31,7 +31,10 @@ export interface BalloonText {
   讀音來源: 'llm' | 'kuromoji';
   /** 空字串＝未翻譯（沒有 API key 或還沒翻）。 */
   譯文: string;
+  /** LLM 判斷是 OCR 亂碼，或 OCR 最低信心低於門檻（ADR 0009）：不覆蓋，side panel 列出原文。 */
   unreadable: boolean;
+  /** OCR 非標點字的最低信心（ADR 0009）。舊快取沒有。 */
+  ocrConfidence?: number;
   /** 原地覆蓋的擦除底色：文字框（外擴 3px）裡最常出現的亮度 0～255，取自截圖（#32）。沒有時當白底。 */
   eraseLuminance?: number;
 }
@@ -46,11 +49,17 @@ export interface LooseText {
   讀音來源: 'llm' | 'kuromoji';
   譯文: string;
   unreadable: boolean;
+  ocrConfidence?: number;
 }
 
 export interface PageText {
   balloons: BalloonText[];
   looseText: LooseText[];
+}
+
+/** 要原地覆蓋的 Balloon：有譯文、不是 unreadable（spec 第 7.2 節、ADR 0009）。Loose Text 不覆蓋。 */
+export function overlaidBalloons({ balloons }: PageText): BalloonText[] {
+  return balloons.filter((b) => !b.unreadable && b.譯文 !== '');
 }
 
 /** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */

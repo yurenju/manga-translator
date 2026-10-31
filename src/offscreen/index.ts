@@ -120,8 +120,10 @@ async function analyze({ screenshot, viewport, candidate, subRect, pipeline: con
         subRect,
         imageRect: rect,
         ms: Math.round(performance.now() - startedAt),
-        balloons: text.balloons.map(({ id, order, orientation, 原文, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, balloonBbox, textBbox })),
-        looseText: text.looseText.map(({ id, order, orientation, 原文, bbox }) => ({ id, order, orientation, 原文, bbox })),
+        balloons: text.balloons.map(({ id, order, orientation, 原文, ocrConfidence, balloonBbox, textBbox }) => ({ id, order, orientation, 原文, ocrConfidence, balloonBbox, textBbox })),
+        looseText: text.looseText.map(({ id, order, orientation, 原文, ocrConfidence, bbox }) => ({ id, order, orientation, 原文, ocrConfidence, bbox })),
+        // 這時還沒翻譯，unreadable 只會來自 OCR 信心門檻（ADR 0009）
+        lowConfidence: [...text.balloons, ...text.looseText].filter((t) => t.unreadable).length,
         detections: detectionImage(bitmap, rect, text),
       });
     }
