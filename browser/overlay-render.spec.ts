@@ -7,9 +7,10 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { Rect } from '../src/shared/messages.ts';
 import type { PageMode } from '../src/shared/page-mode.ts';
-import type { PageText, RatioRect } from '../src/shared/page-text.ts';
-import { eraseImage } from '../src/offscreen/erase-image.ts';
-import { groundTruthPageTexts, pngDataUrl, readGroundTruth, readRgba, SYNTHETIC_IDS, type GtBox } from '../src/testing/synthetic.ts';
+import { boxToRatio, tupleBox } from '../src/content/overlay-layout.ts';
+import type { EraseData, PageText, RatioRect } from '../src/shared/page-text.ts';
+import { eraseImage, type EraseImage } from '../src/offscreen/erase-image.ts';
+import { groundTruthPageTexts, pngDataUrl, readGroundTruth, readRgba, SYNTHETIC_IDS } from '../src/testing/synthetic.ts';
 import { expect, test } from './fixtures.ts';
 import { overlayTexts, type ScreenRect } from './overlay-helpers.ts';
 
@@ -27,6 +28,11 @@ declare global {
 async function render(page: Page, id: string, width: number, pages = groundTruthPageTexts(id), pageMode?: PageMode): Promise<void> {
   const image = `data:image/png;base64,${(await readFile(new URL(`${id}.png`, SYNTHETIC))).toString('base64')}`;
   await page.evaluate((input) => globalThis.__renderOverlay(input), { image, width, pages, pageMode });
+}
+
+/** offscreen 的 encodeErase 在 Node 裡的版本：小圖編成 PNG data URL、位置換成比例。 */
+function eraseData({ box, rgba }: EraseImage, page: { width: number; height: number }): EraseData {
+  return { box: boxToRatio(tupleBox(box), page), image: pngDataUrl({ data: rgba, width: box[2], height: box[3] }) };
 }
 
 const anchorRect = (page: Page): Promise<ScreenRect> =>
@@ -125,16 +131,10 @@ test.describe('覆蓋渲染（ground truth）', () => {
     const gt = readGroundTruth(id);
     const image = readRgba(id);
     const { sub, text } = groundTruthPageTexts(id)[0]!;
-    const px = ([x, y, w, h]: GtBox) => ({ x, y, w, h });
     // t1 帶擦除小圖；t7 當成舊快取，沒有小圖
     const t1 = gt.texts.find((t) => t.id === 't1')!;
-    const erase = eraseImage(image, px(t1.bbox), px(t1.textBbox))!;
-    const [ex, ey, ew, eh] = erase.box;
-    const balloons = text.balloons.map((b) =>
-      b.id === 't1'
-        ? { ...b, erase: { box: { x: ex / gt.width, y: ey / gt.height, w: ew / gt.width, h: eh / gt.height }, image: pngDataUrl({ data: erase.rgba, width: ew, height: eh }) } }
-        : b,
-    );
+    const erase = eraseImage(image, tupleBox(t1.bbox), tupleBox(t1.textBbox))!;
+    const balloons = text.balloons.map((b) => (b.id === 't1' ? { ...b, erase: eraseData(erase, gt) } : b));
     // 原尺寸顯示，Page 像素＝畫面 px
     await render(page, id, gt.width, [{ sub, text: { ...text, balloons } }]);
 
@@ -221,17 +221,15 @@ test.describe('覆蓋渲染（ground truth）', () => {
     const gt = readGroundTruth(id);
     const image = readRgba(id);
     const { sub, text } = groundTruthPageTexts(id)[0]!;
-    const px = ([x, y, w, h]: GtBox) => ({ x, y, w, h });
-    const ratio = ([x, y, w, h]: [number, number, number, number]): RatioRect => ({ x: x / gt.width, y: y / gt.height, w: w / gt.width, h: h / gt.height });
     const erases = new Map(
       gt.texts.flatMap((t) => {
-        const erase = eraseImage(image, px(t.bbox), px(t.textBbox));
+        const erase = eraseImage(image, tupleBox(t.bbox), tupleBox(t.textBbox));
         return erase ? [[t.id, erase] as const] : [];
       }),
     );
     const balloons = text.balloons.map((b) => {
       const erase = erases.get(b.id);
-      return erase ? { ...b, erase: { box: ratio(erase.box), image: pngDataUrl({ data: erase.rgba, width: erase.box[2], height: erase.box[3] }), fit: ratio(erase.fit) } } : b;
+      return erase ? { ...b, erase: { ...eraseData(erase, gt), fit: boxToRatio(tupleBox(erase.fit), gt) } } : b;
     });
     // 原尺寸顯示，Page 像素＝畫面 px
     await render(page, id, gt.width, [{ sub, text: { ...text, balloons } }]);

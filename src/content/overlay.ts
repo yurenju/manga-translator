@@ -19,7 +19,7 @@ import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
-import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, looseTextRegions, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, looseTextRegions, minLayerFontPx, pageSize, ratioToBox, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -135,13 +135,6 @@ function intrinsicSize(anchor: HTMLElement): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
-const toPx = (r: RatioRect, size: { width: number; height: number }): Box => ({
-  x: r.x * size.width,
-  y: r.y * size.height,
-  w: r.w * size.width,
-  h: r.h * size.height,
-});
-
 function setBox(el: HTMLElement, box: Box): void {
   Object.assign(el.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
 }
@@ -153,7 +146,7 @@ function eraseElement(text: Parameters<typeof eraseFill>[0], rect: Box, size: { 
     const img = document.createElement('img');
     img.className = 'er img';
     img.src = fill.image;
-    setBox(img, toPx(fill.box, size));
+    setBox(img, ratioToBox(fill.box, size));
     return img;
   }
   const div = document.createElement('div');
@@ -341,7 +334,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     highlight.className = 'hl';
     const toHoverLine = (t: PageText['balloons'][number] | PageText['looseText'][number], bbox: RatioRect): HoverLine => ({
       id: t.id,
-      box: toPx(bbox, size),
+      box: ratioToBox(bbox, size),
       原文: t.原文,
       讀音: t.讀音,
       譯文: t.譯文,
@@ -357,14 +350,14 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // Balloon 與 Loose Text 一起排、一起 separateRegions；frame 是判斷直書橫書的框，Loose Text 的排版區是文字框本身（#151）
     const overlaid = [
       ...balloons.map((b) => {
-        const frame = toPx(b.balloonBbox, size);
-        const textBox = toPx(b.textBbox, size);
+        const frame = ratioToBox(b.balloonBbox, size);
+        const textBox = ratioToBox(b.textBbox, size);
         // Balloon 的排版區跟排版矩形取交集（#150）；Loose Text 不取
         const fit = b.erase?.fit;
-        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox, fit && toPx(fit, size)) } };
+        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox, fit && ratioToBox(fit, size)) } };
       }),
       ...looseText.map((l) => {
-        const textBox = toPx(l.bbox, size);
+        const textBox = ratioToBox(l.bbox, size);
         return { kind: 'loose' as const, line: l, frame: textBox, regions: { text: textBox, ...looseTextRegions(textBox) } };
       }),
     ];

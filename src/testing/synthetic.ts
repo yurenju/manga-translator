@@ -4,6 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { deflateSync, inflateSync } from 'node:zlib';
+import { ERASE_PADDING, expandBox, tupleBox } from '../content/overlay-layout.ts';
 import { eraseLuminance } from '../offscreen/erase-color.ts';
 import type { GrayImage } from '../shared/page-hash.ts';
 import type { PageText, RatioRect } from '../shared/page-text.ts';
@@ -220,17 +221,11 @@ export function groundTruthPageTexts(id: string): { sub: RatioRect; text: PageTe
       text: {
         balloons: texts
           .filter((t) => OVERLAY_KINDS.has(t.kind))
-          .map((t) => {
-            const [x, y, w, h] = t.textBbox;
-            return { ...common(t), balloonBbox: ratio(t.bbox), textBbox: ratio(t.textBbox), eraseLuminance: eraseLuminance(image, { x: x - 3, y: y - 3, w: w + 6, h: h + 6 }) };
-          }),
+          .map((t) => ({ ...common(t), balloonBbox: ratio(t.bbox), textBbox: ratio(t.textBbox), eraseLuminance: eraseLuminance(image, expandBox(tupleBox(t.textBbox), ERASE_PADDING)) })),
         // sfx 跟 FakeTranslator 一樣看 ground truth 的種類；沒有擦除小圖，底色用最常出現的亮度
         looseText: texts
           .filter((t) => !OVERLAY_KINDS.has(t.kind))
-          .map((t) => {
-            const [x, y, w, h] = t.bbox;
-            return { ...common(t), bbox: ratio(t.bbox), sfx: t.kind === 'sfx', eraseLuminance: eraseLuminance(image, { x: x - 3, y: y - 3, w: w + 6, h: h + 6 }) };
-          }),
+          .map((t) => ({ ...common(t), bbox: ratio(t.bbox), sfx: t.kind === 'sfx', eraseLuminance: eraseLuminance(image, expandBox(tupleBox(t.bbox), ERASE_PADDING)) })),
       },
     };
   });

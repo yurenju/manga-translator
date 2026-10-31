@@ -1,7 +1,7 @@
 // offscreen document：裁切截圖、Page hash、偵測＋OCR＋閱讀順序、呼叫 LLM（spec #27 第 2 節）。
 // 由 SW 在需要時用 chrome.offscreen.createDocument 建立，manifest 不必宣告。
 import { SYNTHETIC_GROUND_TRUTH } from '../background/synthetic-ground-truth.ts';
-import { ERASE_PADDING } from '../content/overlay-layout.ts';
+import { boxToRatio, ERASE_PADDING, expandBox, ratioToBox, tupleBox } from '../content/overlay-layout.ts';
 import { indexedDbApiKeyStore } from '../shared/api-key-store.ts';
 import { createFakeTranslator } from '../shared/fake-translator.ts';
 import type {
@@ -32,7 +32,6 @@ import { eraseLuminance } from './erase-color.ts';
 import { eraseImage, eraseLooseText, meanLuminance, type EraseImage } from './erase-image.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { pageRgba } from './page-image.ts';
-import type { PixelBox } from './pipeline/boxes.ts';
 import { cropImage, splitSpread } from './spread.ts';
 
 const trace = createTrace('offscreen');
@@ -182,14 +181,12 @@ async function analyze({ screenshot, viewport, candidate, subRect, collected = [
  */
 function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] {
   const gray = grayOfRgba(page.data, page.width, page.height);
-  const px = (r: RatioRect) => ({ x: r.x * page.width, y: r.y * page.height, w: r.w * page.width, h: r.h * page.height });
   return balloons.map((b) => {
-    const text = px(b.textBbox);
-    const pad = ERASE_PADDING;
-    const luminance = eraseLuminance(gray, { x: text.x - pad, y: text.y - pad, w: text.w + 2 * pad, h: text.h + 2 * pad });
-    const erase = eraseImage(page, px(b.balloonBbox), text);
+    const text = ratioToBox(b.textBbox, page);
+    const luminance = eraseLuminance(gray, expandBox(text, ERASE_PADDING));
+    const erase = eraseImage(page, ratioToBox(b.balloonBbox, page), text);
     // 排版矩形（#150）只有 Balloon 有；Loose Text 的排版區是文字框本身
-    return erase ? { ...b, eraseLuminance: luminance, erase: { ...encodeErase(erase, page), fit: ratioRect(erase.fit, page) } } : { ...b, eraseLuminance: luminance };
+    return erase ? { ...b, eraseLuminance: luminance, erase: { ...encodeErase(erase, page), fit: boxToRatio(tupleBox(erase.fit), page) } } : { ...b, eraseLuminance: luminance };
   });
 }
 
@@ -200,7 +197,7 @@ function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] 
 function eraseLoose(looseText: LooseText[], page: RgbaImage): LooseText[] {
   return looseText.map((l) => {
     if (l.unreadable) return l;
-    const erase = eraseLooseText(page, { x: l.bbox.x * page.width, y: l.bbox.y * page.height, w: l.bbox.w * page.width, h: l.bbox.h * page.height });
+    const erase = eraseLooseText(page, ratioToBox(l.bbox, page));
     return { ...l, eraseLuminance: Math.round(meanLuminance(erase)), erase: encodeErase(erase, page) };
   });
 }
@@ -209,10 +206,8 @@ function eraseLoose(looseText: LooseText[], page: RgbaImage): LooseText[] {
 function encodeErase({ box, rgba }: EraseImage, page: RgbaImage): EraseData {
   const [, , w, h] = box;
   const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(rgba, w, h), 0, 0));
-  return { box: ratioRect(box, page), image };
+  return { box: boxToRatio(tupleBox(box), page), image };
 }
-
-const ratioRect = ([x, y, w, h]: PixelBox, page: RgbaImage): RatioRect => ({ x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height });
 
 
 /**

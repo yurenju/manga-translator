@@ -2,7 +2,7 @@
  * 擦除小圖（#149，spec #142「擦除範圍與顏色」）：擦除範圍沿泡泡內緣長出來，顏色從背景像素往內內插。
  * 結果是一張 RGBA 小圖（像素是顏色，alpha 是擦除範圍），content script 原樣貼回原位。
  */
-import { ERASE_PADDING, type Box } from '../content/overlay-layout.ts';
+import { ERASE_PADDING, expandBox, type Box } from '../content/overlay-layout.ts';
 import { luma, type RgbaImage } from '../shared/pixels.ts';
 import type { PixelBox } from './pipeline/boxes.ts';
 import { eraseLuminance } from './erase-color.ts';
@@ -37,9 +37,9 @@ const SMOOTHING_SWEEPS = 8;
  */
 export function eraseImage(page: RgbaImage, balloon: Box, text: Box): BalloonEraseImage | undefined {
   const framed = balloon.x !== text.x || balloon.y !== text.y || balloon.w !== text.w || balloon.h !== text.h;
-  const grow = framed ? expand(balloon, BALLOON_MARGIN) : expand(text, TEXT_MARGIN);
+  const grow = framed ? expandBox(balloon, BALLOON_MARGIN) : expandBox(text, TEXT_MARGIN);
   // 擦除範圍最多到文字框外擴 ERASE_PADDING（跟矩形退路一樣）
-  const clip = expand(text, ERASE_PADDING);
+  const clip = expandBox(text, ERASE_PADDING);
   // 計算的視窗：往外長的範圍與擦除範圍的聯集，夾在 Page 內
   const left = Math.max(0, Math.floor(Math.min(grow.x, clip.x)));
   const top = Math.max(0, Math.floor(Math.min(grow.y, clip.y)));
@@ -165,7 +165,7 @@ export function eraseLooseText(page: RgbaImage, text: Box): EraseImage {
 /** 文字框中央一半範圍內，沒被擦到、又跟底色差很多（墨水）的像素比例。 */
 function residue(page: RgbaImage, erase: EraseImage, text: Box): number {
   const [ex, ey, ew, eh] = erase.box;
-  const { gray, left, top, w } = grayWindow(page, expand(text, ERASE_PADDING));
+  const { gray, left, top, w } = grayWindow(page, expandBox(text, ERASE_PADDING));
   const base = eraseLuminance({ gray, width: w, height: gray.length / w }, { x: 0, y: 0, w, h: gray.length / w });
   let ink = 0;
   let total = 0;
@@ -180,8 +180,8 @@ function residue(page: RgbaImage, erase: EraseImage, text: Box): number {
 
 /** 整個文字框＋padding 的矩形；顏色從框外附近（TEXT_MARGIN 內）接近底色的像素內插，沒有就用單色底色。 */
 function eraseRect(page: RgbaImage, text: Box): EraseImage {
-  const { gray, left, top, w, h } = grayWindow(page, expand(text, TEXT_MARGIN));
-  const clip = expand(text, ERASE_PADDING);
+  const { gray, left, top, w, h } = grayWindow(page, expandBox(text, TEXT_MARGIN));
+  const clip = expandBox(text, ERASE_PADDING);
   const base = eraseLuminance({ gray, width: w, height: h }, { x: clip.x - left, y: clip.y - top, w: clip.w, h: clip.h });
   const bx = Math.max(0, Math.round(clip.x - left));
   const by = Math.max(0, Math.round(clip.y - top));
@@ -228,8 +228,6 @@ function grayWindow(page: RgbaImage, box: Box): { gray: Uint8Array; left: number
       gray[y * w + x] = Math.round(luma(page.data, ((top + y) * page.width + left + x) * 4));
   return { gray, left, top, w, h };
 }
-
-const expand = (b: Box, m: number): Box => ({ x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m });
 
 /** 4 連通的 BFS：從 starts 出發，accept(from, to) 為真就走過去並 visit。 */
 function flood(w: number, h: number, starts: number[], accept: (from: number, to: number) => boolean, visit: (i: number) => void): void {
