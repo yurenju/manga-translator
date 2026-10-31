@@ -32,6 +32,10 @@ _Avoid_: bubble, text box
 Text on a Page that belongs to no Balloon: sound effects, narration, signs.
 _Avoid_: SFX (only one kind of Loose Text), stray text
 
+**Sound Effect** (狀聲詞)
+Loose Text that renders a sound or a manner (擬音語・擬態語), e.g. ぱち, ニコリ. Left as drawn on the Page; its translation shows only in the tooltip and the side panel. A character's own exclamation (あ…, あっ) is speech, not a Sound Effect.
+_Avoid_: SFX (in the UI), onomatopoeia
+
 **Line** (句)
 One Balloon or one Loose Text entry on a Page, as the transcript lists it in reading order; the unit that hover sync and furigana work on. Its id (b1, l1…) is only unique within its Page, so a Line is always named together with its Page.
 _Avoid_: item, sentence (one Balloon can hold several sentences)
