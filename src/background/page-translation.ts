@@ -8,6 +8,7 @@
 import type { PageView } from '../shared/messages.ts';
 import { pageLines, type PageText, type PageTranslation } from '../shared/page-text.ts';
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
+import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { NotesChanges, NotesEntry, PriorPage, TranslateInput, TranslateOutput, Translator } from '../shared/translator.ts';
 import { QuotaExhaustedError } from './hosted-translator.ts';
@@ -24,6 +25,7 @@ export type Transcript = PageView['transcript'];
 export interface PageTranslationDeps {
   cache: PageCache;
   ledger: NotesLedger;
+  getSeries(seriesId: string): Promise<Series | undefined>;
   /** 目前會用來翻譯的模型與 prompt 版本（過時提示比對用）；沒有 Translator 時 undefined，就不比版本。 */
   translatorVersion?(): TranslatorVersion | undefined | Promise<TranslatorVersion | undefined>;
 }
@@ -45,7 +47,12 @@ export interface TranslateRequest {
 
 const trace = createTrace('sw');
 
-function toTranslateInput(text: PageText, seriesNotes: NotesEntry[], priorPages: PriorPage[]): TranslateInput {
+/** 只送讀者取的名稱：Provisional Series 的名稱是自動產生的（網站＋日期），不是作品名。 */
+function seriesName(series: Series | undefined): Pick<TranslateInput, 'seriesName'> {
+  return series && !series.provisional ? { seriesName: series.name } : {};
+}
+
+function toTranslateInput(text: PageText, seriesNotes: NotesEntry[], priorPages: PriorPage[]): Omit<TranslateInput, 'seriesName'> {
   const items = [
     ...text.balloons.map((b) => ({ order: b.order, item: { id: b.id, kind: 'balloon' as const, 原文: b.原文, orientation: b.orientation } })),
     ...text.looseText.map((l) => ({ order: l.order, item: { id: l.id, kind: 'loose' as const, 原文: l.原文, orientation: l.orientation } })),
@@ -62,7 +69,7 @@ function applyTranslation(text: PageText, output: TranslateOutput): PageText {
   return { balloons: text.balloons.map(merge), looseText: text.looseText.map(merge) };
 }
 
-export function createPageTranslation({ cache, ledger, translatorVersion }: PageTranslationDeps) {
+export function createPageTranslation({ cache, ledger, getSeries, translatorVersion }: PageTranslationDeps) {
   /** 還在背景跑的 ②。 */
   const pendingNotes = new Set<Promise<void>>();
 
@@ -108,11 +115,11 @@ export function createPageTranslation({ cache, ledger, translatorVersion }: Page
   async function translate({ text, translator, seriesId, pageHash, group, priorPages }: TranslateRequest): Promise<Transcript> {
     if (!translator) return { state: 'done', text, translated: false };
     // 送出時的 Notes 快照：送進 prompt，也是快取的 usedNotes
-    const seriesNotes = seriesId === undefined ? [] : await ledger.list(seriesId);
+    const [seriesNotes, series] = seriesId === undefined ? [[], undefined] : await Promise.all([ledger.list(seriesId), getSeries(seriesId)]);
     let output: TranslateOutput;
     const startedAt = Date.now();
     try {
-      output = await translator.translatePage(toTranslateInput(text, seriesNotes, priorPages));
+      output = await translator.translatePage({ ...seriesName(series), ...toTranslateInput(text, seriesNotes, priorPages) });
       trace('translate:done', { pageHash, ms: Date.now() - startedAt, model: output.model, usage: output.usage, priorPages: priorPages.length });
     } catch (e) {
       trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });

@@ -21,7 +21,7 @@ import type {
 
 export const CLAUDE_MODEL = 'claude-haiku-5-5';
 /** 寫進快取判斷過時用（#33）；改 ① 的 prompt 或 schema 就要改這個。② 的 prompt 不影響已快取的譯文，不用改。 */
-export const PROMPT_VERSION = 'claude-text-v3';
+export const PROMPT_VERSION = 'claude-text-v4';
 
 const MAX_TOKENS = 16_000;
 
@@ -75,6 +75,12 @@ const TRANSLATE_TEXT = `你是日文漫畫翻譯助手，幫助讀者一邊看�
 閱讀順序已經由程式決定，請照輸入的順序回答，不要重排。
 
 翻譯時請遵守 Series Notes 的譯名。
+
+使用者可能會告訴你作品名（讀者為這部作品取的名稱）。原文裡出現作品名時，那是作品名，不是狀聲詞；作品有官方中文譯名就用官方譯名。
+
+真實世界的樂團、品牌、作品名（例如歌手、商品、電影），用官方的中文寫法；沒有官方中文寫法就保留原文，不要自己音譯或意譯。
+
+敬稱（さん、君、ちゃん等）依場景翻：同學之間的さん可以翻成「同學」，熟人之間只叫名字，不影響語意時可以省略；不要一律死板地翻成「先生／小姐」。
 
 使用者可能先給你前面幾頁的原文與譯文（context），讓你知道前後劇情、誰在說話、語氣與已經用過的譯名。context 只用來理解，不要翻譯、也不要回傳；譯名與語氣請跟 context 保持一致。
 
@@ -173,14 +179,15 @@ const toWire = (lines: TranslatedLine[]) => lines.map(({ kind, 原文, 譯文 })
 /** ① 翻譯這一頁的 request body。 */
 export function translateRequest(input: TranslateInput): MessagesRequest {
   const current = JSON.stringify(input.items.map(({ id, kind, 原文 }) => ({ id, kind, ja: 原文 })));
-  // Prior Pages 每頁都不同，放在 user message，不動 system 的 prompt cache
+  // 作品名與 Prior Pages 每部、每頁都不同，放在 user message，不動 system 的 prompt cache
+  const before: TextBlock[] = [
+    ...(input.seriesName ? [{ type: 'text' as const, text: `作品名：${input.seriesName}` }] : []),
+    ...(input.priorPages.length > 0
+      ? [{ type: 'text' as const, text: `context（前面的頁，依閱讀順序）：\n${JSON.stringify(input.priorPages.map(toWire))}` }]
+      : []),
+  ];
   const content: TextBlock[] =
-    input.priorPages.length > 0
-      ? [
-          { type: 'text', text: `context（前面的頁，依閱讀順序）：\n${JSON.stringify(input.priorPages.map(toWire))}` },
-          { type: 'text', text: `這一頁要翻譯的文字：\n${current}` },
-        ]
-      : [{ type: 'text', text: current }];
+    before.length > 0 ? [...before, { type: 'text', text: `這一頁要翻譯的文字：\n${current}` }] : [{ type: 'text', text: current }];
   return {
     model: CLAUDE_MODEL,
     max_tokens: MAX_TOKENS,

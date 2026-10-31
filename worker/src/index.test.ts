@@ -105,6 +105,26 @@ describe('翻譯', () => {
     expect(anthropic).not.toHaveBeenCalled();
   });
 
+  it('作品名轉給 Anthropic，跟外掛直接送的 request 一樣', async () => {
+    const anthropic = fakeAnthropic([ok]);
+
+    const response = await post(TRANSLATE_PATH, { ...input, seriesName: '星屑バンド' });
+
+    expect(response.status).toBe(200);
+    expect(anthropic.calls[0]!.body).toEqual(translateRequest({ ...input, seriesName: '星屑バンド' }));
+  });
+
+  it('作品名不是字串或超過 200 字回 400，不呼叫 Anthropic', async () => {
+    const anthropic = vi.spyOn(globalThis, 'fetch');
+
+    const wrongType = await post(TRANSLATE_PATH, { ...input, seriesName: ['星屑バンド'] });
+    const tooLong = await post(TRANSLATE_PATH, { ...input, seriesName: 'あ'.repeat(201) });
+
+    expect(wrongType.status).toBe(400);
+    expect(tooLong.status).toBe(400);
+    expect(anthropic).not.toHaveBeenCalled();
+  });
+
   it('Anthropic 失敗回 502 與它的錯誤訊息', async () => {
     fakeAnthropic([() => Response.json({ error: { message: 'invalid x-api-key' } }, { status: 401 })]);
 

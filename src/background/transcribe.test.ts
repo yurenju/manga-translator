@@ -82,6 +82,7 @@ function setup(overrides: Partial<TranscriberDeps> = {}) {
     analyze: vi.fn(async () => structuredClone(pageText)),
     getTranslator: () => undefined,
     getSeriesId: async () => 'series-1',
+    getSeries: async (id) => ({ id, name: '未命名・manga.example・2026-10-31', provisional: true, createdAt: 0 }),
     cache: memoryCache(),
     notes: memoryNotes(),
     publish: (_tabId, pages) => published.push(structuredClone(pages)),
@@ -169,6 +170,31 @@ describe('逐字稿：本機流水線＋Translator', () => {
     if (last.state !== 'done') return;
     expect(last.text.balloons[0]).toMatchObject({ 讀音: 'きょうは', 讀音來源: 'llm', 譯文: '今天', unreadable: false });
     expect(last.text.looseText[0]).toMatchObject({ 讀音: 'どん', 讀音來源: 'llm', 譯文: '咚', unreadable: true });
+  });
+
+  it('讀者命名過的 Series：翻譯請求帶作品名', async () => {
+    const calls: TranslateInput[] = [];
+    const { transcriber } = setup({
+      getTranslator: () => translatorReturning('譯', calls),
+      getSeries: async (id) => ({ id, name: '星屑バンド', provisional: false, createdAt: 0 }),
+    });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(calls.map((c) => c.seriesName)).toEqual(['星屑バンド']);
+  });
+
+  it('Provisional Series 的名稱是自動產生的，不當作品名送出', async () => {
+    const calls: TranslateInput[] = [];
+    const { transcriber } = setup({
+      getTranslator: () => translatorReturning('譯', calls),
+      getSeries: async (id) => ({ id, name: '未命名・manga.example・2026-10-31', provisional: true, createdAt: 0 }),
+    });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toHaveProperty('seriesName');
   });
 
   it('Translator 失敗時保留 kuromoji 讀音、標示未翻譯，並帶上錯誤訊息', async () => {

@@ -108,7 +108,7 @@ describe('用量紀錄', () => {
     fakeAnthropic([ok, notesOk]);
     const seriesNotes = [{ seriesId: 's1', 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文: '霧島湊', 類別: '人名', locked: false }];
 
-    await post(TRANSLATE_PATH, { ...input, seriesNotes, url: 'https://manga.example/episode/1' }, { token });
+    await post(TRANSLATE_PATH, { ...input, seriesName: '星屑バンド', seriesNotes, url: 'https://manga.example/episode/1' }, { token });
     await post(NOTES_PATH, notesInput, { token });
 
     const { results } = await env.DB.prepare(
@@ -129,7 +129,7 @@ describe('用量紀錄', () => {
     });
     expect(results).toEqual([record('translate'), record('notes')]);
     const stored = JSON.stringify(results);
-    for (const content of ['おはよう', '早安', '霧島湊', 'パン屋', '麵包店', 'manga.example']) expect(stored).not.toContain(content);
+    for (const content of ['おはよう', '早安', '星屑バンド', '霧島湊', 'パン屋', '麵包店', 'manga.example']) expect(stored).not.toContain(content);
   });
 
   it('Notes 的用量歸到同一頁：翻譯回應帶回用量紀錄 id，Notes 請求帶回來，Notes 那筆就記下它', async () => {
