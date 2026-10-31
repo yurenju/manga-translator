@@ -247,7 +247,7 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
 
 test('學習時從 Balloon 斜著移向 tooltip、途中出了框：tooltip 留著；停住才收起', async ({ context, sw, extensionId, mockSite }) => {
   // unit 測了安全三角形的幾何（hover-intent.test.ts）；這裡測 overlay 真的拿 tooltip 的畫面位置判斷、停住後計時器會換句
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   const center = await greetingOnPage(page);
   await pageMode(panel, '學習').click();
   await page.bringToFront();
