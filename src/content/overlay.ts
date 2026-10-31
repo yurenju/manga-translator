@@ -55,7 +55,7 @@ const STYLE = `${TOKENS}
 .tip.on { display: block; }
 .tip-ja { font-family: var(--naru-font-ja); font-size: 1.1em; line-height: 2; color: var(--naru-tooltip-ink-2); }
 .tip-ja rt, .tip-guess, .tip-note { color: var(--naru-tooltip-ruby); }
-.tip-ja rt { font-weight: 400; }
+.tip-ja rt { font-size: 0.6em; font-weight: 400; }
 .tip-guess { font-size: 0.75em; }
 .tip-unreadable { color: var(--naru-tooltip-ink-3); text-decoration: line-through dotted; }
 .tip-zh { font-size: 1.15em; }
@@ -77,7 +77,7 @@ const WHOLE_PAGE: RatioRect = { x: 0, y: 0, w: 1, h: 1 };
 /** 截圖前等重繪最多這麼久：tab 不在前景時 rAF 不會跑（那時也截不到它）。 */
 const FRAME_TIMEOUT_MS = 200;
 /** tooltip 的畫面字級。 */
-const TOOLTIP_SCREEN_PX = 13;
+const TOOLTIP_SCREEN_PX = 15;
 /** 高亮框的畫面邊框粗細。 */
 const HIGHLIGHT_SCREEN_PX = 2;
 /**
