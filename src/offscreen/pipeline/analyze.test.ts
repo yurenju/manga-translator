@@ -119,6 +119,23 @@ describe('analyzePage：偵測結果 → Balloon／Loose Text', () => {
     // pad = round(100 × 0.08) + 2 = 10；左邊夾到 0，寬度維持 100＋2×10（跟 #7 的 prototype 一樣）
     expect(engine.crops).toEqual([[0, 90, 120, 320]]);
   });
+
+  it('accept 不收的框（長 Page 被切到或已收過的）不做 OCR、不出現在結果，順序照收下的編', async () => {
+    const engine = fakeEngine(
+      [
+        det('bubble', [600, 0, 300, 400]),
+        det('text_bubble', [700, 50, 100, 300]),
+        det('text_bubble', [300, 1000, 50, 200]),
+      ],
+      { 700: 'きれた', 300: 'のこる' },
+    );
+
+    // 只收沒碰到上緣的框；Balloon 看的是外框
+    const page = await analyzePage(engine, whitePage(), (ja) => ja, (box) => box.y > 0);
+
+    expect(page.balloons.map((b) => [b.id, b.order, b.原文])).toEqual([['b1', 1, 'のこる']]);
+    expect(engine.crops).toHaveLength(1);
+  });
 });
 
 describe('analyzePage：OCR 信心門檻（ADR 0009）', () => {

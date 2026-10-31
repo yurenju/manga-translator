@@ -2,6 +2,7 @@
  * 一個 Page 上的文字：Balloon 與 Loose Text（spec #27 第 4.3 節的 balloons／looseText）。
  * 本機流水線（偵測＋OCR＋閱讀順序）產生座標、原文、順序；讀音與譯文來自 Translator，沒有時用 kuromoji 讀音。
  */
+import type { Stripe } from './long-page.ts';
 import type { TranslatedLine, UsedNote } from './translator.ts';
 
 /**
@@ -79,8 +80,10 @@ export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
  */
 export interface PageTranslation extends PageText {
   seriesId: string;
-  /** shared/page-hash.ts 的 perceptual hash；查詢用 Hamming 距離門檻。 */
+  /** shared/page-hash.ts 的 perceptual hash；查詢用 Hamming 距離門檻。長 Page 是第一次看到它時的身分，查詢不用它。 */
   pageHash: string;
+  /** 長 Page（spec #142）才有：看過的橫條；查詢時任何一條對得上就命中。Line 是到目前收到的整個 Page。 */
+  stripes?: Stripe[];
   /** 判斷過時用（#38）。 */
   usedNotes: UsedNote[];
   model: string;

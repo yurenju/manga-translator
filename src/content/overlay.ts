@@ -164,6 +164,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   const changedParents = new Map<HTMLElement, string>();
   let pageMode: PageMode = 'read';
   let capturing = false;
+  /** 截圖中也不藏的 anchor（長 Page）。 */
+  let keptDuringCapture: ReadonlySet<Element> = new Set();
   let hiddenAt: number | undefined;
   let stopped = false;
 
@@ -204,8 +206,8 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
-  /** host 要不要顯示：不在截圖中、anchor 看得到。 */
-  const isVisible = (entry: Entry) => !capturing && isShown(entry.anchor);
+  /** host 要不要顯示：不在截圖中（或截圖時不藏的長 Page）、anchor 看得到。 */
+  const isVisible = (entry: Entry) => (!capturing || keptDuringCapture.has(entry.anchor)) && isShown(entry.anchor);
 
   function applyVisibility(entry: Entry): void {
     const visibility = isVisible(entry) ? 'visible' : 'hidden';
@@ -594,11 +596,15 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     if (hovered) showTooltip(hovered.layer, hovered.line);
   }
 
-  /** 截圖前：隱藏所有 host（學習時也藏，tooltip 與高亮框不能進截圖），等兩個 rAF（確定已重繪）。 */
-  async function hideForCapture(): Promise<void> {
+  /**
+   * 截圖前：隱藏 host（學習時也藏，tooltip 與高亮框不能進截圖），等兩個 rAF（確定已重繪）。
+   * keep 裡的 anchor（長 Page，spec #142）不藏：截圖裡跟已收 Line 重疊的框本來就會丟掉，藏了反而每次捲動停下都閃回日文。
+   */
+  async function hideForCapture(keep: ReadonlySet<Element> = new Set()): Promise<void> {
     capturing = true;
+    keptDuringCapture = keep;
     entries.forEach(applyVisibility);
-    if (entries.size === 0) return;
+    if (![...entries.keys()].some((anchor) => !keep.has(anchor))) return;
     hiddenAt = performance.now();
     await untilRepainted();
   }
@@ -606,6 +612,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   /** 截完立刻還原；回傳覆蓋層被藏了多久（ms），沒藏就是 undefined。 */
   function restoreAfterCapture(): number | undefined {
     capturing = false;
+    keptDuringCapture = new Set();
     entries.forEach(applyVisibility);
     const ms = hiddenAt === undefined ? undefined : performance.now() - hiddenAt;
     hiddenAt = undefined;
