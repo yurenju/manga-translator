@@ -400,10 +400,15 @@ stage "第一次部署 Worker 與網站（自動）"
 say "從這台電腦部署一次：Worker 要先存在，接下來才能設定 secrets。"
 say "部署時 Cloudflare 會自動建 api.$DOMAIN 與 $DOMAIN 的 DNS 記錄和 HTTPS 憑證。"
 say "網站這次還沒有 Paddle 的 client-side token，checkout 頁要等開通自動部署後的下一次部署才會正常。"
-confirm "要部署嗎？" || { warn "沒有部署就不能設定 secrets；之後重跑。"; exit 1; }
-wrangler deploy -c "$WORKER_CONFIG"
-npm run site:build
-wrangler deploy -c "$SITE_CONFIG"
+if curl -fsS -o /dev/null "$API_ORIGIN/v1/health" 2>/dev/null && curl -fsS -o /dev/null "$SITE_ORIGIN/zh-tw/" 2>/dev/null \
+  && ! confirm "Worker 與網站都已經上線了，要重新部署嗎？"; then
+  note "略過部署。"
+else
+  confirm "要部署嗎？" || { warn "沒有部署就不能設定 secrets；之後重跑。"; exit 1; }
+  wrangler deploy -c "$WORKER_CONFIG"
+  npm run site:build
+  wrangler deploy -c "$SITE_CONFIG"
+fi
 say "等 $API_ORIGIN/v1/health 與 $SITE_ORIGIN 回應（最多各一分鐘）…"
 if wait_for "$API_ORIGIN/v1/health"; then
   note "✓ Worker 健康檢查通過（D1 連得上）"
