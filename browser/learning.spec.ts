@@ -244,3 +244,28 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
   await page.mouse.click(center.x, center.y);
   expect(await page.evaluate(() => (globalThis as unknown as { __clicked: number[] }).__clicked)).toEqual([0]);
 });
+
+test('學習時從 Balloon 斜著移向 tooltip、途中出了框：tooltip 留著；停住才收起', async ({ context, sw, extensionId, mockSite }) => {
+  // unit 測了安全三角形的幾何（hover-intent.test.ts）；這裡測 overlay 真的拿 tooltip 的畫面位置判斷、停住後計時器會換句
+  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const center = await greetingOnPage(page);
+  await pageMode(panel, '學習').click();
+  await page.bringToFront();
+  const tooltip = page.locator('[data-naruhodo-overlay] .tip.on');
+  await page.mouse.move(1, 1);
+  await page.mouse.move(center.x, center.y);
+  await expect(tooltip).toHaveCount(1);
+
+  // 從中心朝 tooltip 左上角內側走，停在 Balloon 框左緣外一點：在三角形裡、不在框裡也不在 tooltip 裡
+  const box = (await page.locator('[data-naruhodo-overlay] .hl.on').boundingBox())!;
+  const tip = (await tooltip.boundingBox())!;
+  const corner = { x: tip.x + 5, y: tip.y };
+  expect(corner.x, 'tooltip 要比 Balloon 框寬，路徑才會出框').toBeLessThan(box.x - 3);
+  const t = (box.x - 3 - center.x) / (corner.x - center.x);
+  const outside = { x: box.x - 3, y: center.y + t * (corner.y - center.y) };
+  await page.mouse.move(outside.x, outside.y);
+  await expect(tooltip).toHaveCount(1);
+  await expect(tooltip).toContainText('今日');
+  // 停住：照實際位置（框外）收起
+  await expect(tooltip).toHaveCount(0);
+});
