@@ -49,9 +49,14 @@ export function stripeFingerprint(slice: GrayImage, offset: number): Stripe[] {
   return stripes;
 }
 
-/** 兩份指紋是不是同一個長 Page：任何一條橫條（同一個位置）的 hash 在門檻內就是。 */
+/** 兩份指紋第一條對得上的橫條（同一個位置、hash 在門檻內）是第幾條；對不上是 undefined。 */
+export function matchingStripe(a: readonly Stripe[], b: readonly Stripe[]): number | undefined {
+  return a.find((s) => b.some((t) => t.index === s.index && hammingDistance(s.hash, t.hash) <= SAME_PAGE_MAX_DISTANCE))?.index;
+}
+
+/** 兩份指紋是不是同一個長 Page：任何一條橫條對得上就是。 */
 export function sameLongPage(a: readonly Stripe[], b: readonly Stripe[]): boolean {
-  return a.some((s) => b.some((t) => t.index === s.index && hammingDistance(s.hash, t.hash) <= SAME_PAGE_MAX_DISTANCE));
+  return matchingStripe(a, b) !== undefined;
 }
 
 /** 長 Page 看得到的一截在 Page 裡的範圍（Page 高度的比例 0～1）；寬度一律是整個 Page。 */

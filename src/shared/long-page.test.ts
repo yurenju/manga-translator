@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resize, type GrayImage } from '../testing/image-degrade.ts';
 import { cropGray, readGray } from '../testing/synthetic.ts';
-import { addLines, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox, toPageText } from './long-page.ts';
+import { addLines, matchingStripe, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox, toPageText } from './long-page.ts';
 import type { BalloonText, LooseText, PageText, RatioRect } from './page-text.ts';
 
 /** 合成頁上下接成一張長圖（webtoon 式，接縫看不出來）。 */
@@ -56,6 +56,12 @@ describe('長 Page 的橫條指紋', () => {
     const { image, offset } = shownSlice(longPage, 1, 0, 0.3);
     const stripes = stripeFingerprint(image, offset);
     expect(sameLongPage(stripes, stripes.map((s) => ({ ...s, index: s.index + 1 })))).toBe(false);
+  });
+
+  it('matchingStripe 回傳對上的是第幾條（trace 用），對不上是 undefined', () => {
+    const known = [{ index: 0, hash: '0'.repeat(64) }, { index: 3, hash: 'f'.repeat(64) }];
+    expect(matchingStripe(known, [{ index: 3, hash: 'f'.repeat(64) }, { index: 4, hash: '0'.repeat(64) }])).toBe(3);
+    expect(matchingStripe(known, [{ index: 1, hash: '0'.repeat(64) }])).toBeUndefined();
   });
 
   it('沒有內容的橫條（空白）不算', () => {

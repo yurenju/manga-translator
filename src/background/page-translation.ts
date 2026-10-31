@@ -5,7 +5,7 @@
  *   失敗就跳過、不重試，只記在 trace，譯文不受影響。
  * 查快取時判斷過時（#38）。排程、每個 tab 的畫面狀態與 Prior Pages 在 transcribe.ts。
  */
-import type { Stripe } from '../shared/long-page.ts';
+import { matchingStripe, type Stripe } from '../shared/long-page.ts';
 import type { PageView } from '../shared/messages.ts';
 import { pageLines, type PageCharge, type PageText, type PageTranslation } from '../shared/page-text.ts';
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
@@ -227,7 +227,10 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
     return { state: 'done', text: { balloons, looseText }, translated: true, translation: { source: 'cache', model, latencyMs, usage }, stale };
   }
 
-  /** 長 Page 查快取（spec #142）：任何一條橫條對得上就命中，連同快取裡的身分與看過的橫條一起回傳。 */
+  /**
+   * 長 Page 查快取（spec #142）：任何一條橫條對得上就命中，連同快取裡的身分與看過的橫條一起回傳。
+   * trace 記對上的是第幾條（真實網站驗收時核對「靠哪一條認出來」）。
+   */
   async function lookupLong(seriesId: string | undefined, stripes: readonly Stripe[]): Promise<{ transcript: Transcript; cached: PageTranslation } | undefined> {
     if (seriesId === undefined) return undefined;
     const cached = await cache.findLong(seriesId, stripes).catch((e: unknown) => {
@@ -238,7 +241,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       trace('cache:miss', { seriesId, stripes });
       return undefined;
     }
-    return { transcript: await hit(cached, { seriesId, stripes }), cached };
+    return { transcript: await hit(cached, { seriesId, stripes, stripe: matchingStripe(cached.stripes ?? [], stripes) }), cached };
   }
 
   return { translate, lookup, lookupLong, staleOf, notesSettled };

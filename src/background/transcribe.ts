@@ -26,7 +26,7 @@
  * 顯示與快取的是整個 Page。身分先看 anchor，認不出才比橫條指紋（記憶體裡的，再來是快取）。
  * 同一個 Page 一次只有一截在本機段排隊：還沒開始時換成最新的那一截。
  */
-import { addLines, collectedBoxes, pickLines, replaceLines, sameLongPage, sliceOf, type Slice, type Stripe } from '../shared/long-page.ts';
+import { addLines, collectedBoxes, matchingStripe, pickLines, replaceLines, sliceOf, type Slice, type Stripe } from '../shared/long-page.ts';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import { pageLines, type PageCharge, type PageText } from '../shared/page-text.ts';
@@ -414,10 +414,24 @@ export function createTranscriber(deps: TranscriberDeps) {
     };
   }
 
-  /** 長 Page 的這一截是哪個 Page：anchor 認得就是它，認不出才比橫條（記憶體裡的）。 */
+  /**
+   * 長 Page 的這一截是哪個 Page：anchor 認得就是它，認不出才比橫條（記憶體裡的；快取的在 lookupLong）。
+   * 認出來時記一筆 trace：靠什麼認的、對上第幾條橫條（#154 真實網站驗收核對用）。
+   */
   function findLong(tab: TabState, page: PageThumb): PageRecord | undefined {
     const longs = tab.records.filter((r) => r.long);
-    return longs.find((r) => r.long!.anchorId === page.anchorId) ?? longs.find((r) => sameLongPage(r.long!.stripes, page.stripes ?? []));
+    const byAnchor = longs.find((r) => r.long!.anchorId === page.anchorId);
+    if (byAnchor) {
+      trace('longPage:identified', { tabId: tab.tabId, anchorId: page.anchorId, pageHash: byAnchor.pageHash, by: 'anchor' });
+      return byAnchor;
+    }
+    for (const record of longs) {
+      const stripe = matchingStripe(record.long!.stripes, page.stripes ?? []);
+      if (stripe === undefined) continue;
+      trace('longPage:identified', { tabId: tab.tabId, anchorId: page.anchorId, pageHash: record.pageHash, by: 'memoryStripes', stripe });
+      return record;
+    }
+    return undefined;
   }
 
   /** 已認出的長 Page 又擷取到一截：沒處理過的那一截排進本機段；還沒開始的工作換成這一截。 */
@@ -437,6 +451,8 @@ export function createTranscriber(deps: TranscriberDeps) {
     if (!found) return undefined;
     const { cached, transcript } = found;
     const provisional = record.pageHash;
+    // 對上第幾條記在 cache:hit
+    trace('longPage:identified', { tabId: tab.tabId, anchorId: record.long!.anchorId, pageHash: cached.pageHash, by: 'cacheStripes' });
     record.pageHash = cached.pageHash;
     record.long!.stripes = mergeStripes(cached.stripes ?? [], record.long!.stripes);
     if (cached.charge) record.long!.charge = cached.charge;
