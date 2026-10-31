@@ -313,7 +313,7 @@ B. **OAuth client＋refresh token**
 | Purple Nickel | 沒有 prominent disclosure，或在收集前沒有取得同意 | **最高風險**。2026-08 起的新規則下，目前 side panel 沒有揭露與同意畫面。做第 3.2 節的同意卡片 |
 | Purple Lithium | 隱私權政策缺漏、失效、放錯欄位，或沒寫到資料處理 | 準備隱私權政策頁面（例如 GitHub Pages），填在 Dashboard 的專用欄位，內容要跟 Privacy 分頁一致 |
 | Yellow Magnesium | 功能不能用，或套件壞掉 | 審查員沒有 Anthropic key 就看不到翻譯。在 Test instructions 提供一把設好低花費上限的測試 key 與操作步驟，並說明第一次要下載模型（約 128／472 MB）。官方寫 Test instructions 用於「restricted credentials or a paid account」的情境，BYOK 正好符合。沒有 key 時 UI 要有清楚的錯誤訊息（官方建議要說明需要帳號，並妥善處理 timeout 與 4xx／5xx） |
-| Yellow Argon | 關鍵字堆砌：無實質價值的網站、品牌清單，同一個關鍵字重複超過 5 次 | description 不要列一長串「支援 Jump+、Kindle、ピッコマ……」，最多在功能描述裡自然提一兩個測試過的網站 |
+| Yellow Argon | 關鍵字堆砌：無實質價值的網站、品牌清單，同一個關鍵字重複超過 5 次 | description 不要列一長串支援的網站名稱，最多在功能描述裡自然提一兩個測試過的網站 |
 | Red Nickel／Potassium／Silicon | 行為跟描述不符，或暗示有官方背書 | description 明寫需要自備 Anthropic API key、費用由使用者付給 Anthropic、第一次要下載模型。不要用出版社或網站的 logo |
 | Purple Potassium | 申請了沒用到或過多的權限 | 六個權限都有實際用途。`storage` 只用在 Page Mode，justification 要寫清楚 |
 | Yellow Zinc | 缺 icon、標題、截圖或描述，或內容沒有意義 | 照第 5 題準備 |

@@ -22,7 +22,7 @@ A layer over its budget is a signal that tests have drifted up: find the ones th
 
 ## Regression tests for bugs found on a real site
 
-A bug reproduced on Jump+ or Kindle ([real-site debugging](real-site-debugging.md)) gets its regression test at the **lowest layer that reproduces it**. When a pure function reproduces it, copy the actual values from the trace (rects, subRects, page views) into a unit test as its data. A browser test is for bugs in the wiring itself: timing between components, messages, real layout.
+A bug reproduced on a real manga site ([real-site debugging](real-site-debugging.md)) gets its regression test at the **lowest layer that reproduces it**. When a pure function reproduces it, copy the actual values from the trace (rects, subRects, page views) into a unit test as its data. A browser test is for bugs in the wiring itself: timing between components, messages, real layout.
 
 ## Choices made on purpose
 
@@ -45,7 +45,7 @@ Browser tests replace the ONNX models with FakeEngine (`src/offscreen/fake-engin
 
 Re-record when the models, detection or OCR change: `npm run record:ocr`, then commit the JSON and run e2e. If FakeEngine throws "認不出這是哪張合成頁", the page it was given is not one of the recorded ranges (a new mock-site layout, or a crop the extension did not make before).
 
-FakeEngine is near-instant. A test that relies on OCR being slow (the side panel layout before the transcript arrives) sets `test.use({ fakeOcrDelayMs })`; rules about OCR being slower than page turns, such as queue scheduling, are unit tests. Don't add a delay just to make a flaky test pass: instant OCR has already exposed a real product race on the mock Kindle (ADR 0007).
+FakeEngine is near-instant. A test that relies on OCR being slow (the side panel layout before the transcript arrives) sets `test.use({ fakeOcrDelayMs })`; rules about OCR being slower than page turns, such as queue scheduling, are unit tests. Don't add a delay just to make a flaky test pass: instant OCR has already exposed a real product race on the mock e-book reader (ADR 0007).
 
 ## Flaky tests
 
