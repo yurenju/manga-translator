@@ -1,6 +1,6 @@
 # 翻譯與 Series Notes 分成兩次呼叫，翻譯帶 Prior Pages、不開 thinking
 
-[ADR 0002](0002-series-notes-maintained-by-llm-in-indexeddb.md) 讓 LLM 在同一次翻譯呼叫裡順手回傳 `notes_changes`。在真實的 Jump+ 上量到，翻頁到譯文出現約 8.5 s，其中 LLM 約 6.6 s，大部分是 thinking：每頁 output 約 1100–1300 tokens，譯文本身只有幾百。直接關掉 thinking，LLM 時間就減半，但 Notes 變得很亂。另外，「Notes 依送出順序套用」讓 Spread 的第二頁就算先翻完，也要等第一頁 commit 完才顯示（[#49](https://github.com/yurenju/naruhodo-manga-translator/issues/49)）。
+[ADR 0002](0002-series-notes-maintained-by-llm-in-indexeddb.md) 讓 LLM 在同一次翻譯呼叫裡順手回傳 `notes_changes`。在真實網站上量到，翻頁到譯文出現約 8.5 s，其中 LLM 約 6.6 s，大部分是 thinking：每頁 output 約 1100–1300 tokens，譯文本身只有幾百。直接關掉 thinking，LLM 時間就減半，但 Notes 變得很亂。另外，「Notes 依送出順序套用」讓 Spread 的第二頁就算先翻完，也要等第一頁 commit 完才顯示（[#49](https://github.com/yurenju/naruhodo-manga-translator/issues/49)）。
 
 ## 決定
 

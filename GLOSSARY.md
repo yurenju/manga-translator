@@ -13,7 +13,7 @@ One installment of a Series, as published.
 _Avoid_: chapter (unless the site itself uses it), issue
 
 **Page** (頁)
-One manga page image as the reader sees it on the site. The same Page read on different sites is still one Page.
+One manga page image as the reader sees it on the site. The same Page read on different sites is still one Page. A Page can be taller than the screen, as in vertically scrolled works where the reader scrolls through it; it is still one Page.
 _Avoid_: image, screen
 
 **Spread** (跨頁 / 見開き)

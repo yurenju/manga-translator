@@ -9,13 +9,13 @@
 - **測試分層。** browser test：真的瀏覽器、真的外掛，OCR 與 LLM 都是假的，每次改動都跑。e2e：少數主要流程，OCR 是真的、LLM 是假的，需要時才跑（開整合 PR 前、改到 `src/offscreen/` 時）。smoke：呼叫真的 Claude API。分法與指令見 `docs/agents/testing.md`。
 - **假 OCR 切在 `Engine`（`detect`／`recognize`）。** 分組、閱讀順序、座標換算、擦除底色仍是真的程式。很多 browser test 在驗證「譯文落在 Balloon 內」，等於在測座標換算，切在整個 `analyze` 會讓它們失去意義。
 - **FakeEngine 重播真模型錄下來的結果，不是 ground truth。** `npm run record:ocr` 用真模型跑每張合成頁（Spread 再加上切開的每一頁），存成 `testdata/synthetic/recorded-ocr.json`；FakeEngine 把錄到的框換回偵測結果、用框對回錄到的字。
-- **FakeEngine 用縮圖比對認出是哪個錄製範圍。** 外掛送進 `Engine` 之前已經去掉黑邊、把 Spread 切成兩頁，拿到的圖就是某個範圍縮放後的樣子；白底的仿 Kindle 不去邊，就照等比例縮放置中去比。最小的差異仍超過門檻就 throw，讓測試明確失敗，不會默默給錯的答案。
-- **e2e 只留主要流程：** OCR 指標、模型下載與 SHA-256 檢查、仿 Jump+ 覆蓋、仿 Kindle Spread、翻頁後自動翻譯、仿 Kindle 工具列開關。它們標 `@e2e`，browser test 也用 FakeEngine 跑一次。（後來 #100 訂了 e2e 的入選標準「真模型會讓結果不一樣嗎」，翻頁後自動翻譯不符合，改成只在 browser test 跑；現況見 `docs/agents/testing.md`。）
+- **FakeEngine 用縮圖比對認出是哪個錄製範圍。** 外掛送進 `Engine` 之前已經去掉黑邊、把 Spread 切成兩頁，拿到的圖就是某個範圍縮放後的樣子；白底的仿電子書閱讀器 mock 頁不去邊，就照等比例縮放置中去比。最小的差異仍超過門檻就 throw，讓測試明確失敗，不會默默給錯的答案。
+- **e2e 只留主要流程：** OCR 指標、模型下載與 SHA-256 檢查、仿 canvas 網站的覆蓋、仿電子書閱讀器的 Spread、翻頁後自動翻譯、仿電子書閱讀器的工具列開關。它們標 `@e2e`，browser test 也用 FakeEngine 跑一次。（後來 #100 訂了 e2e 的入選標準「真模型會讓結果不一樣嗎」，翻頁後自動翻譯不符合，改成只在 browser test 跑；現況見 `docs/agents/testing.md`。）
 
 ## 不直覺的地方
 
-- **一開始用 ground truth 合成「完美的 OCR」，後來改成重播。** ground truth 的框比真模型小一圈，仿 Kindle 縮小 Spread 後，譯文用最小字級排在小框裡就超出 Balloon；真模型把 p02 的旁白框當成框外文字、p07 的卻當成 Balloon，沒有規則推得出來。原本的測試都是對著真模型的行為寫的，重播才對得上。代價是換模型時要重錄。
-- **OCR 變快會暴露原本被蓋住的時序問題。** 仿 Kindle 的測試在 FakeEngine 不延遲時，右頁的譯文被拉長、往上偏。原因是產品的 bug：開 side panel 讓視窗變窄、合成圖重畫之前的第一張截圖量到不一樣的 subRect（同一頁、hash 一樣），OCR 一快，這一頁就用舊的 subRect 先覆蓋了；之後帶正確 subRect 的那次，content script 另外疊一層、舊層沒拿掉，overlay-sync 也可能因為結果一樣就不重送。真 OCR 慢到第二次擷取之後才翻好，所以一直沒露出來（WebGPU 一樣可能很快）。修好後 `kindle.spec.ts` 不再延遲。有些測試本來就假設 OCR 比翻頁、比畫面慢（佇列排程、逐字稿出來之前的版面），也用 `fakeOcrDelayMs` 明確寫出來。
+- **一開始用 ground truth 合成「完美的 OCR」，後來改成重播。** ground truth 的框比真模型小一圈，仿電子書閱讀器縮小 Spread 後，譯文用最小字級排在小框裡就超出 Balloon；真模型把 p02 的旁白框當成框外文字、p07 的卻當成 Balloon，沒有規則推得出來。原本的測試都是對著真模型的行為寫的，重播才對得上。代價是換模型時要重錄。
+- **OCR 變快會暴露原本被蓋住的時序問題。** 仿電子書閱讀器的測試在 FakeEngine 不延遲時，右頁的譯文被拉長、往上偏。原因是產品的 bug：開 side panel 讓視窗變窄、合成圖重畫之前的第一張截圖量到不一樣的 subRect（同一頁、hash 一樣），OCR 一快，這一頁就用舊的 subRect 先覆蓋了；之後帶正確 subRect 的那次，content script 另外疊一層、舊層沒拿掉，overlay-sync 也可能因為結果一樣就不重送。真 OCR 慢到第二次擷取之後才翻好，所以一直沒露出來（WebGPU 一樣可能很快）。修好後那支測試不再延遲。有些測試本來就假設 OCR 比翻頁、比畫面慢（佇列排程、逐字稿出來之前的版面），也用 `fakeOcrDelayMs` 明確寫出來。
 - **browser test 不設 retry，e2e 設 1 次。** FakeEngine 是確定性的，browser test 出現 flaky 就代表程式本身有 race condition，應該直接紅；e2e 受機器負載影響，偶發逾時不值得擋住合併。e2e 一次只開一個瀏覽器，不互搶 CPU。
 
 ## 不採用的做法
