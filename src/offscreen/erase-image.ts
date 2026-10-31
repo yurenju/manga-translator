@@ -20,6 +20,12 @@ export interface EraseImage {
   rgba: Uint8ClampedArray<ArrayBuffer>;
 }
 
+/** Balloon 的擦除小圖多帶排版矩形；Loose Text（eraseLooseText）的排版區是文字框本身，不帶。 */
+export interface BalloonEraseImage extends EraseImage {
+  /** 排版矩形（#150）：擦除範圍內面積最大的軸對齊矩形（Page 原始像素，整數），譯文只排在這裡面。 */
+  fit: PixelBox;
+}
+
 /** 往外長的範圍：Balloon 外框再外擴這麼多，框線外側才碰得到範圍邊緣。 */
 const BALLOON_MARGIN = 4;
 /** 沒有 Balloon 外框時，往外長的範圍是文字框外擴這麼多。 */
@@ -35,7 +41,7 @@ const SMOOTHING_SWEEPS = 8;
  * balloon 等於 text 代表沒有外框（沒有 bubble 的 text_bubble），範圍改用文字框附近。
  * 文字框中央找不到接近底色的像素時回傳 undefined，由呼叫端退回矩形加單色 eraseLuminance。
  */
-export function eraseImage(page: RgbaImage, balloon: Box, text: Box): EraseImage | undefined {
+export function eraseImage(page: RgbaImage, balloon: Box, text: Box): BalloonEraseImage | undefined {
   const framed = balloon.x !== text.x || balloon.y !== text.y || balloon.w !== text.w || balloon.h !== text.h;
   const grow = framed ? expand(balloon, BALLOON_MARGIN) : expand(text, TEXT_MARGIN);
   // 擦除範圍最多到文字框外擴 ERASE_PADDING（跟矩形退路一樣）
@@ -106,6 +112,7 @@ export function eraseImage(page: RgbaImage, balloon: Box, text: Box): EraseImage
     for (let x = bx; x < bx + bw; x++) if (label[y * w + x] !== 0 && !known[y * w + x]) wanted.push(y * w + x);
   const colors = interpolate(page, left, top, w, h, known, wanted, base);
   const rgba = new Uint8ClampedArray(bw * bh * 4);
+  const mask = new Uint8Array(bw * bh);
   for (let y = 0; y < bh; y++)
     for (let x = 0; x < bw; x++) {
       const i = (by + y) * w + bx + x;
@@ -115,8 +122,34 @@ export function eraseImage(page: RgbaImage, balloon: Box, text: Box): EraseImage
       rgba[o + 1] = colors[i * 3 + 1]!;
       rgba[o + 2] = colors[i * 3 + 2]!;
       rgba[o + 3] = 255;
+      mask[y * bw + x] = 1;
     }
-  return { box: [left + bx, top + by, bw, bh], rgba };
+  const [fx, fy, fw, fh] = largestRect(mask, bw, bh);
+  return { box: [left + bx, top + by, bw, bh], rgba, fit: [left + bx + fx, top + by + fy, fw, fh] };
+}
+
+/**
+ * mask（非 0＝範圍內）裡面積最大的軸對齊矩形，[x, y, w, h]；沒有範圍時寬高是 0。
+ * 逐列累計每欄往上連續的高度，再用單調堆疊求每列長條圖裡最大的矩形，O(w × h)。
+ */
+export function largestRect(mask: ArrayLike<number>, w: number, h: number): PixelBox {
+  const heights = new Int32Array(w);
+  const stack = new Int32Array(w + 1);
+  let best: PixelBox = [0, 0, 0, 0];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) heights[x] = mask[y * w + x] ? heights[x]! + 1 : 0;
+    let top = 0;
+    for (let x = 0; x <= w; x++) {
+      const height = x < w ? heights[x]! : 0;
+      while (top > 0 && heights[stack[top - 1]!]! >= height) {
+        const barHeight = heights[stack[--top]!]!;
+        const left = top > 0 ? stack[top - 1]! + 1 : 0;
+        if (barHeight * (x - left) > best[2] * best[3]) best = [left, y - barHeight + 1, x - left, barHeight];
+      }
+      stack[top++] = x;
+    }
+  }
+  return best;
 }
 
 /** 殘留墨水：亮度跟擦除底色差這麼多以上。 */

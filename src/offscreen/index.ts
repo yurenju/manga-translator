@@ -31,6 +31,7 @@ import { eraseLuminance } from './erase-color.ts';
 import { eraseImage, eraseLooseText, meanLuminance, type EraseImage, type RgbaImage } from './erase-image.ts';
 import { createLocalPipeline } from './local-pipeline.ts';
 import { pageRgba } from './page-image.ts';
+import type { PixelBox } from './pipeline/boxes.ts';
 import { cropImage, splitSpread } from './spread.ts';
 
 const trace = createTrace('offscreen');
@@ -186,7 +187,8 @@ function eraseBalloons(balloons: BalloonText[], page: RgbaImage): BalloonText[] 
     const pad = ERASE_PADDING;
     const luminance = eraseLuminance(gray, { x: text.x - pad, y: text.y - pad, w: text.w + 2 * pad, h: text.h + 2 * pad });
     const erase = eraseImage(page, px(b.balloonBbox), text);
-    return erase ? { ...b, eraseLuminance: luminance, erase: encodeErase(erase, page) } : { ...b, eraseLuminance: luminance };
+    // 排版矩形（#150）只有 Balloon 有；Loose Text 的排版區是文字框本身
+    return erase ? { ...b, eraseLuminance: luminance, erase: { ...encodeErase(erase, page), fit: ratioRect(erase.fit, page) } } : { ...b, eraseLuminance: luminance };
   });
 }
 
@@ -203,10 +205,13 @@ function eraseLoose(looseText: LooseText[], page: RgbaImage): LooseText[] {
 }
 
 /** 小圖編成 PNG data URL 才能隨 PageText 走 messaging、存進快取；位置換成相對 Page 的比例。 */
-function encodeErase({ box: [x, y, w, h], rgba }: EraseImage, page: RgbaImage): { box: RatioRect; image: string } {
+function encodeErase({ box, rgba }: EraseImage, page: RgbaImage): { box: RatioRect; image: string } {
+  const [, , w, h] = box;
   const image = pngDataUrl({ width: w, height: h }, (ctx) => ctx.putImageData(new ImageData(rgba, w, h), 0, 0));
-  return { box: { x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height }, image };
+  return { box: ratioRect(box, page), image };
 }
+
+const ratioRect = ([x, y, w, h]: PixelBox, page: RgbaImage): RatioRect => ({ x: x / page.width, y: y / page.height, w: w / page.width, h: h / page.height });
 
 function grayOfRgba({ data, width, height }: RgbaImage): GrayImage {
   const gray = new Uint8Array(width * height);

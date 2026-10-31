@@ -59,6 +59,17 @@ describe('textRegions', () => {
     expect(textRegions(balloon, text).fit2).toEqual({ x: 120, y: 140, w: 160, h: 320 });
     expect(textRegions(balloon, { x: 105, y: 105, w: 190, h: 390 }).fit2).toEqual({ x: 116, y: 132, w: 168, h: 336 });
   });
+
+  it('有排版矩形（#150）：第 1、2 階都跟它取交集，擦除範圍不變', () => {
+    const fit = { x: 160, y: 190, w: 80, h: 400 };
+
+    const regions = textRegions(balloon, text, fit);
+
+    // fit1 146～254 × 152～448、fit2 120～280 × 140～460，各自跟 160～240 × 190～590 取交集
+    expect(regions.fit1).toEqual({ x: 160, y: 190, w: 80, h: 258 });
+    expect(regions.fit2).toEqual({ x: 160, y: 190, w: 80, h: 270 });
+    expect(regions.erase).toEqual({ x: 167, y: 197, w: 66, h: 206 });
+  });
 });
 
 describe('separateRegions（相鄰 Balloon 的譯文範圍不重疊）', () => {

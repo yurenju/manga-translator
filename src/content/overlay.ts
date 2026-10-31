@@ -357,7 +357,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       ...balloons.map((b) => {
         const frame = toPx(b.balloonBbox, size);
         const textBox = toPx(b.textBbox, size);
-        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox) } };
+        // Balloon 的排版區跟排版矩形取交集（#150）；Loose Text 不取
+        const fit = b.erase?.fit;
+        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox, fit && toPx(fit, size)) } };
       }),
       ...looseText.map((l) => {
         const textBox = toPx(l.bbox, size);

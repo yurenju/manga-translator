@@ -210,6 +210,52 @@ test.describe('覆蓋渲染（ground truth）', () => {
     expect(await page.evaluate(() => getComputedStyle(document.querySelector('[data-naruhodo-overlay]')!.shadowRoot!.querySelector('[data-balloon-id]')!).webkitTextStrokeWidth)).toBe('0px');
   });
 
+  // unit test 驗不到：瀏覽器真的排出來的譯文（字型、斷行、縮字之後）是不是落在擦除範圍內
+  test('有排版矩形時，譯文的實際外框落在擦除範圍內（#150）', async ({ context, extensionId }) => {
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);
+    const id = 'p09-erase';
+    const gt = readGroundTruth(id);
+    const image = readRgba(id);
+    const { sub, text } = groundTruthPageTexts(id)[0]!;
+    const px = ([x, y, w, h]: GtBox) => ({ x, y, w, h });
+    const ratio = ([x, y, w, h]: [number, number, number, number]): RatioRect => ({ x: x / gt.width, y: y / gt.height, w: w / gt.width, h: h / gt.height });
+    const erases = new Map(
+      gt.texts.flatMap((t) => {
+        const erase = eraseImage(image, px(t.bbox), px(t.textBbox));
+        return erase ? [[t.id, erase] as const] : [];
+      }),
+    );
+    const balloons = text.balloons.map((b) => {
+      const erase = erases.get(b.id);
+      return erase ? { ...b, erase: { box: ratio(erase.box), image: pngDataUrl({ data: erase.rgba, width: erase.box[2], height: erase.box[3] }), fit: ratio(erase.fit) } } : b;
+    });
+    // 原尺寸顯示，Page 像素＝畫面 px
+    await render(page, id, gt.width, [{ sub, text: { ...text, balloons } }]);
+
+    const anchor = await anchorRect(page);
+    const spans = await page.evaluate(() =>
+      [...document.querySelector('[data-naruhodo-overlay]')!.shadowRoot!.querySelectorAll<HTMLElement>('[data-balloon-id]')].map((el) => {
+        const r = el.firstElementChild!.getBoundingClientRect();
+        return { id: el.dataset.balloonId!, x: r.x, y: r.y, w: r.width, h: r.height };
+      }),
+    );
+    expect(spans.filter((s) => erases.has(s.id)).length).toBeGreaterThan(0);
+    for (const span of spans) {
+      const erase = erases.get(span.id);
+      if (!erase) continue;
+      const [ex, ey, ew] = erase.box;
+      // 譯文外框（往內 1px 容許次像素誤差）蓋到的每個像素，都要在擦除小圖的 alpha 裡
+      let outside = 0;
+      for (let y = Math.ceil(span.y - anchor.y + 1); y < Math.floor(span.y - anchor.y + span.h - 1); y++)
+        for (let x = Math.ceil(span.x - anchor.x + 1); x < Math.floor(span.x - anchor.x + span.w - 1); x++) {
+          const [lx, ly] = [x - ex, y - ey];
+          if (lx < 0 || ly < 0 || lx >= ew || ly >= erase.box[3] || erase.rgba[(ly * ew + lx) * 4 + 3] === 0) outside++;
+        }
+      expect.soft(outside, `${span.id} 的譯文有 ${outside} 個像素在擦除範圍外`).toBe(0);
+    }
+  });
+
   test('譯文太長時截斷，字級仍不小於畫面 9px，滑過時 tooltip 顯示原文＋ルビ＋譯文全文', async ({ context, extensionId }) => {
     const page = await context.newPage();
     await page.goto(`chrome-extension://${extensionId}/test-overlay.html`);

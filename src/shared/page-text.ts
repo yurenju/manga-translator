@@ -44,8 +44,9 @@ export interface BalloonText {
    * 擦除小圖（#149）：沿泡泡內緣的擦除範圍，顏色從背景內插。image 是 box 大小的 PNG data URL（alpha＝擦除範圍），
    * content script 原樣貼在 box 上。只存在本機快取，不送給 LLM 或 Worker。舊快取沒有、擦除退回矩形時也沒有：
    * 用文字框外擴 3px 的矩形加 eraseLuminance。
+   * fit 是排版矩形（#150）：擦除範圍內面積最大的軸對齊矩形，譯文只排在這裡面。#150 之前算的小圖沒有，排版維持原本的範圍。
    */
-  erase?: { box: RatioRect; image: string };
+  erase?: { box: RatioRect; image: string; fit?: RatioRect };
 }
 
 export interface LooseText {
@@ -86,7 +87,7 @@ export function overlaidTexts({ balloons, looseText }: PageText): PageText {
 
 /**
  * 只留在本機快取、不進備份的擦除資料（#149）。從截圖算出來的圖，備份只帶文字與座標；還原後那頁跟舊快取一樣
- * 退回矩形加 eraseLuminance。之後新增的擦除資料（例如排版矩形）加在這裡。
+ * 退回矩形加 eraseLuminance。排版矩形（#150）在 erase 裡，跟著一起拿掉。之後新增的擦除資料加在這裡。
  */
 const LOCAL_ERASE_KEYS = ['erase'] as const satisfies readonly (keyof BalloonText & keyof LooseText)[];
 
