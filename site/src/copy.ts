@@ -2,8 +2,9 @@ import type { Locale } from './locale.ts';
 import type { LegalDoc } from './links.ts';
 
 /**
- * 網站文案（#89 A 版定稿）。`[TBD]` 會畫成明顯的 TBD 標記（Copy.astro），
- * 標在還沒定案的數字旁：年費、Monthly Page Limit 800 與由它推算的「大約 4 本」，等 #97 量完成本再拿掉。
+ * 網站文案（#89 A 版定稿）。`[TBD]` 會畫成明顯的 TBD 標記（Copy.astro），標在還沒定案的文字旁。
+ * 年費、Monthly Page Limit 800 與由它推算的「大約 4 本」在上線時（#97）拿掉了標記：Paddle 審核網站時看到 TBD
+ * 會當成還沒完成。數字仍是草案，量完真實成本再調。
  */
 export interface SiteCopy {
   nav: { pricing: string; faq: string; install: string; languageLabel: string };
@@ -37,7 +38,7 @@ export interface SiteCopy {
   };
 }
 
-const PRICE = '$20[TBD]';
+const PRICE = '$20';
 
 export const copy: Record<Locale, SiteCopy> = {
   'zh-tw': {
@@ -68,7 +69,7 @@ export const copy: Record<Locale, SiteCopy> = {
         title: '年繳訂閱',
         price: PRICE,
         unit: '／年',
-        items: ['每月 800[TBD] 頁翻譯，大約 4[TBD] 本單行本', '每月在你訂閱的那天重置', '隨時取消，用到這一年結束'],
+        items: ['每月 800 頁翻譯，大約 4 本單行本', '每月在你訂閱的那天重置', '隨時取消，用到這一年結束'],
         cta: '訂閱',
       },
       ownKey: '已經有 Anthropic API key？也可以改用自備金鑰，不需要帳號、沒有頁數限制。',
@@ -105,7 +106,7 @@ export const copy: Record<Locale, SiteCopy> = {
       missing: '這個付款連結不完整。請回到外掛，重新打開付款頁。',
       plan: 'Naruhodo 年繳訂閱',
       pagesPerMonth: '每月頁數',
-      pagesValue: '800[TBD]',
+      pagesValue: '800',
       agree: '付款即表示同意',
     },
   },
@@ -137,7 +138,7 @@ export const copy: Record<Locale, SiteCopy> = {
         title: 'Yearly subscription',
         price: PRICE,
         unit: '/year',
-        items: ['800[TBD] translated pages a month, about 4[TBD] volumes', 'Resets each month on the day you subscribed', 'Cancel anytime, keep using it until the year ends'],
+        items: ['800 translated pages a month, about 4 volumes', 'Resets each month on the day you subscribed', 'Cancel anytime, keep using it until the year ends'],
         cta: 'Subscribe',
       },
       ownKey: 'Already have an Anthropic API key? You can use your own key instead: no account, no page limit.',
@@ -174,7 +175,7 @@ export const copy: Record<Locale, SiteCopy> = {
       missing: 'This checkout link is incomplete. Go back to the extension and open the checkout again.',
       plan: 'Naruhodo yearly subscription',
       pagesPerMonth: 'Pages per month',
-      pagesValue: '800[TBD]',
+      pagesValue: '800',
       agree: 'By paying you agree to the',
     },
   },

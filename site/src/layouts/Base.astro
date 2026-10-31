@@ -1,6 +1,6 @@
 ---
 /**
- * 每一頁的外框：頁首（語言切換）與頁尾（三份法律文件連結與公司名稱，Paddle 網域審核的要求）。
+ * 每一頁的外框：頁首（語言切換）與頁尾（三份法律文件連結、聯絡 email 與公司名稱，Paddle 網域審核的要求）。
  * `locale` 是 'auto' 的是法律文件：只有一個網址，頁首頁尾的語言由那一頁的 script 在瀏覽器決定（設定 `<html data-locale>`）。
  */
 import '../../../src/shared/tokens.css';
@@ -8,7 +8,7 @@ import '../styles/site.css';
 import logo from '../../../src/icons/naruhodo.svg';
 import L from '../components/L.astro';
 import { copy } from '../copy.ts';
-import { LEGAL_DOCS, INSTALL_URL, REPO_URL, legalHref } from '../links.ts';
+import { CONTACT_EMAIL, LEGAL_DOCS, INSTALL_URL, REPO_URL, legalHref } from '../links.ts';
 import { type Locale, LOCALES, byLocale, languageTag } from '../locale.ts';
 
 interface Props {
@@ -58,6 +58,7 @@ const home = locale === 'auto' ? '/' : `/${locale}/`;
             <L locale={locale} text={byLocale((l) => copy[l].legal[doc])} href={byLocale((l) => legalHref(doc, l))} />
           ))}
           <L locale={locale} text={byLocale((l) => copy[l].legal.source)} href={byLocale(() => REPO_URL)} />
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </div>
         <div class="copyright">© Sad Coder, Inc.</div>
       </div>
