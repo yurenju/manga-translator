@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { sameLongPage } from '../shared/long-page.ts';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import type { PageText, PageTranslation } from '../shared/page-text.ts';
 import { editEntry, type NotesSuggestion, type SeriesNotes } from '../shared/series-notes.ts';
@@ -51,7 +52,8 @@ function memoryCache(): PageCache & { saved: PageTranslation[] } {
   const saved: PageTranslation[] = [];
   return {
     saved,
-    find: async (seriesId, pageHash) => saved.find((t) => t.seriesId === seriesId && t.pageHash === pageHash),
+    find: async (seriesId, pageHash) => saved.find((t) => t.seriesId === seriesId && !t.stripes && t.pageHash === pageHash),
+    findLong: async (seriesId, stripes) => saved.find((t) => t.seriesId === seriesId && t.stripes && sameLongPage(t.stripes, stripes)),
     // 跟 IndexedDB 的 put 一樣：同一個 key 覆寫
     async save(translation) {
       const i = saved.findIndex((t) => t.seriesId === translation.seriesId && t.pageHash === translation.pageHash);
@@ -1440,5 +1442,91 @@ describe('過時提示（#38）', () => {
 
     expect(notes.entries).toEqual([note('今日', '今兒', { locked: true })]);
     expect(staleOf(published.at(-1)!)).toEqual(['notes']);
+  });
+});
+
+describe('直式捲動的長 Page（spec #142）', () => {
+  /** 長 Page 上的一個 Balloon，Page 座標。 */
+  const balloonAt = (y: number, 原文: string): PageText['balloons'][number] => ({
+    ...pageText.balloons[0]!,
+    balloonBbox: { x: 0.1, y, w: 0.3, h: 0.05 },
+    textBbox: { x: 0.15, y, w: 0.2, h: 0.05 },
+    原文,
+  });
+  const sliceText = (...balloons: PageText['balloons']): PageText => ({ balloons: balloons.map((b, i) => ({ ...b, id: `b${i + 1}`, order: i + 1 })), looseText: [] });
+
+  /** 長 canvas 捲到 Page 的 top～top+0.3 這一截；stripes 是這一截裡的橫條（第幾條＝hash 表裡的位置）。 */
+  const longThumb = (anchorId: string, top: number, stripes: [number, string][]): PageThumb => ({
+    anchorId,
+    rect: { x: 0, y: -top * 2000, width: 400, height: 2000 },
+    visible: { x: 0, y: 0, width: 400, height: 600 },
+    thumbnail: `data:${anchorId}`,
+    pageHash: stripes[0]?.[1] ?? '',
+    stripes: stripes.map(([index, hash]) => ({ index, hash })),
+  });
+
+  it('每一截新收的 Line 併進同一個 Page，只翻新收的；下一截帶著已收 Line 的外框送去辨識', async () => {
+    const calls: TranslateInput[] = [];
+    const analyze = vi
+      .fn<(request: AnalyzeRequest) => Promise<PageText>>()
+      .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'うえ')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.4, 'した')));
+    const { transcriber, published } = setup({ analyze, getTranslator: () => translatorReturning('譯', calls) });
+
+    await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!], [1, HASHES.a2!]])], capture);
+    await transcriber.update(1, [longThumb('a1', 0.3, [[3, HASHES.a3!]])], capture);
+
+    expect(calls.map((c) => c.items.map((i) => [i.id, i.原文]))).toEqual([[['b1', 'うえ']], [['b2', 'した']]]);
+    expect(analyze.mock.calls[1]![0].collected).toEqual([balloonAt(0.1, '').balloonBbox]);
+    const pages = published.at(-1)!;
+    expect(pages).toHaveLength(1);
+    const { transcript } = pages[0]!;
+    expect(transcript.state === 'done' && transcript.text.balloons.map((b) => [b.原文, b.譯文, b.order])).toEqual([
+      ['うえ', '譯-b1', 1],
+      ['した', '譯-b2', 2],
+    ]);
+  });
+
+  it('同一截再出現（例如覆蓋層畫好後再掃一次）不重新辨識', async () => {
+    const { transcriber, deps } = setup();
+    await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!]])], capture);
+    await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!]])], capture);
+    expect(deps.analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it('快取存整個 Page 的 Line 與看過的橫條；重新整理後任何一條橫條對得上就命中，沒有新的 Line 就不翻譯', async () => {
+    const cache = memoryCache();
+    const calls: TranslateInput[] = [];
+    const analyze = vi
+      .fn<(request: AnalyzeRequest) => Promise<PageText>>()
+      .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'うえ')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.4, 'した')))
+      .mockResolvedValue({ balloons: [], looseText: [] });
+    const { transcriber, published } = setup({ cache, analyze, getTranslator: () => translatorReturning('譯', calls) });
+    await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!]])], capture);
+    await transcriber.update(1, [longThumb('a1', 0.3, [[3, HASHES.a3!]])], capture);
+    expect(cache.saved).toHaveLength(1);
+    expect(cache.saved[0]!.balloons.map((b) => b.原文)).toEqual(['うえ', 'した']);
+    expect(cache.saved[0]!.stripes).toEqual([
+      { index: 0, hash: HASHES.a1 },
+      { index: 3, hash: HASHES.a3 },
+    ]);
+
+    // 重新整理：anchor 換了，只靠橫條認
+    transcriber.resetPages(1);
+    await transcriber.update(1, [longThumb('a9', 0.3, [[3, HASHES.a3!]])], capture);
+
+    expect(calls).toHaveLength(2);
+    expect(analyze.mock.calls[2]![0].collected).toHaveLength(2);
+    const { transcript } = published.at(-1)![0]!;
+    expect(transcript).toMatchObject({ state: 'done', translated: true, translation: { source: 'cache' } });
+    expect(transcript.state === 'done' && transcript.text.balloons.map((b) => b.譯文)).toEqual(['譯-b1', '譯-b2']);
+  });
+
+  it('看不到任何有內容的橫條、anchor 也還沒認出 Page 時，先不處理', async () => {
+    const { transcriber, published, deps } = setup();
+    await transcriber.update(1, [longThumb('a1', 0, [])], capture);
+    expect(deps.analyze).not.toHaveBeenCalled();
+    expect(published.at(-1)).toEqual([]);
   });
 });
