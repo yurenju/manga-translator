@@ -215,20 +215,24 @@ function bestLines(units: string[], n: number): { cost: number; lines: string[] 
 }
 
 /**
- * 譯文斷成幾行（#81）：只在詞與詞之間斷、守避頭尾，行數在原文行數 ±1 裡挑；每偏離一行加 LINE_COUNT_COST，
+ * 譯文斷成幾行的候選（#81）：只在詞與詞之間斷、守避頭尾，行數取原文行數 ±1；cost 含每偏離一行的 LINE_COUNT_COST，
  * 所以能斷在標點後、或各行比較平均時，寧可多一行或少一行。單位比這些行數都少，就一個單位一行。
  */
-export function breakLines(譯文: string, targetLines: number): string[] {
+function lineCandidates(譯文: string, targetLines: number): { cost: number; lines: string[] }[] {
   const units = lineUnits(譯文);
-  if (units.length <= 1) return [units.join('')];
+  if (units.length <= 1) return [{ cost: 0, lines: [units.join('')] }];
   const counts = [targetLines - 1, targetLines, targetLines + 1].filter((n) => n >= 1 && n <= units.length);
-  let chosen: { cost: number; lines: string[] } = { cost: Infinity, lines: units };
-  for (const n of counts.length > 0 ? counts : [units.length]) {
+  return (counts.length > 0 ? counts : [units.length]).map((n) => {
     const { cost, lines } = bestLines(units, n);
-    const total = cost + Math.abs(n - targetLines) * LINE_COUNT_COST;
-    if (total < chosen.cost) chosen = { cost: total, lines };
-  }
-  return chosen.lines;
+    return { cost: cost + Math.abs(n - targetLines) * LINE_COUNT_COST, lines };
+  });
+}
+
+const cheapest = <T extends { cost: number }>(candidates: T[]): T => candidates.reduce((a, b) => (b.cost < a.cost ? b : a));
+
+/** 只看扣分的斷法（不量字級）。 */
+export function breakLines(譯文: string, targetLines: number): string[] {
+  return cheapest(lineCandidates(譯文, targetLines)).lines;
 }
 
 /** 最小畫面字級（畫面 px）。canvas 網站顯示倍率約 0.49×，只看 Page 像素的話 14px 在畫面上只剩約 7px。 */
@@ -282,6 +286,39 @@ export function fitText(target: FitTarget, regions: { fit1: Box; fit2: Box }, mi
   const size = Math.max(STAGE_FLOORS[2], minLayerPx);
   target.apply(regions.fit2, size);
   return { stage: 3, size, region: regions.fit2, truncated: true };
+}
+
+/** 字級差在這個比例內視為一樣大，改用扣分決定（#129）。 */
+const SIZE_TIE = 0.05;
+
+/** layoutText 要量的對象：fitText 的量測，再加上換一種斷法。 */
+export interface LayoutTarget extends FitTarget {
+  setLines(lines: string[]): void;
+}
+
+/**
+ * 行數和字級一起挑（#129）：lineCandidates 的每個候選行數各自跑 fitText，取字級最大的；字級差在 SIZE_TIE 內就看扣分。
+ * 截斷的候選排在沒截斷的後面。量完把選中的斷法與字級套回 target。
+ */
+export function layoutText(
+  target: LayoutTarget,
+  譯文: string,
+  targetLines: number,
+  regions: { fit1: Box; fit2: Box },
+  minLayerPx: number,
+  startPx = START_PX,
+): FitResult & { lines: string[] } {
+  const fitted = lineCandidates(譯文, targetLines).map(({ cost, lines }) => {
+    target.setLines(lines);
+    return { cost, lines, ...fitText(target, regions, minLayerPx, startPx) };
+  });
+  const whole = fitted.filter((candidate) => !candidate.truncated);
+  const pool = whole.length > 0 ? whole : fitted;
+  const largest = Math.max(...pool.map((candidate) => candidate.size));
+  const { cost: _, ...chosen } = cheapest(pool.filter((candidate) => candidate.size >= largest * (1 - SIZE_TIE)));
+  target.setLines(chosen.lines);
+  target.apply(chosen.region, chosen.size);
+  return chosen;
 }
 
 /** anchor 的 offset*（不含 transform；捲動、祖先 transform、overflow 裁切交給瀏覽器自然套用）。 */

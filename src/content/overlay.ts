@@ -19,7 +19,7 @@ import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
-import { breakLines, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -279,14 +279,13 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return entry;
   }
 
-  /** 一行一段、中間 <br>（行在哪裡斷由 breakLines 決定，不讓瀏覽器自動換行，#81）。 */
-  function buildText(lines: string[], vertical: boolean): HTMLElement {
-    const inner = document.createElement('span');
+  /** 一行一段、中間 <br>（行在哪裡斷由 layoutText 決定，不讓瀏覽器自動換行，#81、#129）。 */
+  function setLines(inner: HTMLElement, lines: string[], vertical: boolean): void {
+    inner.replaceChildren();
     for (const [i, text] of lines.entries()) {
       if (i > 0) inner.append(document.createElement('br'));
       appendRuns(inner, text, vertical);
     }
-    return inner;
   }
 
   function appendRuns(inner: HTMLElement, text: string, vertical: boolean): void {
@@ -350,10 +349,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       box.style.fontFamily = fontFamily;
       box.style.color = luminance < 128 ? '#fff' : '#111';
       const originalLines = estimateOriginalLines(regions.text, balloon.原文, vertical);
-      const lines = breakLines(balloon.譯文, originalLines);
-      const inner = buildText(lines, vertical);
+      const inner = document.createElement('span');
       box.append(inner);
-      return { balloon, regions, erase, box, inner, vertical, originalLines, lines };
+      return { balloon, regions, erase, box, inner, vertical, originalLines };
     });
     // 擦除底色全部在譯文之前：偵測框重疊時，後一個 Balloon 的底色才不會蓋掉前一個的譯文
     element.append(...items.map((item) => item.erase), ...items.map((item) => item.box), highlight, tip);
@@ -375,8 +373,9 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     const minLayerPx = minLayerFontPx(screenScale);
     const startSizes = estimateFontPx(balloons.map((b, i) => ({ text: regionsList[i]!.text, 譯文: b.譯文 })));
     const fits: Record<string, unknown>[] = [];
-    for (const [i, { balloon, regions, box, inner, vertical, originalLines, lines }] of items.entries()) {
+    for (const [i, { balloon, regions, box, inner, vertical, originalLines }] of items.entries()) {
       const target = {
+        setLines: (lines: string[]) => setLines(inner, lines, vertical),
         apply(region: Box, px: number) {
           setBox(box, region);
           box.style.fontSize = `${px}px`;
@@ -387,12 +386,12 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
           box.scrollWidth > box.clientWidth + 1 ||
           box.scrollHeight > box.clientHeight + 1,
       };
-      let result = fitText(target, regions, minLayerPx, startSizes[i]);
-      // 照 breakLines 的斷法排不下（譯文範圍跟文字框的形狀差太多）就讓瀏覽器自動換行再試，最差跟 #81 之前一樣
+      let result = layoutText(target, balloon.譯文, originalLines, regions, minLayerPx, startSizes[i]);
+      // 每個候選行數都排不下（譯文範圍跟文字框的形狀差太多）就讓瀏覽器自動換行再試，最差跟 #81 之前一樣
       const wrapped = result.stage === 3;
       if (wrapped) {
         box.dataset.wrap = '';
-        result = fitText(target, regions, minLayerPx, startSizes[i]);
+        result = { lines: result.lines, ...fitText(target, regions, minLayerPx, startSizes[i]) };
       }
       box.dataset.fit = String(result.stage);
       if (__DEBUG__) {
@@ -405,7 +404,6 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
           譯文: balloon.譯文,
           vertical,
           startPx: startSizes[i],
-          lines,
           originalLines,
           wrapped,
           renderedLines,
