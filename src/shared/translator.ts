@@ -47,6 +47,11 @@ export interface TranslateInput {
     原文: string;
     orientation: Orientation;
   }[];
+  /**
+   * 只有 Hosted Translation 的長 Page 接續請求有（spec #142「計費」）：同一個 Page 前一次 ① 的 TranslateOutput.usageRecordId，
+   * Worker 在條件內只記用量、不扣頁（不進 prompt）。
+   */
+  pageUsageRecordId?: number;
 }
 
 /** ② 的輸入：這一頁的原文與 ① 的譯文（unreadable 的不送）。 */
@@ -83,7 +88,10 @@ export interface CallInfo {
 
 export interface TranslateOutput extends CallInfo {
   items: { id: string; 讀音: string; 譯文: string; unreadable: boolean }[];
-  /** 只有 Hosted Translation 有：Worker 這次翻譯的用量紀錄 id，同一頁的 Notes 請求帶回去（NotesInput.pageUsageRecordId）。 */
+  /**
+   * 只有 Hosted Translation 有：這一頁扣頁的那次翻譯的用量紀錄 id（接續請求回的是被接續的那筆）。同一頁的 Notes 請求、
+   * 長 Page 的接續請求帶回去（NotesInput／TranslateInput 的 pageUsageRecordId）。
+   */
   usageRecordId?: number;
 }
 

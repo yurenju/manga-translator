@@ -62,7 +62,15 @@ export function parseTranslateInput(body: unknown): TranslateInput | undefined {
   const priorPages = all(body.priorPages, priorPage);
   const items = all(body.items, item);
   if (!seriesNotes || !priorPages || !items) return undefined;
-  return { ...(seriesName === undefined ? {} : { seriesName }), seriesNotes, priorPages, items };
+  // 接續哪一頁只影響扣不扣頁，不對就當作沒帶（照常扣）
+  const page = body.pageUsageRecordId;
+  return {
+    ...(seriesName === undefined ? {} : { seriesName }),
+    seriesNotes,
+    priorPages,
+    items,
+    ...(Number.isSafeInteger(page) ? { pageUsageRecordId: page as number } : {}),
+  };
 }
 
 export function parseNotesInput(body: unknown): NotesInput | undefined {

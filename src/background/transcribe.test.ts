@@ -1487,6 +1487,64 @@ describe('直式捲動的長 Page（spec #142）', () => {
     ]);
   });
 
+  it('同一個 Page 前面翻好的段算一頁 Prior Pages（在 2 頁上限內，放在最後）', async () => {
+    const calls: TranslateInput[] = [];
+    const analyze = vi
+      .fn<(request: AnalyzeRequest) => Promise<PageText>>()
+      .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'まえ1')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'まえ2')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'うえ')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.4, 'なか')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.7, 'した')));
+    const { transcriber } = setup({ analyze, getTranslator: () => translatorReturning('譯', calls) });
+
+    await transcriber.update(1, [thumb('a1')], capture);
+    await transcriber.update(1, [thumb('a2')], capture);
+    await transcriber.update(1, [longThumb('a3', 0, [[0, HASHES.a3!]])], capture);
+    await transcriber.update(1, [longThumb('a3', 0.3, [[3, HASHES.a4!]])], capture);
+    await transcriber.update(1, [longThumb('a3', 0.6, [[5, HASHES.a5!]])], capture);
+
+    expect(calls.map((c) => c.priorPages.map((p) => p.map((l) => l.原文)))).toEqual([
+      [],
+      [['まえ1']],
+      [['まえ1'], ['まえ2']],
+      [['まえ2'], ['うえ']],
+      [['まえ2'], ['うえ', 'なか']],
+    ]);
+    expect(calls[3]!.priorPages[1]).toEqual([{ kind: 'balloon', 原文: 'うえ', 譯文: '譯-b1' }]);
+  });
+
+  it('Hosted Translation 的接續：後面的段帶這一頁的 usageRecordId；重新翻譯整個 Page 不帶，之後的段改帶它回的', async () => {
+    const calls: TranslateInput[] = [];
+    // Worker 回的是這一頁扣頁那次的紀錄 id：接續的回原本的，不帶的（扣一頁）回新的
+    let records = 0;
+    const base = translatorReturning('譯', calls);
+    const translator: Translator = {
+      ...base,
+      async translatePage(input) {
+        return { ...(await base.translatePage(input)), usageRecordId: input.pageUsageRecordId ?? ++records };
+      },
+    };
+    const analyze = vi
+      .fn<(request: AnalyzeRequest) => Promise<PageText>>()
+      .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'うえ')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.4, 'なか')))
+      .mockResolvedValueOnce(sliceText(balloonAt(0.7, 'した')));
+    const { transcriber } = setup({ analyze, getTranslator: () => translator });
+
+    await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!]])], capture);
+    await transcriber.update(1, [longThumb('a1', 0.3, [[3, HASHES.a3!]])], capture);
+    await transcriber.translate(1);
+    await transcriber.update(1, [longThumb('a1', 0.6, [[5, HASHES.a5!]])], capture);
+
+    expect(calls.map((c) => [c.items.length, c.pageUsageRecordId])).toEqual([
+      [1, undefined],
+      [1, 1],
+      [2, undefined],
+      [1, 2],
+    ]);
+  });
+
   it('同一截再出現（例如覆蓋層畫好後再掃一次）不重新辨識', async () => {
     const { transcriber, deps } = setup();
     await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!]])], capture);

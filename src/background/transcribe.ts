@@ -22,7 +22,8 @@
  * 結束（翻好、失敗或被丟掉）才送；前一批的頁不等。Series 換了就清空；同 origin 重新整理（換話）保留，停止或關 tab 才忘掉。
  *
  * 直式捲動的長 Page（spec #142，PageThumb.visible）：每次擷取處理看得到的那一截，新收的 Line 併進同一個 Page、馬上翻譯
- * （每一截是獨立的翻譯請求），顯示與快取的是整個 Page。身分先看 anchor，認不出才比橫條指紋（記憶體裡的，再來是快取）。
+ * （同一個 Page 已翻好的 Line 算一頁 Prior Pages；Hosted Translation 的接續請求帶這個 Page 的 usageRecordId，Worker 不重複扣頁），
+ * 顯示與快取的是整個 Page。身分先看 anchor，認不出才比橫條指紋（記憶體裡的，再來是快取）。
  * 同一個 Page 一次只有一截在本機段排隊：還沒開始時換成最新的那一截。
  */
 import { addLines, collectedBoxes, pickLines, replaceLines, sameLongPage, sliceOf, type Slice, type Stripe } from '../shared/long-page.ts';
@@ -34,7 +35,7 @@ import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
 import type { TranslatedLine, PriorPage, Translator } from '../shared/translator.ts';
 import { createNotesLedger, newSnapshotGroup, type NotesStore, type SnapshotGroup } from './notes-ledger.ts';
-import { createPageTranslation, type PageCache, type Transcript } from './page-translation.ts';
+import { createPageTranslation, type LongPageRequest, type PageCache, type Transcript } from './page-translation.ts';
 import { createTranslationQueue, type QueuedJob } from './translation-queue.ts';
 
 export type { NotesStore, PageCache };
@@ -111,6 +112,8 @@ interface LongPage {
   stripes: Stripe[];
   /** 最近一次排進本機段的那一截；同一截不重做。 */
   slice: Slice;
+  /** Hosted Translation：這個 Page 扣頁那次的用量紀錄 id，接續的截帶上它（只在記憶體，翻走後再出現就重新扣）。 */
+  usageRecordId?: number;
 }
 
 const EMPTY_TEXT: PageText = { balloons: [], looseText: [] };
@@ -174,6 +177,13 @@ function sliceRequest(page: PageThumb, capture: CropRequest): AnalyzeRequest {
     candidate: { anchorId: page.anchorId, rect: page.rect, ...(page.visible ? { visible: page.visible } : {}) },
     subRect: page.subRect,
   };
+}
+
+/** 長 Page 裡已經翻好的 Line（LLM 給過譯文的），這次要翻的（added）除外。 */
+function translatedLines(page: PageText, added: PageText): TranslatedLine[] {
+  const sending = new Set([...added.balloons, ...added.looseText].map((t) => t.id));
+  const done = new Set([...page.balloons, ...page.looseText].filter((t) => t.讀音來源 === 'llm' && !sending.has(t.id)).map((t) => t.id));
+  return pageLines(pickLines(page, done));
 }
 
 /** 兩份橫條併成一份，同一條留先看到的。 */
@@ -243,8 +253,15 @@ export function createTranscriber(deps: TranscriberDeps) {
     return Promise.all(earlier.map((p) => findSamePage(tab.records, p.pageHash)?.settled));
   }
 
-  /** 送出 ① 的這一刻已經翻好的 Prior Pages。 */
-  const priorPages = (job: Job): PriorPage[] => job.prior.flatMap((p) => (p.lines ? [p.lines] : []));
+  /**
+   * 送出 ① 的這一刻已經翻好的 Prior Pages。長 Page 的接續（spec #142）：同一個 Page 已經翻好的 Line 也算一頁，
+   * 放在最後（離這次最近），一樣算在 PRIOR_PAGES 之內。
+   */
+  function priorPages(job: Job): PriorPage[] {
+    const pages = job.prior.flatMap((p) => (p.lines ? [p.lines] : []));
+    const same = job.added && job.record.text ? translatedLines(job.record.text, job.added) : [];
+    return (same.length > 0 ? [...pages, same] : pages).slice(-PRIOR_PAGES);
+  }
 
   /** 這頁翻好了（翻譯完成或命中快取）：記下它的原文與譯文，之後的頁拿來當 Prior Pages。 */
   function remember(tabId: number, pageHash: string, transcript: Transcript): void {
@@ -372,10 +389,24 @@ export function createTranscriber(deps: TranscriberDeps) {
       pageHash: record.pageHash,
       group: job.group,
       priorPages: priorPages(job),
-      // 翻譯期間下一截可能又收了新的 Line：回來時才併回當下的整個 Page
-      ...(long ? { long: { stripes: long.stripes, whole: (part: PageText) => (record.text = replaceLines(record.text!, part)) } } : {}),
+      ...(long ? { long: longRequest(job, long) } : {}),
     });
     complete(job, transcript);
+  }
+
+  /**
+   * 長 Page 的一次 ①：只翻新收的 Line 時是接續，帶這個 Page 的 usageRecordId（spec #142「計費」）；
+   * 重新翻譯整個 Page（job.added 沒有）不帶，是扣一頁的新請求。回來的 id 給之後的截接續。
+   */
+  function longRequest(job: Job, long: LongPage): LongPageRequest {
+    const { record } = job;
+    return {
+      stripes: long.stripes,
+      // 翻譯期間下一截可能又收了新的 Line：回來時才併回當下的整個 Page
+      whole: (part) => (record.text = replaceLines(record.text!, part)),
+      ...(job.added && long.usageRecordId !== undefined ? { pageUsageRecordId: long.usageRecordId } : {}),
+      charged: (usageRecordId) => (long.usageRecordId = usageRecordId),
+    };
   }
 
   /** 長 Page 的這一截是哪個 Page：anchor 認得就是它，認不出才比橫條（記憶體裡的）。 */
