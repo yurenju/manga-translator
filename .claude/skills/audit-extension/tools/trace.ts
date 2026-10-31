@@ -5,6 +5,7 @@
  *                                            等到第 n 行之後出現 k 筆（預設 1）名稱含 event 的記錄，印出行號（預設 60 秒，逾時 exit 1）
  *   pairs [--since n]                        每組 translate:request／response 配成「原文 → 譯文」，附行號
  *   context [--since n]                      每個 translate:request 帶的 priorPages（每頁頭尾一句）與 Series Notes
+ *   shrunk [--since n]                       overlay:show 裡「譯文比原文少排行、字又被縮小」的框（#129），最後一行是符合數／總框數
  * 都可以加 --session <名稱> 指定別的 session。
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -81,6 +82,36 @@ function context(): string[] {
   return out;
 }
 
+/**
+ * 行數選擇害字被縮小（#129）：譯文實際排出的行數比原文少，而且字級縮到起始字級的 85% 以下。
+ * 這類框多半停在第 1 階、沒截斷，畫面上只看得出字小；挑行數時顧及字級的修法會讓它歸零，所以也當回歸檢查。
+ */
+function shrunk(): string[] {
+  const out: string[] = [];
+  let total = 0;
+  for (const { line, event, data } of records()) {
+    if (event !== 'overlay:show') continue;
+    for (const fit of data.fits as {
+      id: string;
+      譯文: string;
+      originalLines: number;
+      renderedLines: number;
+      startPx: number;
+      size: number;
+      fillRate: number | null;
+    }[]) {
+      total++;
+      if (!(fit.renderedLines < fit.originalLines && fit.size < 0.85 * fit.startPx)) continue;
+      out.push(
+        `L${line} ${fit.id} 行數 ${fit.originalLines}→${fit.renderedLines}  字級 ${fit.startPx.toFixed(1)}→${fit.size.toFixed(1)}px` +
+          `  fillRate ${fit.fillRate?.toFixed(2) ?? '-'}  ${fit.譯文}`,
+      );
+    }
+  }
+  out.push(`${out.length} / ${total} 框`);
+  return out;
+}
+
 async function wait(event: string): Promise<string> {
   const deadline = Date.now() + Number(option('--timeout') ?? 60) * 1000;
   const count = Number(option('--count') ?? 1);
@@ -105,6 +136,9 @@ switch (args[0]) {
     break;
   case 'context':
     console.log(context().join('\n'));
+    break;
+  case 'shrunk':
+    console.log(shrunk().join('\n'));
     break;
   default:
     throw new Error(`未知指令 ${args[0]}；用法見 ${import.meta.filename} 開頭`);
