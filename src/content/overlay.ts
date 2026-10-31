@@ -11,7 +11,7 @@
  * Page Mode（#73）只決定擦字＋譯文那一層要不要顯示：學習時藏起來、保留日文原稿；hover hit-test、tooltip、
  * 高亮框兩種模式都照常運作。
  */
-import type { LineRef } from '../shared/messages.ts';
+import type { LineRef, Rect } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
 import type { PageMode } from '../shared/page-mode.ts';
 import { overlaidTexts, type PageText, type RatioRect } from '../shared/page-text.ts';
@@ -19,7 +19,7 @@ import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
 import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
-import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, looseTextRegions, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
+import { eraseFill, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, layoutText, looseTextRegions, minLayerFontPx, pageSize, ratioToBox, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
 export type LoadFont = (text: string) => Promise<string>;
@@ -76,6 +76,8 @@ const STYLE = `${TOKENS}
 .hl { position: absolute; display: none; box-sizing: border-box; border-style: solid; border-color: var(--naru-highlight);
   background: var(--naru-highlight-fill); }
 .hl.on { display: block; }
+/* 長 Page 截圖時擦除與譯文不藏，tooltip 與高亮框藏（hideForCapture） */
+:host([data-capturing]) .tip, :host([data-capturing]) .hl { visibility: hidden; }
 `;
 
 const WHOLE_PAGE: RatioRect = { x: 0, y: 0, w: 1, h: 1 };
@@ -133,13 +135,6 @@ function intrinsicSize(anchor: HTMLElement): { width: number; height: number } {
   return { width: 0, height: 0 };
 }
 
-const toPx = (r: RatioRect, size: { width: number; height: number }): Box => ({
-  x: r.x * size.width,
-  y: r.y * size.height,
-  w: r.w * size.width,
-  h: r.h * size.height,
-});
-
 function setBox(el: HTMLElement, box: Box): void {
   Object.assign(el.style, { left: `${box.x}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
 }
@@ -151,7 +146,7 @@ function eraseElement(text: Parameters<typeof eraseFill>[0], rect: Box, size: { 
     const img = document.createElement('img');
     img.className = 'er img';
     img.src = fill.image;
-    setBox(img, toPx(fill.box, size));
+    setBox(img, ratioToBox(fill.box, size));
     return img;
   }
   const div = document.createElement('div');
@@ -339,7 +334,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     highlight.className = 'hl';
     const toHoverLine = (t: PageText['balloons'][number] | PageText['looseText'][number], bbox: RatioRect): HoverLine => ({
       id: t.id,
-      box: toPx(bbox, size),
+      box: ratioToBox(bbox, size),
       原文: t.原文,
       讀音: t.讀音,
       譯文: t.譯文,
@@ -355,14 +350,14 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // Balloon 與 Loose Text 一起排、一起 separateRegions；frame 是判斷直書橫書的框，Loose Text 的排版區是文字框本身（#151）
     const overlaid = [
       ...balloons.map((b) => {
-        const frame = toPx(b.balloonBbox, size);
-        const textBox = toPx(b.textBbox, size);
+        const frame = ratioToBox(b.balloonBbox, size);
+        const textBox = ratioToBox(b.textBbox, size);
         // Balloon 的排版區跟排版矩形取交集（#150）；Loose Text 不取
         const fit = b.erase?.fit;
-        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox, fit && toPx(fit, size)) } };
+        return { kind: 'balloon' as const, line: b, frame, regions: { text: textBox, ...textRegions(frame, textBox, fit && ratioToBox(fit, size)) } };
       }),
       ...looseText.map((l) => {
-        const textBox = toPx(l.bbox, size);
+        const textBox = ratioToBox(l.bbox, size);
         return { kind: 'loose' as const, line: l, frame: textBox, regions: { text: textBox, ...looseTextRegions(textBox) } };
       }),
     ];
@@ -373,13 +368,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
       erase.dataset.eraseId = line.id;
       const vertical = isVertical(line.orientation, frame);
       const box = document.createElement('div');
-      box.className = `tx${vertical ? ' v' : ''}${kind === 'loose' ? ' ol' : ''}`;
-      if (kind === 'loose') box.dataset.looseId = line.id;
-      else box.dataset.balloonId = line.id;
+      box.className = `tx${vertical ? ' v' : ''}`;
       box.style.fontFamily = fontFamily;
-      box.style.color = luminance < 128 ? '#fff' : '#111';
-      // Loose Text 的反色描邊：黑字配白邊、白字配黑邊（Balloon 不加）
-      if (kind === 'loose') box.style.webkitTextStrokeColor = luminance < 128 ? '#111' : '#fff';
+      const [ink, stroke] = luminance < 128 ? ['#fff', '#111'] : ['#111', '#fff'];
+      box.style.color = ink;
+      if (kind === 'loose') {
+        box.classList.add('ol');
+        box.dataset.looseId = line.id;
+        // Loose Text 的反色描邊：黑字配白邊、白字配黑邊（Balloon 不加）
+        box.style.webkitTextStrokeColor = stroke;
+      } else box.dataset.balloonId = line.id;
       const originalLines = estimateOriginalLines(regions.text, line.原文, vertical);
       const inner = document.createElement('span');
       box.append(inner);
@@ -407,9 +405,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     // Loose Text 大小差很多（標題、旁白、小註記），各自依文字框估，不夾在整頁 Balloon 的中位數附近
     const screenScale = (anchor.getBoundingClientRect().width * sub.w) / size.width || 1;
     const minLayerPx = minLayerFontPx(screenScale);
-    const balloonSizes = estimateFontPx(items.filter((item) => item.kind === 'balloon').map((item) => ({ text: item.regions.text, 譯文: item.line.譯文 })));
-    // items 的 Balloon 都排在前面，balloonSizes 的索引跟 items 一樣
-    const startSizes = items.map((item, i) => (item.kind === 'balloon' ? balloonSizes[i]! : estimateFontPx([{ text: item.regions.text, 譯文: item.line.譯文 }])[0]!));
+    const sizing = (item: (typeof items)[number]) => ({ text: item.regions.text, 譯文: item.line.譯文 });
+    const balloonItems = items.filter((item) => item.kind === 'balloon');
+    const balloonSizes = new Map(estimateFontPx(balloonItems.map(sizing)).map((px, i) => [balloonItems[i]!, px]));
+    const startSizes = items.map((item) => balloonSizes.get(item) ?? estimateFontPx([sizing(item)])[0]!);
     const fits: Record<string, unknown>[] = [];
     for (const [i, { kind, line, regions, box, inner, vertical, originalLines }] of items.entries()) {
       const target = {
@@ -636,14 +635,20 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /**
    * 截圖前：隱藏 host（學習時也藏，tooltip 與高亮框不能進截圖），等兩個 rAF（確定已重繪）。
-   * keep 裡的 anchor（長 Page，spec #142）不藏：截圖裡跟已收 Line 重疊的框本來就會丟掉，藏了反而每次捲動停下都閃回日文。
+   * keep 裡的 anchor（長 Page，spec #142）的擦除與譯文不藏：截圖裡跟已收 Line 重疊的框本來就會丟掉，藏了反而每次捲動停下
+   * 都閃回日文。它的 tooltip 與高亮框照樣藏：它們不在已收 Line 的框裡，會被偵測成新的字、弄髒橫條指紋。
    */
   async function hideForCapture(keep: ReadonlySet<Element> = new Set()): Promise<void> {
     capturing = true;
     keptDuringCapture = keep;
     entries.forEach(applyVisibility);
-    if (![...entries.keys()].some((anchor) => !keep.has(anchor))) return;
-    hiddenAt = performance.now();
+    const kept = [...entries.values()].filter((entry) => keep.has(entry.anchor));
+    for (const entry of kept) entry.host.dataset.capturing = '';
+    const hidesHost = [...entries.keys()].some((anchor) => !keep.has(anchor));
+    const hidesHover = kept.some((entry) => [...entry.layers.values()].some((l) => l.tip.classList.contains('on') || l.highlight.classList.contains('on')));
+    if (!hidesHost && !hidesHover) return;
+    // 只藏了 tooltip／高亮框不算「覆蓋層被藏」
+    if (hidesHost) hiddenAt = performance.now();
     await untilRepainted();
   }
 
@@ -651,6 +656,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   function restoreAfterCapture(): number | undefined {
     capturing = false;
     keptDuringCapture = new Set();
+    for (const entry of entries.values()) delete entry.host.dataset.capturing;
     entries.forEach(applyVisibility);
     const ms = hiddenAt === undefined ? undefined : performance.now() - hiddenAt;
     hiddenAt = undefined;
@@ -662,6 +668,16 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     const entry = entries.get(anchor as HTMLElement);
     if (!entry || pageMode === 'learn' || stopped || !entry.host.isConnected) return [];
     return [...entry.layers.values()].map((layer) => layer.pageHash);
+  }
+
+  /** 這個 anchor 上會出現在截圖裡的擦除與譯文（畫面 CSS px）；學習時它們藏著，是空的。長 Page 算橫條指紋時避開。 */
+  function coveredRects(anchor: Element): Rect[] {
+    const entry = entries.get(anchor as HTMLElement);
+    if (!entry || pageMode === 'learn' || stopped || !entry.host.isConnected) return [];
+    return [...entry.root.querySelectorAll('.er, .tx')].map((el) => {
+      const { x, y, width, height } = el.getBoundingClientRect();
+      return { x, y, width, height };
+    });
   }
 
   /** 停止：拿掉所有 host、還原被改成 relative 的父元素。 */
@@ -685,7 +701,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     return changedParents.has(element as HTMLElement);
   }
 
-  return { show, highlight, setPageMode, hideForCapture, restoreAfterCapture, shownPages, clear, ownsStyleOf };
+  return { show, highlight, setPageMode, hideForCapture, restoreAfterCapture, shownPages, coveredRects, clear, ownsStyleOf };
 }
 
 export type Overlay = ReturnType<typeof createOverlay>;

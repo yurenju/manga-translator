@@ -5,9 +5,9 @@
  *   失敗就跳過、不重試，只記在 trace，譯文不受影響。
  * 查快取時判斷過時（#38）。排程、每個 tab 的畫面狀態與 Prior Pages 在 transcribe.ts。
  */
-import type { Stripe } from '../shared/long-page.ts';
+import { matchingStripe, type Stripe } from '../shared/long-page.ts';
 import type { PageView } from '../shared/messages.ts';
-import { pageLines, type PageText, type PageTranslation } from '../shared/page-text.ts';
+import { pageLines, type PageCharge, type PageText, type PageTranslation } from '../shared/page-text.ts';
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
 import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
@@ -56,10 +56,10 @@ export interface LongPageRequest {
   stripes: Stripe[];
   /** 這次的 Line（翻好或沒翻好）併回整個 Page。 */
   whole(part: PageText): PageText;
-  /** 接續同一個 Page（不是重新翻譯整個 Page）時：這個 Page 扣頁那次的 usageRecordId（Hosted Translation 才有）。 */
-  pageUsageRecordId?: number;
-  /** 翻好時 Worker 回的 usageRecordId（Hosted Translation 才有），下一截接續時帶。 */
-  charged?(usageRecordId: number): void;
+  /** 接續同一個 Page（不是重新翻譯整個 Page）時：這個 Page 扣頁的那次（Hosted Translation 才有），帶上它的 usageRecordId。 */
+  charge?: PageCharge;
+  /** 翻好時這個 Page 扣頁的那次（Hosted Translation 才有），也跟著存進快取；下一截接續時帶。 */
+  charged?(charge: PageCharge): void;
 }
 
 const trace = createTrace('sw');
@@ -87,6 +87,12 @@ function applyTranslation(text: PageText, output: TranslateOutput): PageText {
     return item.sfx === undefined ? merged : { ...merged, sfx: item.sfx };
   };
   return { balloons: text.balloons.map(merge), looseText: text.looseText.map(merge) };
+}
+
+/** Worker 回的 usageRecordId 是哪一次扣頁：接續成功時回原本那筆，時間照舊；不一樣就是這次新扣的。 */
+function chargeOf(previous: PageCharge | undefined, usageRecordId: number | undefined): PageCharge | undefined {
+  if (usageRecordId === undefined) return undefined;
+  return previous?.usageRecordId === usageRecordId ? previous : { usageRecordId, chargedAt: Date.now() };
 }
 
 export function createPageTranslation({ cache, ledger, getSeries, translatorVersion }: PageTranslationDeps) {
@@ -140,7 +146,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
     let output: TranslateOutput;
     const startedAt = Date.now();
     try {
-      const continues = long?.pageUsageRecordId;
+      const continues = long?.charge?.usageRecordId;
       output = await translator.translatePage({
         ...seriesName(series),
         ...toTranslateInput(text, seriesNotes, priorPages),
@@ -155,7 +161,8 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       console.warn('translate failed', e);
       return { state: 'done', text: whole(text), translated: false, translateError: e instanceof Error ? e.message : String(e) };
     }
-    if (output.usageRecordId !== undefined) long?.charged?.(output.usageRecordId);
+    const charge = long && chargeOf(long.charge, output.usageRecordId);
+    if (charge) long.charged?.(charge);
     const translated = applyTranslation(text, output);
     const page = whole(translated);
     const { model, latencyMs, usage } = output;
@@ -168,6 +175,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
         seriesId,
         pageHash,
         ...(long ? { stripes: long.stripes } : {}),
+        ...(charge ? { charge } : {}),
         usedNotes: usedNotes(seriesNotes, [...page.balloons, ...page.looseText].map((t) => t.原文)),
         model: version?.model ?? model,
         promptVersion: version?.promptVersion ?? '',
@@ -219,7 +227,10 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
     return { state: 'done', text: { balloons, looseText }, translated: true, translation: { source: 'cache', model, latencyMs, usage }, stale };
   }
 
-  /** 長 Page 查快取（spec #142）：任何一條橫條對得上就命中，連同快取裡的身分與看過的橫條一起回傳。 */
+  /**
+   * 長 Page 查快取（spec #142）：任何一條橫條對得上就命中，連同快取裡的身分與看過的橫條一起回傳。
+   * trace 記對上的是第幾條（真實網站驗收時核對「靠哪一條認出來」）。
+   */
   async function lookupLong(seriesId: string | undefined, stripes: readonly Stripe[]): Promise<{ transcript: Transcript; cached: PageTranslation } | undefined> {
     if (seriesId === undefined) return undefined;
     const cached = await cache.findLong(seriesId, stripes).catch((e: unknown) => {
@@ -230,7 +241,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       trace('cache:miss', { seriesId, stripes });
       return undefined;
     }
-    return { transcript: await hit(cached, { seriesId, stripes }), cached };
+    return { transcript: await hit(cached, { seriesId, stripes, stripe: matchingStripe(cached.stripes ?? [], stripes) }), cached };
   }
 
   return { translate, lookup, lookupLong, staleOf, notesSettled };

@@ -154,6 +154,8 @@ async function setFreePages(email: string, remaining: number): Promise<void> {
   expect(response.status).toBe(204);
 }
 
+// unit 測不到的：外掛真的把 Worker 回的 usageRecordId 帶回下一截的請求、Worker 照它不扣頁（transcribe 的 unit 用假的
+// Translator，Worker 的 unit 直接送 HTTP；兩邊接起來只有這裡看得到）
 test('直式捲動的長 Page 捲動兩次只扣一頁：扣掉最後一頁之後，接續的那一截照樣翻譯', async ({ context, sw, extensionId, mockSite }, testInfo) => {
   const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.verticalScrollUrl });
   const email = freshEmail(testInfo.workerIndex);

@@ -2,6 +2,7 @@
  * 原地覆蓋的排版規則（spec #27 第 7.3、7.4 節）。純邏輯，不碰 DOM；量測由呼叫端注入。
  * 座標與字級的單位都是 Page 原始像素（Page 層再整層 scale 到畫面上）。
  */
+import type { RatioRect } from '../shared/page-text.ts';
 
 /** 一段譯文；upright＝縱中橫（text-combine-upright）。 */
 export interface TextRun {
@@ -36,6 +37,28 @@ export interface Box {
   h: number;
 }
 
+/** 四邊各外擴 m。 */
+export const expandBox = (b: Box, m: number): Box => ({ x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m });
+
+/** 相對 Page 的比例座標換成 Page 像素；size 是 Page 的像素尺寸。 */
+export const ratioToBox = (r: RatioRect, size: { width: number; height: number }): Box => ({
+  x: r.x * size.width,
+  y: r.y * size.height,
+  w: r.w * size.width,
+  h: r.h * size.height,
+});
+
+/** Page 像素換成相對 Page 的比例座標。 */
+export const boxToRatio = (b: Box, size: { width: number; height: number }): RatioRect => ({
+  x: b.x / size.width,
+  y: b.y / size.height,
+  w: b.w / size.width,
+  h: b.h / size.height,
+});
+
+/** [x, y, w, h] 陣列（偵測器的 PixelBox、合成頁的 ground truth）換成 Box。 */
+export const tupleBox = ([x, y, w, h]: readonly [number, number, number, number]): Box => ({ x, y, w, h });
+
 /** 預設直書；只有上游標成橫書而且 Balloon 是寬的才橫書。 */
 export function isVertical(orientation: 'vertical' | 'horizontal', balloon: Box): boolean {
   return !(orientation === 'horizontal' && balloon.w >= balloon.h);
@@ -63,7 +86,6 @@ const fromEdges = (left: number, top: number, right: number, bottom: number): Bo
  * 有排版矩形（#150，擦除範圍內最大的矩形）時，fit1、fit2 都跟它取交集，譯文才不出擦除範圍。
  */
 export function textRegions(balloon: Box, text: Box, fit?: Box): { erase: Box; fit1: Box; fit2: Box } {
-  const p = ERASE_PADDING;
   const gx = balloon.w * 0.12;
   const gy = balloon.h * 0.12;
   const fit1 = fromEdges(
@@ -82,7 +104,7 @@ export function textRegions(balloon: Box, text: Box, fit?: Box): { erase: Box; f
     fit
       ? fromEdges(Math.max(r.x, fit.x), Math.max(r.y, fit.y), Math.min(r.x + r.w, fit.x + fit.w), Math.min(r.y + r.h, fit.y + fit.h))
       : r;
-  return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1: within(fit1), fit2: within(fit2) };
+  return { erase: expandBox(text, ERASE_PADDING), fit1: within(fit1), fit2: within(fit2) };
 }
 
 /**
@@ -90,9 +112,8 @@ export function textRegions(balloon: Box, text: Box, fit?: Box): { erase: Box; f
  * 擦除範圍可能被保留下來的畫面線條切得很碎。erase 是沒有擦除小圖時的矩形退路。
  */
 export function looseTextRegions(text: Box): { erase: Box; fit1: Box; fit2: Box } {
-  const p = ERASE_PADDING;
   // fit1、fit2 各自一份：separateRegions 會就地修改
-  return { erase: { x: text.x - p, y: text.y - p, w: text.w + 2 * p, h: text.h + 2 * p }, fit1: { ...text }, fit2: { ...text } };
+  return { erase: expandBox(text, ERASE_PADDING), fit1: { ...text }, fit2: { ...text } };
 }
 
 const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -324,7 +345,8 @@ export interface LayoutTarget extends FitTarget {
 
 /**
  * 行數和字級一起挑（#129）：lineCandidates 的每個候選行數各自跑 fitText，取字級最大的；字級差在 SIZE_TIE 內就看扣分。
- * 截斷的候選排在沒截斷的後面。量完把選中的斷法與字級套回 target。
+ * 截斷的候選排在沒截斷的後面（刻意的）：截斷的字只在 tooltip 看得到，寧可字小一點也要整句排得下；
+ * 每個候選都截斷時才取字級最大的。量完把選中的斷法與字級套回 target。
  */
 export function layoutText(
   target: LayoutTarget,

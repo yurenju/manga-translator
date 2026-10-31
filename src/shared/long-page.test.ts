@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { resize, type GrayImage } from '../testing/image-degrade.ts';
 import { cropGray, readGray } from '../testing/synthetic.ts';
-import { addLines, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox, toPageText } from './long-page.ts';
+import { addLines, matchingStripe, rejectInSlice, sameLongPage, sliceOf, stripeFingerprint, toPageBox, toPageText } from './long-page.ts';
 import type { BalloonText, LooseText, PageText, RatioRect } from './page-text.ts';
 
-/** 合成頁上下接成一張長圖（webtoon 式，接縫看不出來）。 */
+/** 合成頁上下接成一張長圖（像直式捲動漫畫那樣，接縫看不出來）。 */
 function stack(...ids: string[]): GrayImage {
   const parts = ids.map((id) => readGray(id));
   const width = parts[0]!.width;
@@ -36,6 +36,16 @@ describe('長 Page 的橫條指紋', () => {
     expect(stripeFingerprint(image, offset).map((s) => s.index)).toEqual([2, 3, 4, 5]);
   });
 
+  it('跟自己的覆蓋層有交集的橫條不算（蓋著中文的 hash 跟原稿對不上）', () => {
+    // 同上：完整的是第 2～5 條（440～1320）；覆蓋層在 Page 第 700～750 px（第 3 條）與 1310～1400 px（擦過第 5 條的底）
+    const { image, offset } = shownSlice(longPage, 1, 300 / 3840, 1500 / 3840);
+    const covered = [
+      { top: 700, bottom: 750 },
+      { top: 1310, bottom: 1400 },
+    ];
+    expect(stripeFingerprint(image, offset, covered).map((s) => s.index)).toEqual([2, 4]);
+  });
+
   it('改變縮放後仍對得上（同一條橫條的 hash 在門檻內）', () => {
     const before = shownSlice(longPage, 0.49, 0.1, 0.4);
     const after = shownSlice(longPage, 0.75, 0.2, 0.5);
@@ -56,6 +66,12 @@ describe('長 Page 的橫條指紋', () => {
     const { image, offset } = shownSlice(longPage, 1, 0, 0.3);
     const stripes = stripeFingerprint(image, offset);
     expect(sameLongPage(stripes, stripes.map((s) => ({ ...s, index: s.index + 1 })))).toBe(false);
+  });
+
+  it('matchingStripe 回傳對上的是第幾條（trace 用），對不上是 undefined', () => {
+    const known = [{ index: 0, hash: '0'.repeat(64) }, { index: 3, hash: 'f'.repeat(64) }];
+    expect(matchingStripe(known, [{ index: 3, hash: 'f'.repeat(64) }, { index: 4, hash: '0'.repeat(64) }])).toBe(3);
+    expect(matchingStripe(known, [{ index: 1, hash: '0'.repeat(64) }])).toBeUndefined();
   });
 
   it('沒有內容的橫條（空白）不算', () => {

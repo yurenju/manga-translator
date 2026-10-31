@@ -1074,6 +1074,34 @@ describe('Prior Pages（ADR 0005）', () => {
     ]);
   });
 
+  it('只等同一次擷取裡在前的頁：前一次擷取還在翻的頁不等（spec D2「前一批的頁維持現狀」）', async () => {
+    const inputs: TranslateInput[] = [];
+    let releaseFirst!: () => void;
+    const firstReturns = new Promise<void>((resolve) => (releaseFirst = resolve));
+    const translator = translatorWithNotes([], inputs);
+    const { transcriber } = setup({
+      analyze: analyzeByAnchor,
+      getTranslator: () => ({
+        ...translator,
+        async translatePage(input) {
+          const output = await translator.translatePage(input);
+          if (input.items[0]!.原文 === 'a1') await firstReturns;
+          return output;
+        },
+      }),
+    });
+
+    const first = transcriber.update(1, [thumb('a1')], capture);
+    await vi.waitFor(() => expect(inputs).toHaveLength(1));
+    // 捲動後 a1 還在畫面上、a2 露出來：a1 是前一次擷取的工作，a2 不等它
+    const second = transcriber.update(1, [thumb('a1'), thumb('a2')], capture);
+    await vi.waitFor(() => expect(inputs).toHaveLength(2));
+    expect(transcriber.get(1)[1]!.transcript).toMatchObject({ state: 'done', translated: true });
+
+    releaseFirst();
+    await Promise.all([first, second]);
+  });
+
   it('前頁翻譯失敗：後頁照樣送出，不帶它', async () => {
     const inputs: TranslateInput[] = [];
     const translator = translatorWithNotes([], inputs);
@@ -1554,6 +1582,43 @@ describe('直式捲動的長 Page（spec #142）', () => {
       [2, undefined],
       [1, 2],
     ]);
+  });
+
+  it('扣頁紀錄存進快取：重新整理（或 SW 被回收）後接續照樣帶原本的 usageRecordId，扣頁超過 1 小時就不帶', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const calls: TranslateInput[] = [];
+      let records = 0;
+      const base = translatorReturning('譯', calls);
+      const translator: Translator = {
+        ...base,
+        async translatePage(input) {
+          return { ...(await base.translatePage(input)), usageRecordId: input.pageUsageRecordId ?? ++records };
+        },
+      };
+      const cache = memoryCache();
+      const analyze = vi
+        .fn<(request: AnalyzeRequest) => Promise<PageText>>()
+        .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'うえ')))
+        .mockResolvedValueOnce(sliceText(balloonAt(0.4, 'なか')))
+        .mockResolvedValueOnce(sliceText(balloonAt(0.7, 'した')));
+      const scan = async (anchorId: string, top: number, stripes: [number, string][]) => {
+        // 每次都是新的 transcriber：記憶體裡什麼都沒有，只剩快取
+        const { transcriber } = setup({ cache, analyze, getTranslator: () => translator });
+        await transcriber.update(1, [longThumb(anchorId, top, stripes)], capture);
+      };
+
+      vi.setSystemTime(0);
+      await scan('a1', 0, [[0, HASHES.a1!]]);
+      vi.setSystemTime(59 * 60_000);
+      await scan('a8', 0.3, [[0, HASHES.a1!], [3, HASHES.a3!]]);
+      vi.setSystemTime(61 * 60_000);
+      await scan('a9', 0.6, [[3, HASHES.a3!], [5, HASHES.a5!]]);
+
+      expect(calls.map((c) => c.pageUsageRecordId)).toEqual([undefined, 1, undefined]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('同一截再出現（例如覆蓋層畫好後再掃一次）不重新辨識', async () => {

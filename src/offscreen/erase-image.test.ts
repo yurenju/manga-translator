@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import type { RgbaImage } from '../shared/pixels.ts';
 import { readGroundTruth, readRgba, type GtBox } from '../testing/synthetic.ts';
-import { eraseImage, eraseLooseText, largestRect, meanLuminance, type EraseImage, type RgbaImage } from './erase-image.ts';
+import { eraseImage, eraseLooseText, largestRect, meanLuminance, type EraseImage } from './erase-image.ts';
 import type { RecordedOcr } from './fake-engine.ts';
 
 type Rgb = [number, number, number];

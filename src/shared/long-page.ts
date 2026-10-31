@@ -16,7 +16,7 @@ export interface Stripe {
 const STRIPE_HEIGHT = 1 / 4;
 
 /**
- * 亮度標準差至少這麼多才算「有內容」：空白（webtoon 格子之間的大片留白）的 hash 只是雜訊，
+ * 亮度標準差至少這麼多才算「有內容」：空白（直式捲動漫畫格子之間的大片留白）的 hash 只是雜訊，
  * 拿來比對會讓不同的頁互相認錯。合成頁一條有字的橫條約 40 以上，純白是 0。
  */
 const MIN_STRIPE_CONTRAST = 8;
@@ -32,15 +32,24 @@ function contrast({ gray }: GrayImage): number {
   return Math.sqrt(Math.max(0, squares / gray.length - mean * mean));
 }
 
+/** Page 裡的一段列（像素，跟 stripeFingerprint 的 offset 同一個縮放），上緣含、下緣不含。 */
+export interface RowSpan {
+  top: number;
+  bottom: number;
+}
+
 /**
  * 截到的一截（寬＝整個 Page 寬）裡完整看得到、有內容的橫條各算一個 hash。
  * offset：這一截的第一列在 Page 裡是第幾個像素（同一個縮放）。
+ * covered：自己的覆蓋層（擦除、譯文）蓋住的列。長 Page 截圖時不藏覆蓋層，跟它有交集的橫條算出來的是蓋著中文的樣子，
+ * 之後（例如重新整理後還沒蓋上時）對不上原稿，所以不算；只記乾淨的橫條。
  */
-export function stripeFingerprint(slice: GrayImage, offset: number): Stripe[] {
+export function stripeFingerprint(slice: GrayImage, offset: number, covered: readonly RowSpan[] = []): Stripe[] {
   const height = slice.width * STRIPE_HEIGHT;
   const stripes: Stripe[] = [];
   // 四捨五入留半個像素的餘裕：Page 的位置換算成截圖像素時有小數
   for (let index = Math.max(0, Math.ceil(offset / height - 0.01)); (index + 1) * height <= offset + slice.height + 0.5; index++) {
+    if (covered.some((c) => c.top < (index + 1) * height && c.bottom > index * height)) continue;
     const top = Math.max(0, Math.round(index * height - offset));
     const rows = Math.min(slice.height - top, Math.round(height));
     const stripe = { gray: slice.gray.subarray(top * slice.width, (top + rows) * slice.width), width: slice.width, height: rows };
@@ -49,9 +58,14 @@ export function stripeFingerprint(slice: GrayImage, offset: number): Stripe[] {
   return stripes;
 }
 
-/** 兩份指紋是不是同一個長 Page：任何一條橫條（同一個位置）的 hash 在門檻內就是。 */
+/** 兩份指紋第一條對得上的橫條（同一個位置、hash 在門檻內）是第幾條；對不上是 undefined。 */
+export function matchingStripe(a: readonly Stripe[], b: readonly Stripe[]): number | undefined {
+  return a.find((s) => b.some((t) => t.index === s.index && hammingDistance(s.hash, t.hash) <= SAME_PAGE_MAX_DISTANCE))?.index;
+}
+
+/** 兩份指紋是不是同一個長 Page：任何一條橫條對得上就是。 */
 export function sameLongPage(a: readonly Stripe[], b: readonly Stripe[]): boolean {
-  return a.some((s) => b.some((t) => t.index === s.index && hammingDistance(s.hash, t.hash) <= SAME_PAGE_MAX_DISTANCE));
+  return matchingStripe(a, b) !== undefined;
 }
 
 /** 長 Page 看得到的一截在 Page 裡的範圍（Page 高度的比例 0～1）；寬度一律是整個 Page。 */

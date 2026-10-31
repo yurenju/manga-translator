@@ -112,7 +112,8 @@ const llm =
     const page = pageRecord(input);
     if (charged) {
       const before = await quota(env.DB, accountId, quotaContext(env, now));
-      // 額度用完時，條件內的長 Page 接續照樣翻：這一頁已經扣過
+      // 額度用完時，條件內的長 Page 接續照樣翻（刻意的）：一張長圖只扣一個 Translated Page，這一頁已經扣過，
+      // 擋下來會讓讀者付過的頁翻到一半。濫用的空間由接續條件限住（同一個 Account、1 小時內、最多 10 次，quota.ts）
       if (before.remaining === 0 && !(page !== undefined && (await continuable(env.DB, accountId, page, now)))) return exhausted(before.plan);
     }
     let output: CallInfo;

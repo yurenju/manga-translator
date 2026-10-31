@@ -26,10 +26,10 @@
  * 顯示與快取的是整個 Page。身分先看 anchor，認不出才比橫條指紋（記憶體裡的，再來是快取）。
  * 同一個 Page 一次只有一截在本機段排隊：還沒開始時換成最新的那一截。
  */
-import { addLines, collectedBoxes, pickLines, replaceLines, sameLongPage, sliceOf, type Slice, type Stripe } from '../shared/long-page.ts';
+import { addLines, collectedBoxes, matchingStripe, pickLines, replaceLines, sliceOf, type Slice, type Stripe } from '../shared/long-page.ts';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
-import { pageLines, type PageText } from '../shared/page-text.ts';
+import { pageLines, type PageCharge, type PageText } from '../shared/page-text.ts';
 import type { SeriesNotes, TranslatorVersion } from '../shared/series-notes.ts';
 import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
@@ -112,9 +112,12 @@ interface LongPage {
   stripes: Stripe[];
   /** 最近一次排進本機段的那一截；同一截不重做。 */
   slice: Slice;
-  /** Hosted Translation：這個 Page 扣頁那次的用量紀錄 id，接續的截帶上它（只在記憶體，翻走後再出現就重新扣）。 */
-  usageRecordId?: number;
+  /** Hosted Translation：這個 Page 扣頁的那次，接續的截帶上它。也存在快取裡，翻走、重新整理後再出現照樣接續。 */
+  charge?: PageCharge;
 }
+
+/** 扣頁之後多久內接續（跟 Worker 的條件一樣，worker/src/quota.ts）；超過就不帶，Worker 當成新的一頁扣。 */
+const CONTINUATION_WINDOW_MS = 60 * 60_000;
 
 const EMPTY_TEXT: PageText = { balloons: [], looseText: [] };
 
@@ -169,8 +172,8 @@ interface JobSpec {
 const SAME_SLICE = 1e-3;
 const sameSlice = (a: Slice, b: Slice) => Math.abs(a.top - b.top) < SAME_SLICE && Math.abs(a.bottom - b.bottom) < SAME_SLICE;
 
-/** 擷取到的 Page（長 Page 是看得到的那一截）要送去辨識的內容。 */
-function sliceRequest(page: PageThumb, capture: CropRequest): AnalyzeRequest {
+/** 擷取到的 Page 要送去辨識的內容（一般 Page 是整個 Page，長 Page 是看得到的那一截）。 */
+function analyzeRequestOf(page: PageThumb, capture: CropRequest): AnalyzeRequest {
   return {
     screenshot: capture.screenshot,
     viewport: capture.viewport,
@@ -246,11 +249,16 @@ export function createTranscriber(deps: TranscriberDeps) {
     return [...before, ...earlier].slice(-PRIOR_PAGES);
   }
 
-  /** 同一批裡閱讀順序在前的頁，目前的工作都結束（翻好、失敗或被丟掉）時 resolve；前面沒有頁（單頁 viewer）就不等。 */
-  function earlierSettled(tab: TabState, record: PageRecord): Promise<unknown> | undefined {
-    const earlier = earlierInBatch(tab, record);
-    if (earlier.length === 0) return undefined;
-    return Promise.all(earlier.map((p) => findSamePage(tab.records, p.pageHash)?.settled));
+  /**
+   * 同一次排程（batch）裡閱讀順序在前的頁，它們這次的工作都結束（翻好、失敗或被丟掉）時 resolve。
+   * 前一次排程的工作不等（spec「前一批的頁維持現狀，還沒翻完就不等」）；前面沒有這次排的頁（單頁 viewer）就不等。
+   */
+  function earlierSettled(tab: TabState, record: PageRecord, batch: number): Promise<unknown> | undefined {
+    const earlier = earlierInBatch(tab, record).flatMap((p) => {
+      const r = findSamePage(tab.records, p.pageHash);
+      return r?.job?.batch === batch ? [r.settled] : [];
+    });
+    return earlier.length === 0 ? undefined : Promise.all(earlier);
   }
 
   /**
@@ -284,7 +292,7 @@ export function createTranscriber(deps: TranscriberDeps) {
   function newJob(spec: JobSpec): Job {
     const { tab, record } = spec;
     const prior = priorOf(tab, record);
-    const after = earlierSettled(tab, record);
+    const after = earlierSettled(tab, record, spec.batch);
     let resolve!: () => void;
     record.settled = new Promise<void>((r) => (resolve = r));
     const job: Job = { ...spec, request: spec.request ?? record.request, priority: PRIORITY_VISIBLE, prior, after, resolve };
@@ -395,24 +403,40 @@ export function createTranscriber(deps: TranscriberDeps) {
   }
 
   /**
-   * 長 Page 的一次 ①：只翻新收的 Line 時是接續，帶這個 Page 的 usageRecordId（spec #142「計費」）；
-   * 重新翻譯整個 Page（job.added 沒有）不帶，是扣一頁的新請求。回來的 id 給之後的截接續。
+   * 長 Page 的一次 ①：只翻新收的 Line、扣頁還不到 1 小時時是接續，帶這個 Page 的 usageRecordId（spec #142「計費」）；
+   * 重新翻譯整個 Page（job.added 沒有）不帶，是扣一頁的新請求。回來的扣頁紀錄給之後的截接續。
    */
   function longRequest(job: Job, long: LongPage): LongPageRequest {
     const { record } = job;
+    const { charge } = long;
+    const continues = job.added && charge && Date.now() - charge.chargedAt < CONTINUATION_WINDOW_MS;
     return {
       stripes: long.stripes,
       // 翻譯期間下一截可能又收了新的 Line：回來時才併回當下的整個 Page
       whole: (part) => (record.text = replaceLines(record.text!, part)),
-      ...(job.added && long.usageRecordId !== undefined ? { pageUsageRecordId: long.usageRecordId } : {}),
-      charged: (usageRecordId) => (long.usageRecordId = usageRecordId),
+      ...(continues ? { charge } : {}),
+      charged: (next) => (long.charge = next),
     };
   }
 
-  /** 長 Page 的這一截是哪個 Page：anchor 認得就是它，認不出才比橫條（記憶體裡的）。 */
-  function findLong(tab: TabState, page: PageThumb): PageRecord | undefined {
+  /**
+   * 長 Page 的這一截是哪個 Page：anchor 認得就是它，認不出才比橫條（記憶體裡的；快取的在 lookupLong）。
+   * 認出來時記一筆 trace：靠什麼認的、對上第幾條橫條（#154 真實網站驗收核對用）。
+   */
+  function identifyLongPage(tab: TabState, page: PageThumb): PageRecord | undefined {
     const longs = tab.records.filter((r) => r.long);
-    return longs.find((r) => r.long!.anchorId === page.anchorId) ?? longs.find((r) => sameLongPage(r.long!.stripes, page.stripes ?? []));
+    const byAnchor = longs.find((r) => r.long!.anchorId === page.anchorId);
+    if (byAnchor) {
+      trace('longPage:identified', { tabId: tab.tabId, anchorId: page.anchorId, pageHash: byAnchor.pageHash, by: 'anchor' });
+      return byAnchor;
+    }
+    for (const record of longs) {
+      const stripe = matchingStripe(record.long!.stripes, page.stripes ?? []);
+      if (stripe === undefined) continue;
+      trace('longPage:identified', { tabId: tab.tabId, anchorId: page.anchorId, pageHash: record.pageHash, by: 'memoryStripes', stripe });
+      return record;
+    }
+    return undefined;
   }
 
   /** 已認出的長 Page 又擷取到一截：沒處理過的那一截排進本機段；還沒開始的工作換成這一截。 */
@@ -421,21 +445,25 @@ export function createTranscriber(deps: TranscriberDeps) {
     const slice = sliceOf(page.rect, page.visible!);
     if (sameSlice(long.slice, slice) || record.transcript.state === 'pending') return;
     long.slice = slice;
-    const request = sliceRequest(page, capture);
+    const request = analyzeRequestOf(page, capture);
     if (record.job && !record.job.started) record.job.request = request;
     else enqueueLocal(newJob({ ...spec, record, request }));
   }
 
   /** 長 Page 查快取：命中就換成快取裡的身分，已收的 Line 從快取接著收，看過的橫條併起來。 */
   async function lookupLong(tab: TabState, seriesId: string | undefined, record: PageRecord): Promise<Transcript | undefined> {
-    const found = await pageTranslation.lookupLong(seriesId, record.long!.stripes);
+    const long = record.long!;
+    const found = await pageTranslation.lookupLong(seriesId, long.stripes);
     if (!found) return undefined;
     const { cached, transcript } = found;
     const provisional = record.pageHash;
+    // 對上第幾條記在 cache:hit
+    trace('longPage:identified', { tabId: tab.tabId, anchorId: long.anchorId, pageHash: cached.pageHash, by: 'cacheStripes' });
     record.pageHash = cached.pageHash;
-    record.long!.stripes = mergeStripes(cached.stripes ?? [], record.long!.stripes);
+    long.stripes = mergeStripes(cached.stripes ?? [], long.stripes);
+    if (cached.charge) long.charge = cached.charge;
     if (transcript.state === 'done') record.text = transcript.text;
-    tab.pages = tab.pages.map((p) => (p.anchorId === record.long!.anchorId && p.pageHash === provisional ? { ...p, pageHash: cached.pageHash } : p));
+    tab.pages = tab.pages.map((p) => (p.anchorId === long.anchorId && p.pageHash === provisional ? { ...p, pageHash: cached.pageHash } : p));
     return transcript;
   }
 
@@ -456,7 +484,7 @@ export function createTranscriber(deps: TranscriberDeps) {
     const current = tab;
     pages = pages.flatMap((page) => {
       if (!page.visible) return [page];
-      const known = findLong(current, page);
+      const known = identifyLongPage(current, page);
       if (known) {
         known.long!.anchorId = page.anchorId;
         known.long!.stripes = mergeStripes(known.long!.stripes, page.stripes ?? []);
@@ -488,7 +516,7 @@ export function createTranscriber(deps: TranscriberDeps) {
       const record: PageRecord = {
         pageHash: page.pageHash,
         seriesId: undefined,
-        request: sliceRequest(page, capture!),
+        request: analyzeRequestOf(page, capture!),
         transcript: { state: 'analyzing' },
         settled: Promise.resolve(),
         ...(page.visible ? { long: { anchorId: page.anchorId, stripes: page.stripes ?? [], slice: sliceOf(page.rect, page.visible) } } : {}),

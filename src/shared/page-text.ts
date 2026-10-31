@@ -18,6 +18,12 @@ export interface RatioRect {
 
 export type Orientation = 'vertical' | 'horizontal';
 
+/** 擦除小圖（#149、#151）：image 是 box 大小的 PNG data URL（alpha＝擦除範圍），box 是它在 Page 上的位置。 */
+export interface EraseData {
+  box: RatioRect;
+  image: string;
+}
+
 export interface BalloonText {
   id: string;
   /** 閱讀順序（本機決定），Balloon 與 Loose Text 共用同一串編號，從 1 開始。 */
@@ -46,7 +52,7 @@ export interface BalloonText {
    * 用文字框外擴 3px 的矩形加 eraseLuminance。
    * fit 是排版矩形（#150）：擦除範圍內面積最大的軸對齊矩形，譯文只排在這裡面。#150 之前算的小圖沒有，排版維持原本的範圍。
    */
-  erase?: { box: RatioRect; image: string; fit?: RatioRect };
+  erase?: EraseData & { fit?: RatioRect };
 }
 
 export interface LooseText {
@@ -68,7 +74,7 @@ export interface LooseText {
    * 擦除小圖（#151）：範圍限制在文字框＋padding 內，顏色從背景內插；跟 BalloonText.erase 同樣只存在本機快取。
    * 沒有時（備份還原的頁）用文字框外擴 3px 的矩形加 eraseLuminance。
    */
-  erase?: { box: RatioRect; image: string };
+  erase?: EraseData;
 }
 
 export interface PageText {
@@ -101,7 +107,10 @@ export function withoutEraseData<T extends PageText>(page: T): T {
   return { ...page, balloons: page.balloons.map(strip), looseText: page.looseText.map(strip) };
 }
 
-/** 已翻譯的一頁依閱讀順序的原文與譯文，跳過 unreadable（Prior Pages 與 ② 的輸入，ADR 0005）。 */
+/**
+ * 已翻譯的一頁依閱讀順序的原文與譯文（Prior Pages 與 ② 的輸入，ADR 0005）。刻意跳過 unreadable（LLM 判斷亂碼或 OCR 信心
+ * 低於門檻）：OCR 讀錯的字當上下文會誤導下一頁的翻譯，進 ② 會被整理成錯的 Notes 條目。
+ */
 export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
   return [
     ...balloons.map((b) => ({ ...b, kind: 'balloon' as const })),
@@ -110,6 +119,28 @@ export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
     .filter((t) => !t.unreadable)
     .sort((a, b) => a.order - b.order)
     .map(({ kind, 原文, 譯文 }) => ({ kind, 原文, 譯文 }));
+}
+
+/**
+ * 長 Page 扣一個 Translated Page 的那次（spec #142「計費」）：Worker 回的 usageRecordId 與拿到它的時間。
+ * 接續的截帶上 id，Worker 在 1 小時內只記用量、不再扣頁；超過就不帶，當成新的一頁扣。
+ */
+export interface PageCharge {
+  usageRecordId: number;
+  chargedAt: number;
+}
+
+/**
+ * 只留在本機快取、不進備份的 Page 欄位：扣頁紀錄只對這個 Account、1 小時內有用，換台裝置還原也接不上。
+ * 擦除資料另外在 LOCAL_ERASE_KEYS（在每個 Balloon／Loose Text 上）。
+ */
+const LOCAL_PAGE_KEYS = ['charge'] as const satisfies readonly (keyof PageTranslation)[];
+
+/** 備份裡的一頁：拿掉只留在本機的欄位與擦除資料（不改到傳進來的物件）。 */
+export function forBackup(page: PageTranslation): PageTranslation {
+  const copy = withoutEraseData(page);
+  for (const key of LOCAL_PAGE_KEYS) delete copy[key];
+  return copy;
 }
 
 /**
@@ -122,6 +153,8 @@ export interface PageTranslation extends PageText {
   pageHash: string;
   /** 長 Page（spec #142）才有：看過的橫條；查詢時任何一條對得上就命中。Line 是到目前收到的整個 Page。 */
   stripes?: Stripe[];
+  /** 長 Page 用 Hosted Translation 翻過才有：扣頁那次的用量紀錄，之後的截接續時帶上。只在本機快取，不進備份。 */
+  charge?: PageCharge;
   /** 判斷過時用（#38）。 */
   usedNotes: UsedNote[];
   model: string;
