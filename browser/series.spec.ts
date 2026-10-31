@@ -50,10 +50,10 @@ test('選 Series 後重新整理再啟動，自動預選同一部 Series', async
   const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   await expect(seriesRow(panel)).toContainText(/未歸類（未命名・127\.0\.0\.1・/);
 
-  await createSeries(panel, '火ノ丸相撲');
+  await createSeries(panel, '範例作品');
   await stopReloadActivate(page, panel, tabId);
 
-  await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
+  await expect(seriesRow(panel)).toContainText('範例作品');
 });
 
 // #145：換不換、對不上就沿用是 activation 與 series-catalog 的 unit；這裡確認真的導航會經過 SW 換掉 Series，side panel 跟著顯示
@@ -83,11 +83,11 @@ test('Provisional Series 在 side panel 改名：顯示新名稱，也寫進 sto
   // 平常只是文字；點鉛筆才出現輸入框
   await expect(footer(panel).getByRole('textbox')).toHaveCount(0);
   await openSeriesEditor(panel);
-  await panel.getByRole('textbox', { name: '新名稱' }).fill('火ノ丸相撲');
+  await panel.getByRole('textbox', { name: '新名稱' }).fill('範例作品');
   await panel.getByRole('button', { name: '儲存' }).click();
-  await expect(seriesRow(panel)).toContainText('火ノ丸相撲');
+  await expect(seriesRow(panel)).toContainText('範例作品');
   // 改名後 ID 不變、不再是 Provisional 是 series-catalog 的 unit；這裡只確認改名有經過 SW 寫進去
-  await expect.poll(() => seriesNamed(sw, '火ノ丸相撲')).toBeDefined();
+  await expect.poll(() => seriesNamed(sw, '範例作品')).toBeDefined();
 });
 
 test.describe('合併（FakeTranslator）', () => {
@@ -97,8 +97,8 @@ test.describe('合併（FakeTranslator）', () => {
     const first = await activateOnMockSite({ context, sw, extensionId, mockSite });
     const statusLines = first.panel.getByRole('status', { name: '翻譯狀態' });
     await expect(statusLines.filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
-    await createSeries(first.panel, '火ノ丸相撲');
-    const target = (await seriesNamed(sw, '火ノ丸相撲'))!;
+    await createSeries(first.panel, '範例作品');
+    const target = (await seriesNamed(sw, '範例作品'))!;
     // 選了新的 Series 會重新擷取、用新 ID 翻譯：等它寫完，目標就有這兩頁的快取
     await expect.poll(async () => (await readStore<PageTranslation>(sw, 'pageTranslations')).filter((t) => t.seriesId === target.id).length).toBe(2);
 
@@ -109,10 +109,10 @@ test.describe('合併（FakeTranslator）', () => {
     const calls = await sw.evaluate(() => globalThis.__translateCalls ?? 0);
 
     await openSeriesEditor(other.panel);
-    await other.panel.getByRole('combobox', { name: '合併進' }).selectOption({ label: '火ノ丸相撲' });
+    await other.panel.getByRole('combobox', { name: '合併進' }).selectOption({ label: '範例作品' });
     await other.panel.getByRole('button', { name: '合併' }).click();
 
-    await expect(seriesRow(other.panel)).toContainText('火ノ丸相撲');
+    await expect(seriesRow(other.panel)).toContainText('範例作品');
     await expect.poll(async () => (await readStore<Series>(sw, 'series')).some((s) => s.id === provisionalId)).toBe(false);
     const cached = await readStore<PageTranslation>(sw, 'pageTranslations');
     expect(cached.filter((t) => t.seriesId === provisionalId)).toEqual([]);

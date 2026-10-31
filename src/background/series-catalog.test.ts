@@ -177,7 +177,7 @@ describe('merge', () => {
     const provisional = await catalog.seriesForUrl(EP2);
     db.seed(
       [translation(target.id, A, '目標的'), translation(provisional, nearA, '臨時的'), translation(provisional, B, '另一頁')],
-      [note(target.id, '潮火ノ丸', '火之丸'), note(provisional, '潮火ノ丸', '小火'), note(provisional, '小関', '小關')],
+      [note(target.id, '山田太郎', '太郎'), note(provisional, '山田太郎', '小太'), note(provisional, '鈴木', '阿鈴')],
     );
 
     await catalog.merge(provisional, target.id, EP2);
@@ -187,10 +187,10 @@ describe('merge', () => {
       [target.id, B, '另一頁'],
     ]);
     expect(db.notes.map((n) => [n.seriesId, n.原文, n.譯文])).toEqual([
-      [target.id, '潮火ノ丸', '火之丸'],
-      [target.id, '小関', '小關'],
+      [target.id, '山田太郎', '太郎'],
+      [target.id, '鈴木', '阿鈴'],
     ]);
-    expect(db.suggestions).toEqual([{ seriesId: target.id, 原文: '潮火ノ丸', 建議譯文: '小火', 來源: { mergedFrom: provisional } }]);
+    expect(db.suggestions).toEqual([{ seriesId: target.id, 原文: '山田太郎', 建議譯文: '小太', 來源: { mergedFrom: provisional } }]);
     expect(db.series.has(provisional)).toBe(false);
     expect(await catalog.seriesForUrl(EP2)).toBe(target.id);
   });
@@ -199,7 +199,7 @@ describe('merge', () => {
     const { db, catalog } = setup();
     const target = await catalog.create('範例作品', EP1);
     const named = await catalog.create('鬼滅', EP2);
-    db.seed([translation(named.id, B, '另一頁')], [note(named.id, '小関', '小關')]);
+    db.seed([translation(named.id, B, '另一頁')], [note(named.id, '鈴木', '阿鈴')]);
 
     const merged = await catalog.merge(named.id, target.id, EP2);
 
