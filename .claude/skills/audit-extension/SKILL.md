@@ -21,7 +21,7 @@ disable-model-invocation: true
 `tools/` 裡兩個 node 小工具，直接 `node .claude/skills/audit-extension/tools/<檔名>` 執行，用法寫在各檔開頭：
 
 - `cdp.ts`：開分頁、導航、翻頁（按鍵、滾輪、點擊）、截圖、放大截某一塊。
-- `trace.ts`：查最新 trace session、**等**某個事件出現、把 LLM 的 request／response 配成「原文 → 譯文」、列出每次翻譯帶了哪些上下文。
+- `trace.ts`：查最新 trace session、**等**某個事件出現、把 LLM 的 request／response 配成「原文 → 譯文」、列出每次翻譯帶了哪些上下文、找出行數選擇害字被縮小的框。
 
 在頁面裡跑程式（找連結、量 canvas 尺寸）用 `npm run debug:eval -- page --url <urlPart> -e "<運算式>"`。
 
@@ -64,7 +64,7 @@ disable-model-invocation: true
 
 廣告頁、標題頁、目錄頁也要看（OCR 亂讀、亂句被蓋上去常出在這裡），但不算進「每部頁數」；頁數只算正文。
 
-一部讀完後，`trace.ts pairs --since <這部開始的行數>` 撈出這部的全部譯文，存成 `<audit>\<作品代號>-pairs.txt`，再照「翻譯」那一類整批評。評性別、語氣時對照 trace 的 `crop` 圖看角色。再跑 `trace.ts context --since <同一行>` 看每頁送給 LLM 的上下文：前一頁有沒有在 `priorPages` 裡、同一個角色的暱稱和本名在 Series Notes 是不是分成互不相干的兩條。
+一部讀完後，`trace.ts pairs --since <這部開始的行數>` 撈出這部的全部譯文，存成 `<audit>\<作品代號>-pairs.txt`，再照「翻譯」那一類整批評。評性別、語氣時對照 trace 的 `crop` 圖看角色。再跑 `trace.ts context --since <同一行>` 看每頁送給 LLM 的上下文：前一頁有沒有在 `priorPages` 裡、同一個角色的暱稱和本名在 Series Notes 是不是分成互不相干的兩條。最後跑 `trace.ts shrunk --since <同一行>`：列出的每個框都是「覆蓋版面」的一條 finding（字被縮小），照它給的行號、字級、行數寫證據；這類框畫面上看不出錯、只看得出字小，靠截圖很容易漏掉。
 
 完成條件：每部都讀滿指定的正文頁數，或寫下讀不滿的原因（例如整部抓不到 Page）。讀不到翻譯的作品不能補頁數，就多挑一部補上。
 
@@ -99,7 +99,7 @@ disable-model-invocation: true
 | 偵測 | 有字的泡泡沒畫框、紅框只框到泡泡裡的一部分、閱讀順序跳號 | trace 的 `analyze` 偵測圖（藍＝Balloon、紅＝text、綠＝Loose Text、數字＝順序） |
 | OCR | 框對了但原文讀錯：標題、小字、招牌、專有名詞、手寫字、對白裡的濁音半濁音 | `trace.ts pairs` 的原文欄對照截圖；LLM 自己修回的錯字也記下來當對照 |
 | 翻譯 | 誤譯、性別（他／她、你／妳、先生／小姐）、語氣、稱呼不一致、生硬、作品名或專有名詞亂譯、雙關翻死、上下文缺漏 | `trace.ts pairs`、`trace.ts context`、`crop` 圖（判斷角色） |
-| 覆蓋版面 | 白框太大或超出泡泡、角跑出黑框、字被截斷、字太小或排版擠 | 放大截圖；`overlay:show` 的 `fits.truncated` |
+| 覆蓋版面 | 白框太大或超出泡泡、角跑出黑框、字被截斷、字太小或排版擠、行數選擇害字被縮小（譯文比原文少排行，字級縮到起始字級 85% 以下） | 放大截圖；`overlay:show` 的 `fits.truncated`；`trace.ts shrunk` |
 | 框外文字 | 框外的獨白、旁白、說明字沒翻或沒蓋 | pairs 裡的 `[loose]` 項對照截圖：trace 有譯文、頁面還是日文就是沒蓋 |
 | 當場發現 | 不屬於上面任何一層、要看到畫面或操作才知道的問題 | 操作步驟＋trace 行號 |
 
