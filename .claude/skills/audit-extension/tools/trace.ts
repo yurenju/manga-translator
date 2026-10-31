@@ -1,8 +1,10 @@
 /**
  * 盤點時讀最新一次除錯錄製的 trace.jsonl：node .claude/skills/audit-extension/tools/trace.ts <指令> ...
  *   session                                  印出最新 session 名稱、資料夾與目前行數
- *   wait <event> [--since n] [--timeout s]   等到第 n 行之後出現名稱含 event 的記錄，印出它的行號（預設 60 秒，逾時 exit 1）
+ *   wait <event> [--since n] [--count k] [--timeout s]
+ *                                            等到第 n 行之後出現 k 筆（預設 1）名稱含 event 的記錄，印出行號（預設 60 秒，逾時 exit 1）
  *   pairs [--since n]                        每組 translate:request／response 配成「原文 → 譯文」，附行號
+ *   context [--since n]                      每個 translate:request 帶的 priorPages（每頁頭尾一句）與 Series Notes
  * 都可以加 --session <名稱> 指定別的 session。
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -62,15 +64,33 @@ function pairs(): string[] {
   return out;
 }
 
+/** 每個 translate:request 帶了哪些上下文：priorPages 每頁的頭尾一句、Series Notes。跨頁兩頁的 priorPages 一樣、暱稱和本名各記一條，都是從這裡看出來的。 */
+function context(): string[] {
+  const out: string[] = [];
+  for (const { line, event, data } of records()) {
+    if (event !== 'translate:request') continue;
+    const { items, priorPages, seriesNotes } = data.input as {
+      items: Item[];
+      priorPages: { 原文: string }[][];
+      seriesNotes: { 原文: string; 譯文: string }[];
+    };
+    out.push(`\n=== L${line} items ${items.length}，第一句 ${items[0]?.原文 ?? '(無)'}`);
+    priorPages.forEach((page, i) => out.push(`  priorPages[${i}] ${page[0]?.原文 ?? ''} … ${page.at(-1)?.原文 ?? ''}`));
+    if (seriesNotes.length > 0) out.push(`  notes ${seriesNotes.map((n) => `${n.原文}→${n.譯文}`).join('、')}`);
+  }
+  return out;
+}
+
 async function wait(event: string): Promise<string> {
   const deadline = Date.now() + Number(option('--timeout') ?? 60) * 1000;
+  const count = Number(option('--count') ?? 1);
   while (Date.now() < deadline) {
-    const hit = records().find((r) => r.event.includes(event));
-    if (hit !== undefined) return `L${hit.line} ${hit.event}`;
+    const hits = records().filter((r) => r.event.includes(event));
+    if (hits.length >= count) return hits.slice(0, count).map((hit) => `L${hit.line} ${hit.event}`).join('\n');
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   process.exitCode = 1;
-  return `逾時：L${since} 之後沒有 ${event}（目前 ${readFileSync(file, 'utf8').split('\n').length - 1} 行）`;
+  return `逾時：L${since} 之後不到 ${count} 筆 ${event}（目前 ${readFileSync(file, 'utf8').split('\n').length - 1} 行）`;
 }
 
 switch (args[0]) {
@@ -82,6 +102,9 @@ switch (args[0]) {
     break;
   case 'pairs':
     console.log(pairs().join('\n'));
+    break;
+  case 'context':
+    console.log(context().join('\n'));
     break;
   default:
     throw new Error(`未知指令 ${args[0]}；用法見 ${import.meta.filename} 開頭`);

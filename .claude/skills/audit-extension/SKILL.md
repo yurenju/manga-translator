@@ -21,7 +21,7 @@ disable-model-invocation: true
 `tools/` 裡兩個 node 小工具，直接 `node .claude/skills/audit-extension/tools/<檔名>` 執行，用法寫在各檔開頭：
 
 - `cdp.ts`：開分頁、導航、翻頁（按鍵、滾輪、點擊）、截圖、放大截某一塊。
-- `trace.ts`：查最新 trace session、**等**某個事件出現、把 LLM 的 request／response 配成「原文 → 譯文」。
+- `trace.ts`：查最新 trace session、**等**某個事件出現、把 LLM 的 request／response 配成「原文 → 譯文」、列出每次翻譯帶了哪些上下文。
 
 在頁面裡跑程式（找連結、量 canvas 尺寸）用 `npm run debug:eval -- page --url <urlPart> -e "<運算式>"`。
 
@@ -32,7 +32,9 @@ disable-model-invocation: true
 1. 解析參數：網站（必填）、部數（預設 3）、每部頁數（預設 10）。
 2. 在 Terminal 面板跑 `npm run debug:chrome`（worktree 沒有 `node_modules` 就先 `npm ci`）。這兩個指令一定要在 Terminal 面板跑，原因見 real-site-debugging.md。
 3. `trace.ts session` 拿到 session 名稱，用**同一個名稱**建盤點資料夾 `<audit>` = `%LOCALAPPDATA%\naruhodo\audit\<session>\`，裡面開 `shots\`。trace 與盤點資料同名，事後才對得起來。
-4. 告訴使用者：debug Chrome 已經開好，可以一起看畫面，看到怪的地方隨時說。使用者當場指出的問題照樣記，標註「使用者指出」。
+4. 讀前幾輪：`%LOCALAPPDATA%\naruhodo\audit\` 裡較早的資料夾各有一份 `findings.md`。記下讀過哪些作品（這輪換別部）和已知問題。同一個問題再出現，在 finding 標「＝前輪 Xn」。已知會讓整部讀不到翻譯的問題（例如某種 viewer 整部抓不到 Page），不必再花一部名額重新確認，在作品表下寫一句沒讀的原因。
+5. 待驗證項目：如果叫你盤點的人（issue、map、使用者）列了「等這一輪證據再決定」的項目，記下來，讀的時候刻意找，最後在 `findings.md` 寫「延後項目的證據」一節。
+6. 告訴使用者：debug Chrome 已經開好，可以一起看畫面，看到怪的地方隨時說。使用者當場指出的問題照樣記，標註「使用者指出」。
 
 完成條件：`<audit>` 存在、`trace.ts session` 的行數會隨操作增加。
 
@@ -53,13 +55,16 @@ disable-model-invocation: true
 每翻一頁：
 
 1. 記下目前的 trace 行數，翻頁。
-2. `trace.ts wait overlay:show --since <行數>` 等這頁翻完。逾時就是線索：用 `npm run debug:summary -- --since <行數>` 看它停在哪一層（`scan:noCandidates`、`translate:error`…），這本身就是一條 finding。
+2. `trace.ts wait overlay:show --since <行數>` 等這頁翻完；跨頁 viewer 一次翻兩頁，加 `--count 2`。逾時就是線索：用 `npm run debug:summary -- --since <行數>` 看它停在哪一層（`scan:noCandidates`、`translate:error`…），這本身就是一條 finding。例外：已經蓋過的頁面被重新排版（改視窗大小、縮放）時，外掛只搬動譯文、不再發 `overlay:show`，`content:candidates` 的候選帶著 `overlaid` 就是這種情況，看截圖確認位置對不對即可。
 3. 截整頁（`cdp.ts shot`），檔名用 `<作品代號>-<頁序>.png`。整頁截圖看不出細節：每個泡泡邊緣、每塊框外文字都用 `cdp.ts shot ... x y w h` 放大檢查。
 4. 照下面的**分類**逐項看這一頁，有問題就當場寫一行草稿到 `findings.md`，附截圖路徑與 trace 行號。
+5. 譯文只有半句、意思接不上，或截圖上框裡還露著日文：打開這頁 `analyze` 的偵測圖，看紅框（text）有沒有框滿泡泡、數字順序對不對、有沒有整個框沒抓到。看起來像翻譯錯的，常常是上游送錯。
+
+每翻幾頁就把迴圈寫成一個小腳本（翻頁 → 等 → 截圖 → `trace.ts pairs --since`）放在 scratchpad，一次跑一部的全部頁，再逐頁看結果。
 
 廣告頁、標題頁、目錄頁也要看（OCR 亂讀、亂句被蓋上去常出在這裡），但不算進「每部頁數」；頁數只算正文。
 
-一部讀完後，`trace.ts pairs --since <這部開始的行數>` 撈出這部的全部譯文，存成 `<audit>\<作品代號>-pairs.txt`，再照「翻譯」那一類整批評。評性別、語氣時對照 trace 的 `crop` 圖看角色。
+一部讀完後，`trace.ts pairs --since <這部開始的行數>` 撈出這部的全部譯文，存成 `<audit>\<作品代號>-pairs.txt`，再照「翻譯」那一類整批評。評性別、語氣時對照 trace 的 `crop` 圖看角色。再跑 `trace.ts context --since <同一行>` 看每頁送給 LLM 的上下文：前一頁有沒有在 `priorPages` 裡、同一個角色的暱稱和本名在 Series Notes 是不是分成互不相干的兩條。
 
 完成條件：每部都讀滿指定的正文頁數，或寫下讀不滿的原因（例如整部抓不到 Page）。讀不到翻譯的作品不能補頁數，就多挑一部補上。
 
@@ -91,9 +96,9 @@ disable-model-invocation: true
 | 分類 | 看什麼 | 證據從哪來 |
 | --- | --- | --- |
 | 頁面定位 | 整頁沒翻、只翻了跨頁的一邊、翻到非漫畫的圖 | trace `content:candidates`（看 `rejected` 的原因）、`scan:*` |
-| 偵測 | 有字的泡泡沒畫框、框切錯、閱讀順序跳號 | trace 的 `analyze` 偵測圖（藍＝Balloon、紅＝text、綠＝Loose Text、數字＝順序） |
-| OCR | 框對了但原文讀錯：標題、小字、招牌、專有名詞、手寫字 | `trace.ts pairs` 的原文欄對照截圖 |
-| 翻譯 | 誤譯、性別、語氣、稱呼不一致、生硬、作品名或專有名詞亂譯、雙關翻死 | `trace.ts pairs`、`crop` 圖（判斷角色） |
+| 偵測 | 有字的泡泡沒畫框、紅框只框到泡泡裡的一部分、閱讀順序跳號 | trace 的 `analyze` 偵測圖（藍＝Balloon、紅＝text、綠＝Loose Text、數字＝順序） |
+| OCR | 框對了但原文讀錯：標題、小字、招牌、專有名詞、手寫字、對白裡的濁音半濁音 | `trace.ts pairs` 的原文欄對照截圖；LLM 自己修回的錯字也記下來當對照 |
+| 翻譯 | 誤譯、性別（他／她、你／妳、先生／小姐）、語氣、稱呼不一致、生硬、作品名或專有名詞亂譯、雙關翻死、上下文缺漏 | `trace.ts pairs`、`trace.ts context`、`crop` 圖（判斷角色） |
 | 覆蓋版面 | 白框太大或超出泡泡、角跑出黑框、字被截斷、字太小或排版擠 | 放大截圖；`overlay:show` 的 `fits.truncated` |
 | 框外文字 | 框外的獨白、旁白、說明字沒翻或沒蓋 | pairs 裡的 `[loose]` 項對照截圖：trace 有譯文、頁面還是日文就是沒蓋 |
 | 當場發現 | 不屬於上面任何一層、要看到畫面或操作才知道的問題 | 操作步驟＋trace 行號 |
