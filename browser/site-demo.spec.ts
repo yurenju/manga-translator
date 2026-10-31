@@ -35,6 +35,8 @@ const test = base.extend<{ siteOrigin: string }>({
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     const { port } = server.address() as { port: number };
     await use(`http://127.0.0.1:${port}`);
+    // close 會等所有連線結束：瀏覽器留著的 keep-alive 或還沒回完的請求會讓 teardown 卡到逾時（PR #116 的 CI）
+    server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   },
 });
