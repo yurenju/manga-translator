@@ -113,6 +113,28 @@ export function pageLines({ balloons, looseText }: PageText): TranslatedLine[] {
 }
 
 /**
+ * 長 Page 扣一個 Translated Page 的那次（spec #142「計費」）：Worker 回的 usageRecordId 與拿到它的時間。
+ * 接續的截帶上 id，Worker 在 1 小時內只記用量、不再扣頁；超過就不帶，當成新的一頁扣。
+ */
+export interface PageCharge {
+  usageRecordId: number;
+  chargedAt: number;
+}
+
+/**
+ * 只留在本機快取、不進備份的 Page 欄位：扣頁紀錄只對這個 Account、1 小時內有用，換台裝置還原也接不上。
+ * 擦除資料另外在 LOCAL_ERASE_KEYS（在每個 Balloon／Loose Text 上）。
+ */
+const LOCAL_PAGE_KEYS = ['charge'] as const satisfies readonly (keyof PageTranslation)[];
+
+/** 備份裡的一頁：拿掉只留在本機的欄位與擦除資料（不改到傳進來的物件）。 */
+export function forBackup(page: PageTranslation): PageTranslation {
+  const copy = withoutEraseData(page);
+  for (const key of LOCAL_PAGE_KEYS) delete copy[key];
+  return copy;
+}
+
+/**
  * 翻譯快取的一筆（spec #27 第 4.3 節）：key＝(seriesId, pageHash)。只存文字與座標，不存頁面圖片；
  * anchor 與 subRect 是畫面狀態，不進快取。
  */
@@ -122,6 +144,8 @@ export interface PageTranslation extends PageText {
   pageHash: string;
   /** 長 Page（spec #142）才有：看過的橫條；查詢時任何一條對得上就命中。Line 是到目前收到的整個 Page。 */
   stripes?: Stripe[];
+  /** 長 Page 用 Hosted Translation 翻過才有：扣頁那次的用量紀錄，之後的截接續時帶上。只在本機快取，不進備份。 */
+  charge?: PageCharge;
   /** 判斷過時用（#38）。 */
   usedNotes: UsedNote[];
   model: string;

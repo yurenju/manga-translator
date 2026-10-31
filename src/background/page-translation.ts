@@ -7,7 +7,7 @@
  */
 import type { Stripe } from '../shared/long-page.ts';
 import type { PageView } from '../shared/messages.ts';
-import { pageLines, type PageText, type PageTranslation } from '../shared/page-text.ts';
+import { pageLines, type PageCharge, type PageText, type PageTranslation } from '../shared/page-text.ts';
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
 import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
@@ -56,10 +56,10 @@ export interface LongPageRequest {
   stripes: Stripe[];
   /** 這次的 Line（翻好或沒翻好）併回整個 Page。 */
   whole(part: PageText): PageText;
-  /** 接續同一個 Page（不是重新翻譯整個 Page）時：這個 Page 扣頁那次的 usageRecordId（Hosted Translation 才有）。 */
-  pageUsageRecordId?: number;
-  /** 翻好時 Worker 回的 usageRecordId（Hosted Translation 才有），下一截接續時帶。 */
-  charged?(usageRecordId: number): void;
+  /** 接續同一個 Page（不是重新翻譯整個 Page）時：這個 Page 扣頁的那次（Hosted Translation 才有），帶上它的 usageRecordId。 */
+  charge?: PageCharge;
+  /** 翻好時這個 Page 扣頁的那次（Hosted Translation 才有），也跟著存進快取；下一截接續時帶。 */
+  charged?(charge: PageCharge): void;
 }
 
 const trace = createTrace('sw');
@@ -87,6 +87,12 @@ function applyTranslation(text: PageText, output: TranslateOutput): PageText {
     return item.sfx === undefined ? merged : { ...merged, sfx: item.sfx };
   };
   return { balloons: text.balloons.map(merge), looseText: text.looseText.map(merge) };
+}
+
+/** Worker 回的 usageRecordId 是哪一次扣頁：接續成功時回原本那筆，時間照舊；不一樣就是這次新扣的。 */
+function chargeOf(previous: PageCharge | undefined, usageRecordId: number | undefined): PageCharge | undefined {
+  if (usageRecordId === undefined) return undefined;
+  return previous?.usageRecordId === usageRecordId ? previous : { usageRecordId, chargedAt: Date.now() };
 }
 
 export function createPageTranslation({ cache, ledger, getSeries, translatorVersion }: PageTranslationDeps) {
@@ -140,7 +146,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
     let output: TranslateOutput;
     const startedAt = Date.now();
     try {
-      const continues = long?.pageUsageRecordId;
+      const continues = long?.charge?.usageRecordId;
       output = await translator.translatePage({
         ...seriesName(series),
         ...toTranslateInput(text, seriesNotes, priorPages),
@@ -155,7 +161,8 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       console.warn('translate failed', e);
       return { state: 'done', text: whole(text), translated: false, translateError: e instanceof Error ? e.message : String(e) };
     }
-    if (output.usageRecordId !== undefined) long?.charged?.(output.usageRecordId);
+    const charge = long && chargeOf(long.charge, output.usageRecordId);
+    if (charge) long.charged?.(charge);
     const translated = applyTranslation(text, output);
     const page = whole(translated);
     const { model, latencyMs, usage } = output;
@@ -168,6 +175,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
         seriesId,
         pageHash,
         ...(long ? { stripes: long.stripes } : {}),
+        ...(charge ? { charge } : {}),
         usedNotes: usedNotes(seriesNotes, [...page.balloons, ...page.looseText].map((t) => t.原文)),
         model: version?.model ?? model,
         promptVersion: version?.promptVersion ?? '',

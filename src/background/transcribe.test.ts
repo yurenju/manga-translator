@@ -1556,6 +1556,43 @@ describe('直式捲動的長 Page（spec #142）', () => {
     ]);
   });
 
+  it('扣頁紀錄存進快取：重新整理（或 SW 被回收）後接續照樣帶原本的 usageRecordId，扣頁超過 1 小時就不帶', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const calls: TranslateInput[] = [];
+      let records = 0;
+      const base = translatorReturning('譯', calls);
+      const translator: Translator = {
+        ...base,
+        async translatePage(input) {
+          return { ...(await base.translatePage(input)), usageRecordId: input.pageUsageRecordId ?? ++records };
+        },
+      };
+      const cache = memoryCache();
+      const analyze = vi
+        .fn<(request: AnalyzeRequest) => Promise<PageText>>()
+        .mockResolvedValueOnce(sliceText(balloonAt(0.1, 'うえ')))
+        .mockResolvedValueOnce(sliceText(balloonAt(0.4, 'なか')))
+        .mockResolvedValueOnce(sliceText(balloonAt(0.7, 'した')));
+      const scan = async (anchorId: string, top: number, stripes: [number, string][]) => {
+        // 每次都是新的 transcriber：記憶體裡什麼都沒有，只剩快取
+        const { transcriber } = setup({ cache, analyze, getTranslator: () => translator });
+        await transcriber.update(1, [longThumb(anchorId, top, stripes)], capture);
+      };
+
+      vi.setSystemTime(0);
+      await scan('a1', 0, [[0, HASHES.a1!]]);
+      vi.setSystemTime(59 * 60_000);
+      await scan('a8', 0.3, [[0, HASHES.a1!], [3, HASHES.a3!]]);
+      vi.setSystemTime(61 * 60_000);
+      await scan('a9', 0.6, [[3, HASHES.a3!], [5, HASHES.a5!]]);
+
+      expect(calls.map((c) => c.pageUsageRecordId)).toEqual([undefined, 1, undefined]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('同一截再出現（例如覆蓋層畫好後再掃一次）不重新辨識', async () => {
     const { transcriber, deps } = setup();
     await transcriber.update(1, [longThumb('a1', 0, [[0, HASHES.a1!]])], capture);

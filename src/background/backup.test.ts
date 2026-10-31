@@ -139,4 +139,17 @@ describe('擦除資料只留在本機', () => {
     // 本機那份不受影響
     expect(source.stores().pageTranslations[0]!.balloons[0]!.erase).toEqual(balloon.erase);
   });
+
+  it('長 Page 的扣頁紀錄不進備份：匯入的那頁之後的截當成新的一頁扣', async () => {
+    const long: PageTranslation = { ...translation('s1', 'aaaa', '麵包'), stripes: [{ index: 0, hash: 'ff' }], charge: { usageRecordId: 7, chargedAt: 400 } };
+    const source = memoryDb();
+    source.seed({ ...SAMPLE, pageTranslations: [long] });
+
+    const file = JSON.parse(JSON.stringify(await source.backup.exportAll()));
+    const clean = memoryDb();
+    await clean.backup.importAll(file);
+
+    const { charge: _, ...rest } = long;
+    expect(clean.stores().pageTranslations).toEqual([rest]);
+  });
 });

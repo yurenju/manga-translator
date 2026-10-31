@@ -29,7 +29,7 @@
 import { addLines, collectedBoxes, pickLines, replaceLines, sameLongPage, sliceOf, type Slice, type Stripe } from '../shared/long-page.ts';
 import type { AnalyzeRequest, CropRequest, PageThumb, PageView } from '../shared/messages.ts';
 import { findSamePage } from '../shared/page-hash.ts';
-import { pageLines, type PageText } from '../shared/page-text.ts';
+import { pageLines, type PageCharge, type PageText } from '../shared/page-text.ts';
 import type { SeriesNotes, TranslatorVersion } from '../shared/series-notes.ts';
 import type { Series } from '../shared/series.ts';
 import { createTrace } from '../shared/trace.ts';
@@ -112,9 +112,12 @@ interface LongPage {
   stripes: Stripe[];
   /** 最近一次排進本機段的那一截；同一截不重做。 */
   slice: Slice;
-  /** Hosted Translation：這個 Page 扣頁那次的用量紀錄 id，接續的截帶上它（只在記憶體，翻走後再出現就重新扣）。 */
-  usageRecordId?: number;
+  /** Hosted Translation：這個 Page 扣頁的那次，接續的截帶上它。也存在快取裡，翻走、重新整理後再出現照樣接續。 */
+  charge?: PageCharge;
 }
+
+/** 扣頁之後多久內接續（跟 Worker 的條件一樣，worker/src/quota.ts）；超過就不帶，Worker 當成新的一頁扣。 */
+const CONTINUATION_WINDOW_MS = 60 * 60_000;
 
 const EMPTY_TEXT: PageText = { balloons: [], looseText: [] };
 
@@ -395,17 +398,19 @@ export function createTranscriber(deps: TranscriberDeps) {
   }
 
   /**
-   * 長 Page 的一次 ①：只翻新收的 Line 時是接續，帶這個 Page 的 usageRecordId（spec #142「計費」）；
-   * 重新翻譯整個 Page（job.added 沒有）不帶，是扣一頁的新請求。回來的 id 給之後的截接續。
+   * 長 Page 的一次 ①：只翻新收的 Line、扣頁還不到 1 小時時是接續，帶這個 Page 的 usageRecordId（spec #142「計費」）；
+   * 重新翻譯整個 Page（job.added 沒有）不帶，是扣一頁的新請求。回來的扣頁紀錄給之後的截接續。
    */
   function longRequest(job: Job, long: LongPage): LongPageRequest {
     const { record } = job;
+    const { charge } = long;
+    const continues = job.added && charge && Date.now() - charge.chargedAt < CONTINUATION_WINDOW_MS;
     return {
       stripes: long.stripes,
       // 翻譯期間下一截可能又收了新的 Line：回來時才併回當下的整個 Page
       whole: (part) => (record.text = replaceLines(record.text!, part)),
-      ...(job.added && long.usageRecordId !== undefined ? { pageUsageRecordId: long.usageRecordId } : {}),
-      charged: (usageRecordId) => (long.usageRecordId = usageRecordId),
+      ...(continues ? { charge } : {}),
+      charged: (next) => (long.charge = next),
     };
   }
 
@@ -434,6 +439,7 @@ export function createTranscriber(deps: TranscriberDeps) {
     const provisional = record.pageHash;
     record.pageHash = cached.pageHash;
     record.long!.stripes = mergeStripes(cached.stripes ?? [], record.long!.stripes);
+    if (cached.charge) record.long!.charge = cached.charge;
     if (transcript.state === 'done') record.text = transcript.text;
     tab.pages = tab.pages.map((p) => (p.anchorId === record.long!.anchorId && p.pageHash === provisional ? { ...p, pageHash: cached.pageHash } : p));
     return transcript;

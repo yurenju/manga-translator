@@ -5,7 +5,7 @@
  * 匯入＝合併，本機優先（跟 #36 合併 Series 同一套規則）：本機沒有的 Series／網址模式才加；Notes 照只能新增規則併入，
  * 譯文衝突變成建議修改；同一個 Page 的快取保留本機那份。Notes 經過 notes-ledger 寫，不會跟翻譯中的套用互相蓋掉。
  */
-import { withoutEraseData, type PageTranslation } from '../shared/page-text.ts';
+import { forBackup, type PageTranslation } from '../shared/page-text.ts';
 import { mergeImportedNotes, type NotesSuggestion, type SeriesNotes } from '../shared/series-notes.ts';
 import type { Series, UrlPattern } from '../shared/series.ts';
 import type { NotesEntry } from '../shared/translator.ts';
@@ -78,8 +78,8 @@ export function createBackup(deps: BackupDeps) {
         urlPatterns,
         seriesNotes,
         notesSuggestions,
-        // 擦除小圖只留在本機（#149）
-        pageTranslations: pageTranslations.map(withoutEraseData),
+        // 擦除小圖（#149）與長 Page 的扣頁紀錄只留在本機
+        pageTranslations: pageTranslations.map(forBackup),
       };
     },
 
