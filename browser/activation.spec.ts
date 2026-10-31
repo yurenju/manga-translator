@@ -1,8 +1,8 @@
 import {
-  activateOnJumpPlus,
+  activateOnMockSite,
   expect,
   isContentScriptInjected,
-  openJumpPlus,
+  openMockSite,
   openSidePanel,
   tabIdOf,
   test,
@@ -13,7 +13,7 @@ import {
 const SETTLE_MS = 1000;
 
 test('mock site 的 canvas 是 tainted（getImageData 會丟錯）', async ({ context, mockSite }) => {
-  const page = await openJumpPlus(context, mockSite);
+  const page = await openMockSite(context, mockSite);
 
   const error = await page.evaluate(() => {
     const canvas = document.querySelector<HTMLCanvasElement>('.page canvas')!;
@@ -34,8 +34,8 @@ test('透過測試入口啟動後 side panel 顯示「已啟動」，content scr
   extensionId,
   mockSite,
 }) => {
-  await openJumpPlus(context, mockSite);
-  const tabId = await tabIdOf(sw, mockSite.jumpPlusUrl);
+  await openMockSite(context, mockSite);
+  const tabId = await tabIdOf(sw, mockSite.canvasSiteUrl);
   const panel = await openSidePanel(context, extensionId, tabId);
   await expect(panel.getByText('請點外掛圖示啟動')).toBeVisible();
 
@@ -46,7 +46,7 @@ test('透過測試入口啟動後 side panel 顯示「已啟動」，content scr
 });
 
 test('同 origin 重新整理後 content script 自動重新注入', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
   await page.reload();
 
@@ -55,7 +55,7 @@ test('同 origin 重新整理後 content script 自動重新注入', async ({ co
 });
 
 test('按「停止」後清掉 content script，重新整理也不再注入', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
   await panel.getByRole('button', { name: '停止' }).click();
 
@@ -67,7 +67,7 @@ test('按「停止」後清掉 content script，重新整理也不再注入', as
 });
 
 test('換 origin 就停止', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
   await page.goto(`${mockSite.imageOrigin}/p01-basic.png`);
 

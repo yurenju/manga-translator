@@ -52,7 +52,7 @@ export function createOverlaySync(deps: OverlaySyncDeps) {
 
   /**
    * 每次擷取後：擷取到的 anchor 只記得上面確實還顯示著的覆蓋（PageCandidate.overlaid）。content script 清掉的
-   * （img 換了 src、Kindle 視窗大小變了重新產生合成圖）下次 publish 會重送，同一頁換回來時覆蓋才回得來。
+   * （img 換了 src、電子書閱讀器視窗大小變了重新產生合成圖）下次 publish 會重送，同一頁換回來時覆蓋才回得來。
    */
   function captured(tabId: number, pages: readonly PageCandidate[]): void {
     // 這次沒擷取到的 anchor（捲走了）不知道，當作還顯示著

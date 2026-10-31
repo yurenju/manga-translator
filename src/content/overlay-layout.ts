@@ -72,7 +72,7 @@ export function textRegions(balloon: Box, text: Box): { erase: Box; fit1: Box; f
 const boxesOverlap = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /**
- * 對話框疊在一起時偵測框也會重疊，譯文就排進隔壁的框裡（#27 除錯在 Jump+ 看到）。兩兩比對譯文範圍，
+ * 對話框疊在一起時偵測框也會重疊，譯文就排進隔壁的框裡（#27 除錯在 canvas 網站看到）。兩兩比對譯文範圍，
  * 重疊就沿著兩個文字框分得比較開的那一軸，在文字框相對的兩邊中間切一刀，各留在自己那一側。
  * 只改 fit1／fit2（就地修改）；擦除範圍不動，原文還是要整個蓋掉。
  */
@@ -231,7 +231,7 @@ export function breakLines(譯文: string, targetLines: number): string[] {
   return chosen.lines;
 }
 
-/** 最小畫面字級（畫面 px）。Jump+ 顯示倍率約 0.49×，只看 Page 像素的話 14px 在畫面上只剩約 7px。 */
+/** 最小畫面字級（畫面 px）。canvas 網站顯示倍率約 0.49×，只看 Page 像素的話 14px 在畫面上只剩約 7px。 */
 export const MIN_SCREEN_FONT_PX = 9;
 
 /** 顯示倍率（畫面 px ÷ Page 像素）下，最小畫面字級換算回 Page 像素。 */

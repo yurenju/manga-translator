@@ -143,8 +143,8 @@ export const test = base.extend<{
 
 export const expect = test.expect;
 
-/** 打開仿 Jump+ 並等全部 canvas 畫完。url：同網站的另一個網址（預設 site.jumpPlusUrl）。 */
-export async function openJumpPlus(context: BrowserContext, site: MockSite, url = site.jumpPlusUrl): Promise<Page> {
+/** 打開仿 canvas 網站並等全部 canvas 畫完。url：同網站的另一個網址（預設 site.canvasSiteUrl）。 */
+export async function openMockSite(context: BrowserContext, site: MockSite, url = site.canvasSiteUrl): Promise<Page> {
   const page = await context.newPage();
   await page.goto(url);
   await page.locator('body[data-ready="true"]').waitFor();
@@ -202,30 +202,30 @@ export async function chooseFromPanelMenu(panel: Page, item: string): Promise<vo
 }
 
 /**
- * 打開仿 Jump+ 與它的 side panel，透過測試入口啟動，等 panel 顯示「已啟動」。
- * 啟動前把仿 Jump+ 切到前景，跟真的點圖示時一樣是它視窗裡的作用中 tab，captureVisibleTab 才截得到它
- * （同一個測試開第二個仿 Jump+ 時，兩個在同一個視窗）。
+ * 打開仿 canvas 網站與它的 side panel，透過測試入口啟動，等 panel 顯示「已啟動」。
+ * 啟動前把仿 canvas 網站切到前景，跟真的點圖示時一樣是它視窗裡的作用中 tab，captureVisibleTab 才截得到它
+ * （同一個測試開第二個仿 canvas 網站時，兩個在同一個視窗）。
  */
-export async function activateOnJumpPlus(
+export async function activateOnMockSite(
   {
     context,
     sw,
     extensionId,
     mockSite,
-    url = mockSite.jumpPlusUrl,
+    url = mockSite.canvasSiteUrl,
     beforeActivate,
   }: {
     context: BrowserContext;
     sw: Worker;
     extensionId: string;
     mockSite: MockSite;
-    /** 仿 Jump+ 的網址（預設 mockSite.jumpPlusUrl；翻頁版用 mockSite.jumpPlusPagedUrl）。 */
+    /** 仿 canvas 網站的網址（預設 mockSite.canvasSiteUrl；翻頁版用 mockSite.canvasSitePagedUrl）。 */
     url?: string;
     /** side panel 打開後、啟動前（例如在 panel 裡掛 listener）。 */
     beforeActivate?: (panel: Page) => Promise<void>;
   },
 ): Promise<{ page: Page; panel: Page; tabId: number }> {
-  const page = await openJumpPlus(context, mockSite, url);
+  const page = await openMockSite(context, mockSite, url);
   const tabId = await tabIdOf(sw, url);
   const panel = await openSidePanel(context, extensionId, tabId);
   await beforeActivate?.(panel);

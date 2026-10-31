@@ -37,8 +37,8 @@ function groundTruthHashes(id: string): string[] {
   return readGroundTruth(id).pages.map((p) => pageHash(cropGray(image, p.bbox)));
 }
 
-/** Kindle 實測的幾種視窗：合成圖像素＝viewport×2；橫長視窗黑邊在上下，更寬的視窗在左右。 */
-const KINDLE_VIEWPORTS = [
+/** 電子書閱讀器實測的幾種視窗：合成圖像素＝viewport×2；橫長視窗黑邊在上下，更寬的視窗在左右。 */
+const READER_VIEWPORTS = [
   { width: 3116, height: 2412 },
   { width: 3840, height: 2160 },
   { width: 1500, height: 1000 },
@@ -52,8 +52,8 @@ describe('Spread 切頁', () => {
   });
 
   for (const id of ['p07-spread', 'p08-action']) {
-    for (const viewport of KINDLE_VIEWPORTS) {
-      it(`仿 Kindle 合成圖（${id}，${viewport.width}×${viewport.height}，黑邊）：去黑邊後切成兩頁，hash 跟原圖單頁是同一頁`, () => {
+    for (const viewport of READER_VIEWPORTS) {
+      it(`仿電子書閱讀器合成圖（${id}，${viewport.width}×${viewport.height}，黑邊）：去黑邊後切成兩頁，hash 跟原圖單頁是同一頁`, () => {
         const { image, content } = letterbox(readGray(id), viewport);
         const pages = splitSpread(image);
         expectNear(pages, expectedPages(id, content));

@@ -5,7 +5,7 @@
  * 所以明顯不是翻頁的訊號（只按修飾鍵、跟 Page 無關的元素變動）先在這裡擋掉。
  */
 
-/** 事件停下這麼久才截圖：翻頁動畫（仿 Jump+ 450 ms，結束時有 transitionend）跑完、捲動停下。 */
+/** 事件停下這麼久才截圖：翻頁動畫（仿 canvas 網站 450 ms，結束時有 transitionend）跑完、捲動停下。 */
 export const PAGE_TURN_DEBOUNCE_MS = 400;
 
 export interface PageTurnSignalDeps {

@@ -1,7 +1,7 @@
 /**
  * Hosted Translation：外掛連 globalSetup 啟動的本機 Worker（wrangler dev --env test，Anthropic 是 FakeTranslator、寄信是假的實作）。
  * 全新安裝（#93）：SW 處理安裝事件 → 打開 onboarding 分頁 → 用 email 驗證碼登入（驗證碼從假的寄信實作的 outbox 取出）→
- * 先用免費額度 → 在仿 Jump+ 翻完一頁；切到自備金鑰時改走 offscreen 的 FakeTranslator，不經過 Worker。
+ * 先用免費額度 → 在仿 canvas 網站翻完一頁；切到自備金鑰時改走 offscreen 的 FakeTranslator，不經過 Worker。
  * unit 測不到的：SW 真的打開 onboarding 分頁、onboarding 頁與 side panel 與 SW 透過 chrome.storage／IndexedDB／訊息接起來，
  * side panel 與 SW 真的用 HTTP 打到 Worker、兩邊對 API 契約（路徑、token、輸入與回應格式）的理解一致。
  * 安裝時怎麼決定翻譯模式與 onboarding 在 src/background/install.test.ts。
@@ -17,7 +17,7 @@
 import { createHmac } from 'node:crypto';
 import type { BrowserContext, Page } from '@playwright/test';
 import { DEV_FREE_PAGES_PATH, PADDLE_WEBHOOK_PATH } from '../src/shared/hosted-api.ts';
-import { activateOnJumpPlus, chooseFromPanelMenu, expect, openPanelMenu, test } from './fixtures.ts';
+import { activateOnMockSite, chooseFromPanelMenu, expect, openPanelMenu, test } from './fixtures.ts';
 import { finishOnboarding, onboardingPage, signInFromPanel, signInWithEmail } from './sign-in.ts';
 import { WORKER_URL } from './worker.ts';
 
@@ -46,7 +46,7 @@ test.describe('全新安裝', () => {
     await finishOnboarding(onboarding);
 
     // 設定完成：side panel 不再只顯示「完成設定」，自動翻譯直接經過 Worker 翻（同意在登入時取得，沒有資料使用說明卡）
-    const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+    const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
     const transcript = firstTranscript(panel);
     await expect(transcript.getByText('早安！今天好早喔')).toBeVisible();
     await expect(panel.getByRole('region', { name: '資料使用說明' })).toHaveCount(0);
@@ -116,7 +116,7 @@ test('訂閱：side panel 的「訂閱」用新分頁打開 checkout 頁；webho
   extensionId,
   mockSite,
 }, testInfo) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   await signInOnPanel(panel, context, freshEmail(testInfo.workerIndex));
   const remaining = panel.getByRole('status', { name: '剩餘額度' });
   await expect(remaining).toHaveText(/免費額度剩 50 頁/);
@@ -144,7 +144,7 @@ test('訂閱：side panel 的「訂閱」用新分頁打開 checkout 頁；webho
 });
 
 test('免費額度用完：Worker 回額度不足後，side panel 顯示用完的狀態，逐字稿仍有原文與讀音', async ({ context, sw, extensionId, mockSite }, testInfo) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   // 關掉自動翻譯：登入後只有按「翻譯此頁」才會送到 Worker，額度與按鈕不會被背景的翻譯搶先改掉
   const email = freshEmail(testInfo.workerIndex);
   await signInOnPanel(panel, context, email);
@@ -179,7 +179,7 @@ test('刪除帳號：設定頁的「刪除帳號」換到確認頁 → 確定刪
   extensionId,
   mockSite,
 }, testInfo) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   const email = freshEmail(testInfo.workerIndex);
   await signInOnPanel(panel, context, email);
   await chooseFromPanelMenu(panel, '設定');

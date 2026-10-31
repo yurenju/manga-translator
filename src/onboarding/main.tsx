@@ -175,10 +175,10 @@ function Tutorial() {
   return (
     <>
       <h2 class="ob-h2">開始翻譯</h2>
-      <p>打開日文漫畫網站（例如少年ジャンプ＋、Kindle 雲端閱讀器），然後：</p>
+      <p>打開日文漫畫網站或電子書閱讀器，然後：</p>
       {/* 假的工具列：網址列＋拼圖圖示＋框起來的外掛圖示 */}
       <div class="ob-toolbar" aria-hidden="true">
-        <span class="ob-toolbar__url">shonenjumpplus.com/episode/…</span>
+        <span class="ob-toolbar__url">manga.example/episode/…</span>
         <span class="ob-toolbar__icon">🧩</span>
         <span class="ob-toolbar__icon ob-toolbar__icon--hl">
           <img src={LOGO} alt="" width={24} height={24} />

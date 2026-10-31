@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import type { Locator, Page } from '@playwright/test';
 import type { Message, ModelStatus, ModelStatusResponse } from '../src/shared/messages.ts';
 import {
-  activateOnJumpPlus,
+  activateOnMockSite,
   configuredServiceWorker,
   expect,
   launchWithExtension,
@@ -47,7 +47,7 @@ async function lines(transcript: Locator) {
 
 test.describe('沒有 API key', () => {
   test('side panel 畫出原文＋讀音＋「未翻譯」，Loose Text 標「框外文字」', async ({ context, sw, extensionId, mockSite }) => {
-    const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+    const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
     const first = transcriptOf(panel, 0);
     await expect(first.getByRole('listitem').first()).toBeVisible();
@@ -79,7 +79,7 @@ test.describe('沒有 API key', () => {
 test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就能用', { tag: '@e2e' }, async ({ context, sw, extensionId, mockSite, fakeOcr }) => {
   test.skip(fakeOcr, '需要真的模型，只在 e2e 跑');
   mockSite.corruptModel('onnx/decoder_model_quantized.onnx');
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
 
   await expect(panel.getByRole('alert')).toContainText('SHA-256 不符');
   await expect(panel.getByRole('alert')).toContainText('decoder_model_quantized.onnx');
@@ -87,7 +87,7 @@ test('模型 SHA-256 不符時不使用並顯示錯誤；修好後按重試就�
   await expect(panel.getByRole('list', { name: '逐字稿' })).toHaveCount(0);
 
   mockSite.repairModels();
-  // 重試會重新擷取：仿 Jump+ 維持在前景（跟真的 side panel 一樣），才截得到它
+  // 重試會重新擷取：仿 canvas 網站維持在前景（跟真的 side panel 一樣），才截得到它
   await panel.getByRole('button', { name: '重試' }).click();
   await expect(transcriptOf(panel, 0).getByRole('listitem').first()).toBeVisible();
   await expect(panel.getByRole('alert')).toHaveCount(0);
@@ -102,7 +102,7 @@ test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器�
     let context = await launchWithExtension(userDataDir);
     let sw = await configuredServiceWorker(context, site);
     let extensionId = new URL(sw.url()).host;
-    const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite: site, beforeActivate: recordModelStatus });
+    const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite: site, beforeActivate: recordModelStatus });
     await expect(transcriptOf(panel, 0).getByRole('listitem').first()).toBeVisible();
     const firstRequests = site.modelRequests.length;
     expect(firstRequests).toBe(4); // detector、encoder、decoder、vocab
@@ -124,7 +124,7 @@ test('第一次使用時下載模型並顯示進度與大小；重開瀏覽器�
     context = await launchWithExtension(userDataDir);
     sw = await configuredServiceWorker(context, site);
     extensionId = new URL(sw.url()).host;
-    const second = await activateOnJumpPlus({ context, sw, extensionId, mockSite: site });
+    const second = await activateOnMockSite({ context, sw, extensionId, mockSite: site });
     await expect(transcriptOf(second.panel, 0).getByRole('listitem').first()).toBeVisible();
     expect(site.modelRequests.length).toBe(firstRequests);
     await context.close();

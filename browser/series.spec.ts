@@ -6,7 +6,7 @@ import type { Page, Worker } from '@playwright/test';
 import type { Message, SeriesResponse } from '../src/shared/messages.ts';
 import type { PageTranslation } from '../src/shared/page-text.ts';
 import type { Series } from '../src/shared/series.ts';
-import { activateOnJumpPlus, expect, readStore, testActivate, test } from './fixtures.ts';
+import { activateOnMockSite, expect, readStore, testActivate, test } from './fixtures.ts';
 
 /** 跟 cache.spec.ts 一樣用真的視窗：截圖與 rect 才對得上。 */
 test.use({ viewport: null });
@@ -47,7 +47,7 @@ const seriesNamed = async (sw: Worker, name: string) => (await readStore<Series>
 // 的 unit；這裡只確認 side panel 的操作會經過 SW 寫進 IndexedDB（預選那條再確認下一次啟動讀得回來）。
 
 test('選 Series 後重新整理再啟動，自動預選同一部 Series', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel, tabId } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel, tabId } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   await expect(seriesRow(panel)).toContainText(/未歸類（未命名・127\.0\.0\.1・/);
 
   await createSeries(panel, '火ノ丸相撲');
@@ -57,7 +57,7 @@ test('選 Series 後重新整理再啟動，自動預選同一部 Series', async
 });
 
 test('Provisional Series 在 side panel 改名：顯示新名稱，也寫進 store', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   await expect(seriesRow(panel)).toContainText(/未歸類（/);
 
   // 平常只是文字；點鉛筆才出現輸入框
@@ -74,7 +74,7 @@ test.describe('合併（FakeTranslator）', () => {
   test.use({ fakeTranslator: true });
 
   test('Provisional Series 合併進既有 Series：store 裡快取改掛目標、臨時 Series 刪掉，不重翻', async ({ context, sw, extensionId, mockSite }) => {
-    const first = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+    const first = await activateOnMockSite({ context, sw, extensionId, mockSite });
     const statusLines = first.panel.getByRole('status', { name: '翻譯狀態' });
     await expect(statusLines.filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
     await createSeries(first.panel, '火ノ丸相撲');
@@ -82,7 +82,7 @@ test.describe('合併（FakeTranslator）', () => {
     // 選了新的 Series 會重新擷取、用新 ID 翻譯：等它寫完，目標就有這兩頁的快取
     await expect.poll(async () => (await readStore<PageTranslation>(sw, 'pageTranslations')).filter((t) => t.seriesId === target.id).length).toBe(2);
 
-    const other = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: new URL('episode-2/', mockSite.jumpPlusUrl).href });
+    const other = await activateOnMockSite({ context, sw, extensionId, mockSite, url: new URL('episode-2/', mockSite.canvasSiteUrl).href });
     await expect(other.panel.getByRole('status', { name: '翻譯狀態' }).filter({ hasText: /^已翻譯・/ })).toHaveCount(2);
     const provisionalId = (await currentSeries(other.panel, other.tabId))!;
     expect((await readStore<PageTranslation>(sw, 'pageTranslations')).filter((t) => t.seriesId === provisionalId)).toHaveLength(2);
@@ -96,7 +96,7 @@ test.describe('合併（FakeTranslator）', () => {
     await expect.poll(async () => (await readStore<Series>(sw, 'series')).some((s) => s.id === provisionalId)).toBe(false);
     const cached = await readStore<PageTranslation>(sw, 'pageTranslations');
     expect(cached.filter((t) => t.seriesId === provisionalId)).toEqual([]);
-    // 兩集是同一個仿 Jump+：hash 相同，保留目標原本的兩頁，不會變成 4 頁
+    // 兩集是同一個仿 canvas 網站：hash 相同，保留目標原本的兩頁，不會變成 4 頁
     expect(cached.filter((t) => t.seriesId === target.id)).toHaveLength(2);
     expect(await sw.evaluate(() => globalThis.__translateCalls ?? 0)).toBe(calls);
   });

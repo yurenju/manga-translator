@@ -6,13 +6,13 @@ const target = (type: string, url: string): TargetInfo => ({ id: url, type, url,
 const ours = 'chrome-extension://aaaa';
 const other = 'chrome-extension://bbbb';
 const list: TargetInfo[] = [
-  target('page', 'https://shonenjumpplus.com/episode/1'),
+  target('page', 'https://manga.example/episode/1'),
   target('service_worker', `${other}/background.js`),
   target('service_worker', `${ours}/background.js`),
   target('other', `${ours}/offscreen.html`),
   target('page', 'chrome://extensions/'),
   target('page', `${ours}/sidepanel.html`),
-  target('service_worker', 'https://shonenjumpplus.com/sw.js'),
+  target('service_worker', 'https://manga.example/sw.js'),
   target('page', 'https://example.com/'),
   { id: 'no-ws', type: 'page', url: 'https://attached-elsewhere.com/' },
 ];
@@ -27,13 +27,13 @@ describe('candidateTargets', () => {
   });
 
   it('page／content：一般網頁分頁，照 /json/list 的順序；沒有 WebSocket 的不列', () => {
-    expect(candidateTargets(list, 'page').map((t) => t.url)).toEqual(['https://shonenjumpplus.com/episode/1', 'https://example.com/']);
+    expect(candidateTargets(list, 'page').map((t) => t.url)).toEqual(['https://manga.example/episode/1', 'https://example.com/']);
     expect(candidateTargets(list, 'content')).toEqual(candidateTargets(list, 'page'));
   });
 
   it('url 篩選只套在分頁上', () => {
-    expect(candidateTargets(list, 'page', 'example').map((t) => t.url)).toEqual(['https://example.com/']);
-    expect(candidateTargets(list, 'sw', 'example')).toHaveLength(2);
+    expect(candidateTargets(list, 'page', 'example.com').map((t) => t.url)).toEqual(['https://example.com/']);
+    expect(candidateTargets(list, 'sw', 'example.com')).toHaveLength(2);
   });
 });
 
@@ -70,8 +70,8 @@ describe('buildExpression', () => {
 describe('pickMangaTab', () => {
   const tabs: ChromeTab[] = [
     { id: 1, url: 'https://example.com/', active: true, windowId: 10 },
-    { id: 2, url: 'https://shonenjumpplus.com/episode/1', active: false, windowId: 20 },
-    { id: 3, url: 'https://read.amazon.co.jp/manga/X', active: true, windowId: 20 },
+    { id: 2, url: 'https://manga.example/episode/1', active: false, windowId: 20 },
+    { id: 3, url: 'https://reader.example/manga/X', active: true, windowId: 20 },
     { id: 4, url: 'chrome://extensions/', active: true, windowId: 30 },
   ];
 
@@ -90,7 +90,7 @@ describe('pickMangaTab', () => {
   });
 
   it('給了 url：第一個 url 含這段字的網頁分頁，不管是不是作用中', () => {
-    expect(pickMangaTab(tabs, 20, 'jumpplus')?.id).toBe(2);
+    expect(pickMangaTab(tabs, 20, 'manga.example')?.id).toBe(2);
     expect(pickMangaTab(tabs, 20, 'extensions')).toBeUndefined();
   });
 

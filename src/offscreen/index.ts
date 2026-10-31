@@ -104,7 +104,7 @@ const pipeline = createLocalPipeline({
 
 /**
  * 從截圖裁出全解析度的 Page（Spread 的一頁用 subRect）跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
- * （原地覆蓋用，Jump+ 是 tainted canvas，content script 讀不到像素）。
+ * （原地覆蓋用，canvas 網站的 canvas 是 tainted，content script 讀不到像素）。
  */
 async function analyze({ screenshot, viewport, candidate, subRect, pipeline: config }: AnalyzeRequest): Promise<PageText> {
   if (__E2E__ && config) pipeline.configure(config);

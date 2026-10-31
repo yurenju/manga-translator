@@ -1,11 +1,11 @@
 /**
- * #38：Series Notes 管理、過時提示與匯出／匯入。仿 Jump+ 的翻頁版，OCR 用 FakeEngine 重播（ADR 0007）；FakeTranslator 在
+ * #38：Series Notes 管理、過時提示與匯出／匯入。仿 canvas 網站的翻頁版，OCR 用 FakeEngine 重播（ADR 0007）；FakeTranslator 在
  * Balloon 裡看到「パン」（p01）、「霧島湊」（p02）就新增條目，條目已經在 Notes 裡就補空欄位、譯文不同就提建議。
  */
 import type { Page } from '@playwright/test';
 import type { PageTranslation } from '../src/shared/page-text.ts';
 import type { NotesEntry } from '../src/shared/translator.ts';
-import { activateOnJumpPlus, chooseFromPanelMenu, configuredServiceWorker, expect, launchWithExtension, openSidePanel, readStore, test } from './fixtures.ts';
+import { activateOnMockSite, chooseFromPanelMenu, configuredServiceWorker, expect, launchWithExtension, openSidePanel, readStore, test } from './fixtures.ts';
 
 const パン = { 原文: 'パン', 讀音: 'ぱん', 譯文: '麵包', 類別: '用語' };
 const 霧島湊 = { 原文: '霧島湊', 讀音: 'きりしまみなと', 譯文: '霧島湊', 類別: '人名' };
@@ -57,7 +57,7 @@ async function retranslateWithパン(sw: Parameters<typeof readStore>[0], panel:
 // notes-ledger、transcribe、backup 的 unit；這裡只確認 side panel ↔ SW ↔ IndexedDB 接得起來。
 
 test('在 side panel 編輯條目會寫進 Notes（locked）；重新翻譯後 LLM 的建議列出來，按接受寫回', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.canvasSitePagedUrl });
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   await retranslateWithパン(sw, panel);
   await openNotes(panel);
@@ -80,7 +80,7 @@ test('在 side panel 編輯條目會寫進 Notes（locked）；重新翻譯後 L
 });
 
 test('在別頁改了某頁用到的條目，翻回那頁（快取）出現過時提示', async ({ context, sw, extensionId, mockSite }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.canvasSitePagedUrl });
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   await retranslateWithパン(sw, panel);
 
@@ -98,7 +98,7 @@ test('在別頁改了某頁用到的條目，翻回那頁（快取）出現過�
 });
 
 test('匯出 JSON 真的下載得到檔案，在乾淨的 profile 選檔匯入後 Notes 與快取都在', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite, url: mockSite.jumpPlusPagedUrl });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite, url: mockSite.canvasSitePagedUrl });
   await expect(statusLine(panel)).toHaveText([/^已翻譯・/]);
   // Notes 在背景整理（ADR 0005）：寫進去之後再匯出
   await expect.poll(async () => (await entryOf(sw, 'パン'))?.譯文).toBe('麵包');

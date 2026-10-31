@@ -4,7 +4,7 @@
  * OCR 用 FakeEngine 重播（ADR 0007），讀音與譯文來自 FakeTranslator（ground truth）。
  */
 import type { Locator, Page } from '@playwright/test';
-import { activateOnJumpPlus, expect, test } from './fixtures.ts';
+import { activateOnMockSite, expect, test } from './fixtures.ts';
 import { overlayTexts, pageMode, shownTranslations } from './overlay-helpers.ts';
 
 test.use({ viewport: null, fakeTranslator: true });
@@ -23,7 +23,7 @@ const original = (line: Locator): Locator => line.locator('[lang="ja"]').first()
 const translation = (line: Locator): Locator => line.locator('[lang="zh-Hant"]');
 
 test('閱讀時切換三種顯示層級，逐字稿內容正確', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   const transcript = firstTranscript(panel);
   const greeting = transcript.getByRole('listitem').filter({ hasText: GREETING_ZH });
   await expect(greeting).toBeVisible();
@@ -63,7 +63,7 @@ test('閱讀時切換三種顯示層級，逐字稿內容正確', async ({ conte
 });
 
 test('學習時逐字稿藏譯文，滑過「譯」區塊才出現；振り仮名 Switch 開關ルビ', async ({ context, sw, extensionId, mockSite }) => {
-  const { panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   const transcript = firstTranscript(panel);
   await expect(transcript.getByRole('listitem').filter({ hasText: GREETING_ZH })).toBeVisible();
   // 學習時譯文藏起來沒得篩，先記下第幾行
@@ -123,7 +123,7 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   extensionId,
   mockSite,
 }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   const center = await greetingOnPage(page);
   const line = firstTranscript(panel).getByRole('listitem').filter({ hasText: GREETING_ZH });
   await expect(line).toBeVisible();
@@ -156,7 +156,7 @@ test('滑過頁面 Balloon：頁面出 tooltip、panel 對應行高亮；滑過 
   await panel.mouse.move(1, 1);
   await expect(highlight).toHaveCount(0);
 
-  // 覆蓋層 pointer-events:none：點在譯文上，點擊落到主頁面的 canvas（Jump+ 靠它翻頁）
+  // 覆蓋層 pointer-events:none：點在譯文上，點擊落到主頁面的 canvas（canvas 網站靠它翻頁）
   await page.evaluate(() => {
     const g = globalThis as unknown as { __clicked: number[] };
     g.__clicked = [];
@@ -174,7 +174,7 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
   extensionId,
   mockSite,
 }) => {
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   // 譯文元素藏起來後 rect 不變（visibility），還是拿它當 Balloon 的位置
   const center = await greetingOnPage(page);
   // 學習時逐字稿也藏譯文，切換前先記下第幾行
@@ -247,7 +247,7 @@ test('Page Mode 學習：頁面保留日文；滑過 Balloon 的 tooltip 有原�
 
 test('學習時從 Balloon 斜著移向 tooltip、途中出了框：tooltip 留著；停住才收起', async ({ context, sw, extensionId, mockSite }) => {
   // unit 測了安全三角形的幾何（hover-intent.test.ts）；這裡測 overlay 真的拿 tooltip 的畫面位置判斷、停住後計時器會換句
-  const { page, panel } = await activateOnJumpPlus({ context, sw, extensionId, mockSite });
+  const { page, panel } = await activateOnMockSite({ context, sw, extensionId, mockSite });
   const center = await greetingOnPage(page);
   await pageMode(panel, '學習').click();
   await page.bringToFront();

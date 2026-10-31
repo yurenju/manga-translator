@@ -117,7 +117,7 @@ describe('watchPageTurns', () => {
     expect(t.notify).toHaveBeenCalledTimes(1);
   });
 
-  // 以下來自真實 Jump+（#27 除錯）：這些訊號觸發的截圖 hash 都沒變，卻讓譯文消失 0.3–2.5 秒
+  // 以下來自真實的 canvas 網站（#27 除錯）：這些訊號觸發的截圖 hash 都沒變，卻讓譯文消失 0.3–2.5 秒
   it('只按修飾鍵（alt-tab 的 Alt）或按住 Alt／Ctrl／Meta 的組合鍵不算翻頁', () => {
     const t = setup();
     for (const props of [{ key: 'Alt' }, { key: 'Control' }, { key: 'Shift' }, { key: 'Meta' }, { key: 'Tab', altKey: true }, { key: 'c', ctrlKey: true }]) {
@@ -135,7 +135,7 @@ describe('watchPageTurns', () => {
     expect(t.notify).toHaveBeenCalledTimes(4);
   });
 
-  it('跟 Page 無關的元素改 class／style、播動畫、載入圖片不算翻頁（Jump+ 的頂部選單自己收合）', () => {
+  it('跟 Page 無關的元素改 class／style、播動畫、載入圖片不算翻頁（canvas 網站的頂部選單自己收合）', () => {
     const t = setup();
     const header = unrelated();
     t.mutate([

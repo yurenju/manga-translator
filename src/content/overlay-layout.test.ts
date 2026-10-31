@@ -62,7 +62,7 @@ describe('textRegions', () => {
 });
 
 describe('separateRegions（相鄰 Balloon 的譯文範圍不重疊）', () => {
-  // 真實 Jump+ 一頁（822×1200）的偵測結果（#27 除錯 trace）：三個直書 Balloon 疊在一起，
+  // 真實的 canvas 網站一頁（822×1200）的偵測結果（#27 除錯 trace）：三個直書 Balloon 疊在一起，
   // 偵測框互相重疊，b7 的譯文「這個……」原本排進了 b6 的框裡
   const px = (r: Box): Box => ({ x: r.x * 822, y: r.y * 1200, w: r.w * 822, h: r.h * 1200 });
   const detected = {
@@ -251,7 +251,7 @@ describe('fitText（譯文太長的三階段，spec 第 7.4 節）', () => {
 });
 
 describe('Page 層對到 anchor', () => {
-  // 仿 Jump+：880×1280 的 canvas 顯示成 430 寬，在 offsetParent 裡的 (16, 40)
+  // 仿 canvas 網站：880×1280 的 canvas 顯示成 430 寬，在 offsetParent 裡的 (16, 40)
   const anchor = { offsetLeft: 16, offsetTop: 40, offsetWidth: 430, offsetHeight: 625.45 };
   const whole = { x: 0, y: 0, w: 1, h: 1 };
 

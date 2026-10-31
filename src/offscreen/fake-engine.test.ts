@@ -21,7 +21,7 @@ function expectNearRect(actual: RatioRect, expected: RatioRect, label: string): 
 
 describe('FakeEngine 認頁', () => {
   for (const r of recorded) {
-    it(`${r.id} [${r.rect.join(', ')}] 縮小後（仿 Jump+ 的 canvas）認得出來，擺滿整張`, () => {
+    it(`${r.id} [${r.rect.join(', ')}] 縮小後（仿 canvas 網站的 canvas）認得出來，擺滿整張`, () => {
       const { image } = letterbox(cropGray(readGray(r.id), r.rect), { width: Math.round(r.rect[2] * 0.7), height: Math.round(r.rect[3] * 0.7) });
       const result = match(image);
       expect([result.recorded.id, result.recorded.rect]).toEqual([r.id, r.rect]);
@@ -29,7 +29,7 @@ describe('FakeEngine 認頁', () => {
     });
   }
 
-  it('仿 Kindle 黑邊的 Spread：去黑邊、切成兩頁後，各自認成 Spread 的那一頁', () => {
+  it('仿電子書閱讀器黑邊的 Spread：去黑邊、切成兩頁後，各自認成 Spread 的那一頁', () => {
     const gt = readGroundTruth('p07-spread');
     const { image } = letterbox(readGray('p07-spread'), { width: 1280, height: 1500 });
     const split = splitSpread(image);

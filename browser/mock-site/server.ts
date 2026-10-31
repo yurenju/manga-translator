@@ -1,25 +1,25 @@
 /**
- * localhost mock site（spec #27 第 12 節）：仿 Jump+ 與仿 Kindle。內容一律是 testdata/synthetic 的合成頁。
+ * localhost mock site（spec #27 第 12 節）：仿 canvas 網站與仿電子書閱讀器。內容一律是 testdata/synthetic 的合成頁。
  *
  * 開兩個 server：網站與圖片在不同 port＝不同 origin，而且圖片 server 不送 CORS header，
- * 所以把圖片畫進 canvas 後 canvas 會是 tainted，跟 Jump+ 一樣不能從 DOM 讀像素。
+ * 所以把圖片畫進 canvas 後 canvas 會是 tainted，跟真實的 canvas 網站一樣不能從 DOM 讀像素。
  */
 import { readFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { cachedModelPath, TEST_MODEL_FILES } from '../model-cache.ts';
-import { jumpPlusPage } from './jumpplus.ts';
-import { kindlePage } from './kindle.ts';
+import { canvasSitePage } from './canvas-site.ts';
+import { ebookReaderPage } from './ebook-reader.ts';
 
 const PAGES_DIR = new URL('../../testdata/synthetic/out/', import.meta.url);
 
 export interface MockSite {
-  /** 仿 Jump+：每頁一個 tainted canvas。 */
-  jumpPlusUrl: string;
-  /** 仿 Jump+ 的 RTL 翻頁版（一次一頁、翻頁動畫，#34）。 */
-  jumpPlusPagedUrl: string;
-  /** 仿 Kindle：整個 viewport 一張 blob img（Spread＋黑邊），翻頁換 src（#35）。 */
-  kindleUrl: string;
+  /** 仿 canvas 網站：每頁一個 tainted canvas。 */
+  canvasSiteUrl: string;
+  /** 仿 canvas 網站的 RTL 翻頁版（一次一頁、翻頁動畫，#34）。 */
+  canvasSitePagedUrl: string;
+  /** 仿電子書閱讀器：整個 viewport 一張 blob img（Spread＋黑邊），翻頁換 src（#35）。 */
+  ebookReaderUrl: string;
   /** 取代 https://huggingface.co 的模型下載來源（e2e 透過 test:configure 告訴外掛）。 */
   modelBaseUrl: string;
   /** 外掛向模型下載來源要過的路徑（判斷有沒有重新下載）。 */
@@ -54,22 +54,22 @@ export async function startMockSite(): Promise<MockSite> {
   const site = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     const path = url.pathname;
-    // /jumpplus/ 以下的任何路徑都是同一個仿 Jump+（同網站的另一話，#36 網址模式）
-    if (path.startsWith('/jumpplus/')) {
+    // /canvas-site/ 以下的任何路徑都是同一個仿 canvas 網站（同網站的另一話，#36 網址模式）
+    if (path.startsWith('/canvas-site/')) {
       const flag = (name: string) => url.searchParams.get(name) === '1';
       const options = { paged: url.searchParams.get('mode') === 'paged', nav: flag('nav'), watermark: flag('watermark'), stacked: flag('stacked') };
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(jumpPlusPage(imageOrigin, options));
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(canvasSitePage(imageOrigin, options));
       return;
     }
-    if (path === '/kindle/') {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(kindlePage());
+    if (path === '/ebook-reader/') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(ebookReaderPage());
       return;
     }
-    const kindleImage = /^\/kindle\/img\/([\w-]+\.png)$/.exec(path);
-    if (kindleImage) {
-      // 跟網站同 origin：仿 Kindle 要把圖畫進 canvas 再 toBlob
+    const readerImage = /^\/ebook-reader\/img\/([\w-]+\.png)$/.exec(path);
+    if (readerImage) {
+      // 跟網站同 origin：仿電子書閱讀器要把圖畫進 canvas 再 toBlob
       try {
-        res.writeHead(200, { 'content-type': 'image/png' }).end(await readFile(new URL(kindleImage[1]!, PAGES_DIR)));
+        res.writeHead(200, { 'content-type': 'image/png' }).end(await readFile(new URL(readerImage[1]!, PAGES_DIR)));
       } catch {
         res.writeHead(404).end();
       }
@@ -93,9 +93,9 @@ export async function startMockSite(): Promise<MockSite> {
   const siteOrigin = await listen(site);
 
   return {
-    jumpPlusUrl: `${siteOrigin}/jumpplus/`,
-    jumpPlusPagedUrl: `${siteOrigin}/jumpplus/?mode=paged`,
-    kindleUrl: `${siteOrigin}/kindle/`,
+    canvasSiteUrl: `${siteOrigin}/canvas-site/`,
+    canvasSitePagedUrl: `${siteOrigin}/canvas-site/?mode=paged`,
+    ebookReaderUrl: `${siteOrigin}/ebook-reader/`,
     modelBaseUrl: `${siteOrigin}/hf`,
     modelRequests,
     corruptModel: (path) => void corrupted.add(path),

@@ -1,20 +1,20 @@
 /**
- * 疊在 Page 候選上的元素（#59、ADR 0004）：截圖前暫時藏起來，截完還原。Kindle 的閱讀器把工具列疊在整個 viewport
- * 大小的 img 上面；Jump+ 把透明的翻頁感應區（`<a>`）疊在 canvas 上面。
- * 要碰 DOM（elementsFromPoint、adoptedStyleSheets），單元測試跑在 Node 沒有 DOM，所以由仿 Kindle／Jump+ 的 e2e 測。
+ * 疊在 Page 候選上的元素（#59、ADR 0004）：截圖前暫時藏起來，截完還原。電子書閱讀器把工具列疊在整個 viewport
+ * 大小的 img 上面；canvas 網站把透明的翻頁感應區（`<a>`）疊在 canvas 上面。
+ * 要碰 DOM（elementsFromPoint、adoptedStyleSheets），單元測試跑在 Node 沒有 DOM，所以由仿電子書閱讀器／canvas 網站的 e2e 測。
  */
 
-/** 取樣格點：橫、直各幾個點（含貼著兩邊的點）。真實 Kindle 一次約 3.4 ms（140 個點）。 */
+/** 取樣格點：橫、直各幾個點（含貼著兩邊的點）。真實的電子書閱讀器一次約 3.4 ms（140 個點）。 */
 const SAMPLE_COLUMNS = 14;
 const SAMPLE_ROWS = 10;
 /** 貼邊的取樣點往內縮這麼多 CSS px，免得取到隔壁元素的邊界。 */
 const EDGE_INSET = 2;
 
-/** 可能是漫畫本身（Kindle 左右兩側各有一張預載的頁面 img），不藏。 */
+/** 可能是漫畫本身（電子書閱讀器左右兩側各有一張預載的頁面 img），不藏。 */
 const MEDIA = new Set(['img', 'canvas', 'video']);
 
 /**
- * 取樣期間讓所有元素都接受點擊測試：Kindle 的 img 是 `pointer-events: none`，浮水印、遮罩也常是，
+ * 取樣期間讓所有元素都接受點擊測試：電子書閱讀器的 img 是 `pointer-events: none`，浮水印、遮罩也常是，
  * elementsFromPoint 會跳過它們，就分不出誰在誰上面。用 adopted stylesheet 而不是改 style 屬性：改屬性會產生
  * mutation，觸發自己的翻頁偵測。同步加上、量完立刻拿掉，瀏覽器沒機會拿它算 hover。
  */
