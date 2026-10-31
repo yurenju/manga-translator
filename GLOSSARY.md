@@ -57,7 +57,7 @@ The fixed translations a Series has settled on — names and terms, plus how eac
 _Avoid_: context, glossary (ambiguous with this file), dictionary
 
 **Prior Pages** (前頁)
-The Pages the reader saw just before the ones on screen, in the same tab, with their text and translations; sent along when a Page is translated so the translator can follow the conversation and keep its wording. Follows what the reader actually saw, so after a jump or a page back they are not the previous Pages of the Episode.
+The Pages the reader saw just before the one being translated, in the same tab, with their text and translations; sent along when a Page is translated so the translator can follow the conversation and keep its wording. Includes the Pages on screen that come earlier in reading order, such as the right Page of a Spread for its left Page, and the earlier part of a Page taller than the screen. Follows what the reader actually saw, so after a jump or a page back they are not the previous Pages of the Episode.
 _Avoid_: context (that word is avoided for Series Notes), history
 
 ## Accounts and billing
