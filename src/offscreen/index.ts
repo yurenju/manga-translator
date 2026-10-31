@@ -12,12 +12,15 @@ import type {
   FakeTranslatorConfig,
   Message,
   ModelStatus,
+  PageCandidate,
   PageThumb,
   Rect,
+  Size,
   TestConnectionResponse,
   TranslateResponse,
   ProposeNotesResponse,
 } from '../shared/messages.ts';
+import { rejectInSlice, sliceOf, stripeFingerprint, toPageText } from '../shared/long-page.ts';
 import { pageHash, type GrayImage } from '../shared/page-hash.ts';
 import type { BalloonText, PageText, RatioRect } from '../shared/page-text.ts';
 import { createTrace } from '../shared/trace.ts';
@@ -43,6 +46,7 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
     return candidates.flatMap((candidate) => {
+      if (candidate.visible) return [longPageThumb(bitmap, viewport, candidate, candidate.visible)];
       const src = toImageRect(candidate.rect, viewport, bitmap);
       const gray = grayOf(bitmap, src);
       const pages = splitSpread(gray);
@@ -65,6 +69,23 @@ async function crop({ screenshot, viewport, candidates }: CropRequest): Promise<
   } finally {
     bitmap.close();
   }
+}
+
+/**
+ * 長 Page（spec #142）：只裁看得到的那一截，不切 Spread、不去黑邊。身分是這一截裡完整看得到的橫條指紋；
+ * pageHash 先放第一條的 hash，transcriber 認出是哪個 Page 後換掉。
+ */
+function longPageThumb(bitmap: ImageBitmap, viewport: Size, candidate: PageCandidate, visible: Rect): PageThumb {
+  const src = toImageRect(visible, viewport, bitmap);
+  // Page 的上緣在截圖裡的位置（可能在截圖外面，不夾）
+  const pageTop = (candidate.rect.y * bitmap.height) / viewport.height;
+  const stripes = stripeFingerprint(grayOf(bitmap, src), src.y - pageTop);
+  const size = thumbnailSize(src, THUMBNAIL_WIDTH);
+  const thumbnail = pngDataUrl(size, (ctx) => {
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bitmap, src.x, src.y, src.width, src.height, 0, 0, size.width, size.height);
+  });
+  return { ...candidate, thumbnail, pageHash: stripes[0]?.hash ?? '', stripes };
 }
 
 /** 全解析度的裁切轉灰階（0.299/0.587/0.114，跟本機流水線一致）。縮小交給 pageHash 自己做，Node 的單元測試才算得一樣。 */
@@ -107,14 +128,26 @@ const pipeline = createLocalPipeline({
  * 從截圖裁出全解析度的 Page（Spread 的一頁用 subRect）跑本機流水線（座標換算與縮圖相同）；順便從同一張截圖算每個 Balloon 的擦除底色
  * （原地覆蓋用，canvas 網站的 canvas 是 tainted，content script 讀不到像素）。
  */
-async function analyze({ screenshot, viewport, candidate, subRect, pipeline: config }: AnalyzeRequest): Promise<PageText> {
+async function analyze({ screenshot, viewport, candidate, subRect, collected = [], pipeline: config }: AnalyzeRequest): Promise<PageText> {
   if (__E2E__ && config) pipeline.configure(config);
   const bitmap = await createImageBitmap(await (await fetch(screenshot)).blob());
   try {
-    const candidateRect = toImageRect(candidate.rect, viewport, bitmap);
+    const candidateRect = toImageRect(candidate.visible ?? candidate.rect, viewport, bitmap);
     const rect = subRect ? subImageRect(candidateRect, subRect) : candidateRect;
+    // 長 Page（spec #142）：只跑看得到的那一截，被切到的與已收過的框不做 OCR
+    const slice = candidate.visible && sliceOf(candidate.rect, candidate.visible);
+    const rejected: { box: RatioRect; reason: string }[] = [];
+    const accept = slice
+      ? (box: RatioRect) => {
+          const reason = rejectInSlice(box, slice, rect.height, collected);
+          if (reason) rejected.push({ box, reason });
+          return reason === undefined;
+        }
+      : undefined;
     const startedAt = performance.now();
-    const analyzed = await pipeline.analyze(bitmap, rect);
+    const analyzed = await pipeline.analyze(bitmap, rect, accept);
+    // 被切到、重疊而不收的框；tooTall＝比可見範圍還高，永遠收不到（已知限制）
+    if (__DEBUG__ && slice && rejected.length > 0) trace('longPage:rejected', { anchorId: candidate.anchorId, slice, rejected });
     const eraseStartedAt = performance.now();
     const text = { ...analyzed, balloons: eraseBalloons(analyzed.balloons, pageRgba(bitmap, rect)) };
     if (__DEBUG__) {
@@ -133,7 +166,8 @@ async function analyze({ screenshot, viewport, candidate, subRect, pipeline: con
         detections: detectionImage(bitmap, rect, text),
       });
     }
-    return text;
+    // 長 Page：這一截的座標換成 Page 座標，transcriber 併進整個 Page
+    return slice ? toPageText(text, slice) : text;
   } finally {
     bitmap.close();
   }

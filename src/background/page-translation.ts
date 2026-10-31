@@ -5,6 +5,7 @@
  *   失敗就跳過、不重試，只記在 trace，譯文不受影響。
  * 查快取時判斷過時（#38）。排程、每個 tab 的畫面狀態與 Prior Pages 在 transcribe.ts。
  */
+import type { Stripe } from '../shared/long-page.ts';
 import type { PageView } from '../shared/messages.ts';
 import { pageLines, type PageText, type PageTranslation } from '../shared/page-text.ts';
 import { staleReason, usedNotes, type StaleReason, type TranslatorVersion } from '../shared/series-notes.ts';
@@ -15,8 +16,10 @@ import { QuotaExhaustedError } from './hosted-translator.ts';
 import type { NotesLedger, SnapshotGroup } from './notes-ledger.ts';
 
 export interface PageCache {
-  /** 同一個 Series 裡 hash 在門檻內最接近的一筆。 */
+  /** 同一個 Series 裡 hash 在門檻內最接近的一筆（長 Page 不算）。 */
   find(seriesId: string, pageHash: string): Promise<PageTranslation | undefined>;
+  /** 同一個 Series 裡任何一條橫條對得上的長 Page（spec #142）。 */
+  findLong(seriesId: string, stripes: readonly Stripe[]): Promise<PageTranslation | undefined>;
   save(translation: PageTranslation): Promise<void>;
 }
 
@@ -43,6 +46,16 @@ export interface TranslateRequest {
   group: SnapshotGroup;
   /** 這部 Series 在這一批之前最近看過、已經翻好的頁（ADR 0005）。 */
   priorPages: PriorPage[];
+  /** 長 Page（spec #142）才有：text 只是新收的 Line。 */
+  long?: LongPageRequest;
+}
+
+/** 長 Page 的一次翻譯：只翻新收的 Line，顯示與快取的是整個 Page。 */
+export interface LongPageRequest {
+  /** 看過的橫條，跟整個 Page 的 Line 一起存進快取。 */
+  stripes: Stripe[];
+  /** 這次的 Line（翻好或沒翻好）併回整個 Page。 */
+  whole(part: PageText): PageText;
 }
 
 const trace = createTrace('sw');
@@ -113,8 +126,9 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
   }
 
   /** 翻譯一頁（①）；只有翻譯成功才寫快取，接著在背景整理 Notes（②）。 */
-  async function translate({ text, translator, seriesId, pageHash, group, priorPages }: TranslateRequest): Promise<Transcript> {
-    if (!translator) return { state: 'done', text, translated: false };
+  async function translate({ text, translator, seriesId, pageHash, group, priorPages, long }: TranslateRequest): Promise<Transcript> {
+    const whole = long?.whole ?? ((part: PageText) => part);
+    if (!translator) return { state: 'done', text: whole(text), translated: false };
     // 送出時的 Notes 快照：送進 prompt，也是快取的 usedNotes
     const [seriesNotes, series] = seriesId === undefined ? [[], undefined] : await Promise.all([ledger.list(seriesId), getSeries(seriesId)]);
     let output: TranslateOutput;
@@ -125,22 +139,24 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
     } catch (e) {
       trace('translate:error', { pageHash, ms: Date.now() - startedAt, error: e });
       // 額度用完不是失敗：跟沒有 Translator 一樣只顯示原文與讀音，用完的提示在 side panel 頂端
-      if (e instanceof QuotaExhaustedError) return { state: 'done', text, translated: false };
+      if (e instanceof QuotaExhaustedError) return { state: 'done', text: whole(text), translated: false };
       // 429／5xx 的重試在 Translator 裡（claude-translator.ts）；這裡是重試後仍失敗
       console.warn('translate failed', e);
-      return { state: 'done', text, translated: false, translateError: e instanceof Error ? e.message : String(e) };
+      return { state: 'done', text: whole(text), translated: false, translateError: e instanceof Error ? e.message : String(e) };
     }
     const translated = applyTranslation(text, output);
+    const page = whole(translated);
     const { model, latencyMs, usage } = output;
     if (seriesId !== undefined) {
       // 過時提示（#38）拿它跟目前的版本比，所以兩個欄位都記送出時的版本（同一個來源）。API 回報的模型 ID 可能跟送出的
       // 不同（例如帶日期），用它比對會讓每頁都過時；沒有版本資訊時才退回 API 回報的。
       const version = await translatorVersion?.();
       const entry: PageTranslation = {
-        ...translated,
+        ...page,
         seriesId,
         pageHash,
-        usedNotes: usedNotes(seriesNotes, [...text.balloons, ...text.looseText].map((t) => t.原文)),
+        ...(long ? { stripes: long.stripes } : {}),
+        usedNotes: usedNotes(seriesNotes, [...page.balloons, ...page.looseText].map((t) => t.原文)),
         model: version?.model ?? model,
         promptVersion: version?.promptVersion ?? '',
         usage,
@@ -151,7 +167,7 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       await cache.save(entry).catch((e: unknown) => console.warn('cache save failed', e));
       inBackground(proposeNotes(translator, seriesId, pageHash, group, translated, output.usageRecordId));
     }
-    return { state: 'done', text: translated, translated: true, translation: { source: 'translated', model, latencyMs, usage } };
+    return { state: 'done', text: page, translated: true, translation: { source: 'translated', model, latencyMs, usage } };
   }
 
   /** 背景的 ② 都套用完（或跳過）時 resolve，包含等待期間才送出的。 */
@@ -179,14 +195,33 @@ export function createPageTranslation({ cache, ledger, getSeries, translatorVers
       trace('cache:miss', { seriesId, pageHash });
       return undefined;
     }
+    return hit(cached, { seriesId, pageHash });
+  }
+
+  /** 命中快取時要顯示的逐字稿（含過時提示）。 */
+  async function hit(cached: PageTranslation, query: Record<string, unknown>): Promise<Transcript> {
     const { balloons, looseText, model, latencyMs, usage } = cached;
     const stale = await staleOf(cached);
-    trace('cache:hit', { seriesId, pageHash, cachedHash: cached.pageHash, stale });
+    trace('cache:hit', { ...query, cachedHash: cached.pageHash, stale });
     // 命中快取時沒有本機流水線的結果（text），「翻譯此頁／重新翻譯」不會重翻這頁。
     return { state: 'done', text: { balloons, looseText }, translated: true, translation: { source: 'cache', model, latencyMs, usage }, stale };
   }
 
-  return { translate, lookup, staleOf, notesSettled };
+  /** 長 Page 查快取（spec #142）：任何一條橫條對得上就命中，連同快取裡的身分與看過的橫條一起回傳。 */
+  async function lookupLong(seriesId: string | undefined, stripes: readonly Stripe[]): Promise<{ transcript: Transcript; cached: PageTranslation } | undefined> {
+    if (seriesId === undefined) return undefined;
+    const cached = await cache.findLong(seriesId, stripes).catch((e: unknown) => {
+      console.warn('cache lookup failed', e);
+      return undefined;
+    });
+    if (!cached) {
+      trace('cache:miss', { seriesId, stripes });
+      return undefined;
+    }
+    return { transcript: await hit(cached, { seriesId, stripes }), cached };
+  }
+
+  return { translate, lookup, lookupLong, staleOf, notesSettled };
 }
 
 export type PageTranslator = ReturnType<typeof createPageTranslation>;

@@ -112,15 +112,19 @@ function minConfidence({ text, confidences }: Recognized): number | undefined {
   return counted.length ? Math.min(...counted) : undefined;
 }
 
-export async function analyzePage(engine: Engine, image: PageImage, reading: (ja: string) => string): Promise<PageText> {
+/**
+ * accept：收不收一個框（外框，0～1 比例）；不收的不做 OCR、不出現在結果。長 Page 用它擋掉被可見範圍切到的框
+ * 與已收過的框（spec #142）；閱讀順序仍然看整頁的框排。
+ */
+export async function analyzePage(engine: Engine, image: PageImage, reading: (ja: string) => string, accept?: (box: RatioRect) => boolean): Promise<PageText> {
   const { width, height } = image;
+  const ratio = ([x, y, w, h]: PixelBox): RatioRect => ({ x: x / width, y: y / height, w: w / width, h: h / height });
   const detections = nms((await engine.detect(image)).filter((d) => d.score >= SCORE_THRESHOLD));
-  const units = readingOrder(group(detections), image.gray());
+  const units = readingOrder(group(detections), image.gray()).filter((u) => accept?.(ratio(u.bbox)) ?? true);
   const recognized = await engine.recognize(
     image,
     units.map((u) => ocrBox(u.textBbox, width, height)),
   );
-  const ratio = ([x, y, w, h]: PixelBox): RatioRect => ({ x: x / width, y: y / height, w: w / width, h: h / height });
   const orientation = (b: PixelBox): Orientation => (b[3] >= b[2] ? 'vertical' : 'horizontal');
 
   const result: PageText = { balloons: [], looseText: [] };
