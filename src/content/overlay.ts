@@ -18,6 +18,7 @@ import type { PageText, RatioRect } from '../shared/page-text.ts';
 import { rubyDisplay } from '../shared/ruby.ts';
 import TOKENS from '../shared/tokens.css';
 import { createTrace } from '../shared/trace.ts';
+import { headingToward, HOVER_DWELL_MS, type Point } from './hover-intent.ts';
 import { breakLines, estimateFontPx, estimateOriginalLines, fitText, isVertical, layerTransform, minLayerFontPx, pageSize, separateRegions, textRegions, verticalize, type Box } from './overlay-layout.ts';
 
 /** 載入譯文要用的字型（等 document.fonts.load 完成），回傳 CSS font-family。 */
@@ -196,6 +197,10 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
   let revealed = false;
   /** 顯示中的 tooltip 放在句子上方（揭露時長大要留在同一側）。 */
   let tipAbove = false;
+  /** 上一次 pointermove 的位置：判斷滑鼠往哪個方向移。 */
+  let lastPointer: Point | undefined;
+  /** 學習時朝 tooltip 前進中、先不換句；滑鼠停住這麼久就照實際位置換。 */
+  let dwellTimer: ReturnType<typeof setTimeout> | undefined;
   const onPointerMove = (event: PointerEvent) => updateHover(event.clientX, event.clientY);
   document.addEventListener('pointermove', onPointerMove, { capture: true, passive: true });
 
@@ -436,9 +441,12 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
 
   /**
    * 覆蓋層一律 pointer-events:none，hover 靠座標自己 hit-test（spec 第 7.1 節）：Page 層的畫面 rect（含捲動與
-   * 祖先 transform）換算回 Page 原始像素，找包含滑鼠的最小那句。
+   * 祖先 transform）換算回 Page 原始像素，找包含滑鼠的最小那句。aim＝學習時正朝 tooltip 前進就先不換句。
    */
-  function updateHover(x: number, y: number): void {
+  function updateHover(x: number, y: number, aim = true): void {
+    clearTimeout(dwellTimer);
+    const from = lastPointer;
+    lastPointer = { x, y };
     // 學習時滑鼠在顯示中的 tooltip 上（含緩衝）：tooltip 留著，在「譯」區塊上就揭露譯文
     if (hovered && pageMode === 'learn' && within(hovered.layer.tip.getBoundingClientRect(), x, y, TOOLTIP_BUFFER_SCREEN_PX)) {
       const chip = hovered.layer.tip.querySelector('.tip-reveal');
@@ -461,7 +469,17 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
         }
       }
     }
-    setHovered(hit && { layer: hit.layer, line: hit.line });
+    const next = hit && { layer: hit.layer, line: hit.line };
+    // 學習時從句子移向 tooltip 的「譯」區塊，途中擦過別句的框或空白（安全三角形）：先留著這句，停住夠久才換
+    if (aim && from && hovered && pageMode === 'learn' && next?.line !== hovered.line) {
+      const r = hovered.layer.tip.getBoundingClientRect();
+      const m = TOOLTIP_BUFFER_SCREEN_PX;
+      if (headingToward(from, { x, y }, { left: r.left - m, top: r.top - m, right: r.right + m, bottom: r.bottom + m })) {
+        dwellTimer = setTimeout(() => updateHover(x, y, false), HOVER_DWELL_MS);
+        return;
+      }
+    }
+    setHovered(next);
   }
 
   function setHovered(next: { layer: PageLayer; line: HoverLine } | undefined): void {
@@ -611,6 +629,7 @@ export function createOverlay({ loadFont, onHover }: { loadFont: LoadFont; onHov
     resizeObserver.disconnect();
     window.removeEventListener('resize', onResize);
     document.removeEventListener('pointermove', onPointerMove, { capture: true });
+    clearTimeout(dwellTimer);
     hovered = undefined;
     panelHighlight = undefined;
     for (const entry of entries.values()) entry.host.remove();
